@@ -12,53 +12,58 @@ const Form = () => {
 
   return (
     <StyledWrapper>
-      <div className="center-container">
-        <form className="form" onSubmit={handleSubmit}>
-          <div className="form-title"><span>Inicio de Sesión</span></div>
-          <div className="title-2"><span>AYHER</span></div>
+      <form className="form" onSubmit={handleSubmit}>
+        <div className="form-title"><span>Inicio de Sesión</span></div>
+        <div className="title-2"><span>AYHER</span></div>
 
-          <div className="input-container">
-            <input className="input-mail" type="email" placeholder="Email" required />
-            <span> </span>
-          </div>
+        <div className="input-container">
+          <input className="input-mail" type="email" placeholder="Email" required />
+          <span> </span>
+        </div>
 
-          {/* 💰 Animación de signos de dólar */}
-          <section className="bg-stars">
-            <span className="dollar">$</span>
-            <span className="dollar">$</span>
-            <span className="dollar">$</span>
-            <span className="dollar">$</span>
-          </section>
+        {/* 💰 Animación de signos de dólar */}
+        <section className="bg-stars">
+          <span className="dollar">$</span>
+          <span className="dollar">$</span>
+          <span className="dollar">$</span>
+          <span className="dollar">$</span>
+        </section>
 
-          <div className="input-container">
-            <input className="input-pwd" type="password" placeholder="Contraseña" required />
-          </div>
+        <div className="input-container">
+          <input className="input-pwd" type="password" placeholder="Contraseña" required />
+        </div>
 
-          <button type="submit" className="submit">
-            <span className="sign-text">Iniciar Sesión</span>
-          </button>
-        </form>
-      </div>
+        <button type="submit" className="submit">
+          <span className="sign-text">Iniciar Sesión</span>
+        </button>
+      </form>
     </StyledWrapper>
   );
 };
 
 const StyledWrapper = styled.div`
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  position: fixed; /* Ocupa toda la pantalla */
+  top: 0;
+  left: 0;
+  width: 100vw;
   height: 100vh;
-  width: 100%;
+  display: flex;
+  justify-content: center; /* Centra horizontalmente */
+  align-items: center;     /* Centra verticalmente */
   background: radial-gradient(circle at top, #00111a 0%, #000 100%);
   overflow: hidden;
-  position: relative;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 
-  .center-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  /* Asegura que html y body también ocupen todo */
+  &,
+  body,
+  html {
     width: 100%;
     height: 100%;
+    margin: 0;
+    padding: 0;
   }
 
   .form {
@@ -71,11 +76,11 @@ const StyledWrapper = styled.div`
               rgba(32, 15, 53, 0.2) 65%, rgba(14, 29, 28, 0.9) 100%);
     border: 2px solid #fff;
     box-shadow: rgba(0,212,255) 0px 0px 50px -15px;
-    overflow: hidden;
     border-radius: 10px;
     z-index: 1;
   }
 
+  /*------ Inputs y botón -------*/
   .input-container {
     position: relative;
   }
@@ -120,6 +125,7 @@ const StyledWrapper = styled.div`
     cursor: pointer;
   }
 
+  /*------ Títulos -------*/
   .form-title {
     font-size: 1.25rem;
     font-family: monospace;
@@ -148,6 +154,7 @@ const StyledWrapper = styled.div`
     42%,43%,48%,49% { opacity: 0; }
   }
 
+  /*------ 💸 Signos de dólar flotando -------*/
   .bg-stars {
     position: absolute;
     top: 0;
@@ -178,6 +185,18 @@ const StyledWrapper = styled.div`
   .dollar:nth-child(2) { top: 80%; left: 40%; animation-delay: 1s; }
   .dollar:nth-child(3) { top: 60%; left: 70%; animation-delay: 2s; }
   .dollar:nth-child(4) { top: 90%; left: 85%; animation-delay: 1.5s; }
+
+  /*------ Responsividad -------*/
+  @media (max-width: 480px) {
+    .form {
+      max-width: 300px;
+      padding: 1.5rem;
+    }
+
+    .input-container input {
+      width: 220px;
+    }
+  }
 `;
 
 export default Form;
