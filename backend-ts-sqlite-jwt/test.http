@@ -1,0 +1,137 @@
+@baseUrl = http://localhost:4000/api
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc2MTAxNTAzMSwiZXhwIjoxNzYxMTAxNDMxfQ.E9ZXUU5c0Ahu5dj_dKTWEPl9WXYD9he3fkCs_-nKutI
+
+
+### 🩺 Health Check
+GET http://localhost:4000/health
+
+
+### 🔐 Login (por si deseas probar otro usuario)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@local.test",
+  "password": "admin123"
+}
+
+
+### 👤 Crear usuario normal
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Usuario prueba",
+  "email": "user@test.com",
+  "password": "123456"
+}
+
+
+### 🧾 Listar usuarios (solo ADMIN)
+GET {{baseUrl}}/users
+Authorization: Bearer {{token}}
+
+
+### 🏷️ Crear Marca
+POST {{baseUrl}}/marcas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombre": "ACME",
+  "descripcion": "Fabricante de repuestos automotrices"
+}
+
+
+### 🏷️ Listar Marcas
+GET {{baseUrl}}/marcas
+Authorization: Bearer {{token}}
+
+
+### 📦 Crear Producto en Inventario
+POST {{baseUrl}}/inventario
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "numeroParte": "FILTRO-001",
+  "marcaId": 1,
+  "nombre": "Filtro de Aceite",
+  "descripcion": "Filtro compatible con motor 1.6L",
+  "stockActual": 0,
+  "costoPromedioCordoba": 100.00,
+  "precioVentaPromedioCordoba": 180.00,
+  "precioVentaSugeridoCordoba": 200.00
+}
+
+
+### 📦 Listar Inventario
+GET {{baseUrl}}/inventario
+Authorization: Bearer {{token}}
+
+
+### 💰 Crear Tipo de Cambio
+POST {{baseUrl}}/tipo-cambio
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "valor": 36.85
+}
+
+
+### 💰 Ver últimos Tipos de Cambio
+GET {{baseUrl}}/tipo-cambio
+Authorization: Bearer {{token}}
+
+
+### 💰 Ver último tipo de cambio registrado
+GET {{baseUrl}}/tipo-cambio/latest
+Authorization: Bearer {{token}}
+
+
+### 📥 Registrar Compra
+POST {{baseUrl}}/compras
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "proveedor": "Proveedor Ejemplo S.A.",
+  "numeroFactura": "C-0001",
+  "totalCordoba": 1000,
+  "usuario": "Admin",
+  "observacion": "Compra inicial",
+  "detalles": [
+    {
+      "inventarioId": 1,
+      "cantidad": 10,
+      "costoUnitarioCordoba": 100
+    }
+  ]
+}
+
+
+### 📤 Registrar Venta
+POST {{baseUrl}}/ventas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "cliente": "Cliente Ejemplo",
+  "numeroFactura": "V-0001",
+  "totalCordoba": 400,
+  "usuario": "Admin",
+  "observacion": "Venta de prueba",
+  "detalles": [
+    {
+      "inventarioId": 1,
+      "cantidad": 2,
+      "precioUnitarioCordoba": 200
+    }
+  ]
+}
+
+
+### 📊 Reporte Kardex de un producto
+GET {{baseUrl}}/reportes/kardex/1
+Authorization: Bearer {{token}}

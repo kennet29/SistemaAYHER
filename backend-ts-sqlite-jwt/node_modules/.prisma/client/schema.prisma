@@ -1,0 +1,245 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+//// =========================
+////  AUTH (ya existente)
+//// =========================
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("USER")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+//// =========================
+////  INVENTARIO (tu script)
+//// =========================
+
+model Marca {
+  id          Int          @id @default(autoincrement())
+  nombre      String       @unique
+  descripcion String?
+  inventarios Inventario[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model TipoCambio {
+  id        Int      @id @default(autoincrement())
+  fecha     DateTime @default(now())
+  valor     Decimal
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TipoMovimiento {
+  id          Int                    @id @default(autoincrement())
+  nombre      String                 @unique
+  afectaStock Boolean
+  esEntrada   Boolean
+  descripcion String?
+  movimientos MovimientoInventario[]
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+}
+
+model Inventario {
+  id                         Int                       @id @default(autoincrement())
+  numeroParte                String
+  marcaId                    Int
+  marca                      Marca                     @relation(fields: [marcaId], references: [id])
+  nombre                     String
+  descripcion                String?
+  stockActual                Int                       @default(0)
+  costoPromedioCordoba       Decimal                   @default(0)
+  precioVentaPromedioCordoba Decimal                   @default(0)
+  precioVentaSugeridoCordoba Decimal                   @default(0)
+  codigoSustituto            String?
+  marcaSustitutoId           Int?
+  sustituto                  Inventario?               @relation("Sustituto", fields: [codigoSustituto, marcaSustitutoId], references: [numeroParte, marcaId])
+  sustituciones              Inventario[]              @relation("Sustituto")
+  movimientos                MovimientoInventario[]
+  detalleCompras             DetalleCompra[]
+  detalleVentas              DetalleVenta[]
+  detalleDevVentas           DetalleDevolucionVenta[]
+  detalleDevCompras          DetalleDevolucionCompra[]
+  detalleCambiosSalida       DetalleCambio[]           @relation("CambioSalida")
+  detalleCambiosEntrada      DetalleCambio[]           @relation("CambioEntrada")
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+
+  @@unique([numeroParte, marcaId], name: "UQ_NumeroParte_Marca")
+}
+
+model MovimientoInventario {
+  id                         Int            @id @default(autoincrement())
+  inventarioId               Int
+  inventario                 Inventario     @relation(fields: [inventarioId], references: [id])
+  tipoMovimientoId           Int
+  tipoMovimiento             TipoMovimiento @relation(fields: [tipoMovimientoId], references: [id])
+  fecha                      DateTime       @default(now())
+  cantidad                   Int
+  costoUnitarioCordoba       Decimal?
+  precioVentaUnitarioCordoba Decimal?
+  tipoCambioValor            Decimal?
+  observacion                String?
+  usuario                    String?
+  createdAt                  DateTime       @default(now())
+  updatedAt                  DateTime       @updatedAt
+}
+
+//// =========================
+////  COMPRAS
+//// =========================
+
+model Compra {
+  id               Int                @id @default(autoincrement())
+  fecha            DateTime           @default(now())
+  proveedor        String
+  numeroFactura    String?
+  totalCordoba     Decimal?
+  tipoCambioValor  Decimal            @default(36.50)
+  usuario          String?
+  observacion      String?
+  detalles         DetalleCompra[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  DevolucionCompra DevolucionCompra[]
+}
+
+model DetalleCompra {
+  id                   Int        @id @default(autoincrement())
+  compraId             Int
+  compra               Compra     @relation(fields: [compraId], references: [id])
+  inventarioId         Int
+  inventario           Inventario @relation(fields: [inventarioId], references: [id])
+  cantidad             Int
+  costoUnitarioCordoba Decimal
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+}
+
+//// =========================
+////  VENTAS
+//// =========================
+
+model Venta {
+  id              Int               @id @default(autoincrement())
+  fecha           DateTime          @default(now())
+  cliente         String?
+  numeroFactura   String?
+  totalCordoba    Decimal?
+  tipoCambioValor Decimal           @default(36.50)
+  usuario         String?
+  observacion     String?
+  detalles        DetalleVenta[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  DevolucionVenta DevolucionVenta[]
+}
+
+model DetalleVenta {
+  id                    Int        @id @default(autoincrement())
+  ventaId               Int
+  venta                 Venta      @relation(fields: [ventaId], references: [id])
+  inventarioId          Int
+  inventario            Inventario @relation(fields: [inventarioId], references: [id])
+  cantidad              Int
+  precioUnitarioCordoba Decimal
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+}
+
+//// =========================
+////  DEVOLUCIONES
+//// =========================
+
+model DevolucionVenta {
+  id        Int                      @id @default(autoincrement())
+  ventaId   Int
+  venta     Venta                    @relation(fields: [ventaId], references: [id])
+  fecha     DateTime                 @default(now())
+  cliente   String?
+  motivo    String?
+  usuario   String?
+  detalles  DetalleDevolucionVenta[]
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+}
+
+model DetalleDevolucionVenta {
+  id                    Int             @id @default(autoincrement())
+  devolucionVentaId     Int
+  devolucionVenta       DevolucionVenta @relation(fields: [devolucionVentaId], references: [id])
+  inventarioId          Int
+  inventario            Inventario      @relation(fields: [inventarioId], references: [id])
+  cantidad              Int
+  precioUnitarioCordoba Decimal
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+}
+
+model DevolucionCompra {
+  id        Int                       @id @default(autoincrement())
+  compraId  Int
+  compra    Compra                    @relation(fields: [compraId], references: [id])
+  fecha     DateTime                  @default(now())
+  proveedor String?
+  motivo    String?
+  usuario   String?
+  detalles  DetalleDevolucionCompra[]
+  createdAt DateTime                  @default(now())
+  updatedAt DateTime                  @updatedAt
+}
+
+model DetalleDevolucionCompra {
+  id                   Int              @id @default(autoincrement())
+  devolucionCompraId   Int
+  devolucionCompra     DevolucionCompra @relation(fields: [devolucionCompraId], references: [id])
+  inventarioId         Int
+  inventario           Inventario       @relation(fields: [inventarioId], references: [id])
+  cantidad             Int
+  costoUnitarioCordoba Decimal
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+}
+
+//// =========================
+////  CAMBIOS
+//// =========================
+
+model Cambio {
+  id          Int             @id @default(autoincrement())
+  fecha       DateTime        @default(now())
+  cliente     String?
+  motivo      String?
+  usuario     String?
+  observacion String?
+  detalles    DetalleCambio[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model DetalleCambio {
+  id                    Int        @id @default(autoincrement())
+  cambioId              Int
+  cambio                Cambio     @relation(fields: [cambioId], references: [id])
+  inventarioSalidaId    Int
+  inventarioSalida      Inventario @relation("CambioSalida", fields: [inventarioSalidaId], references: [id])
+  inventarioEntradaId   Int
+  inventarioEntrada     Inventario @relation("CambioEntrada", fields: [inventarioEntradaId], references: [id])
+  cantidadSalida        Int
+  cantidadEntrada       Int
+  precioUnitarioCordoba Decimal
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+}
