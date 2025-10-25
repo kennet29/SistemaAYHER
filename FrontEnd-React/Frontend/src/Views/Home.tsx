@@ -9,8 +9,11 @@ import {
   FaThLarge,
   FaCog,
 } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 
 const Home = () => {
+  const navigate = useNavigate(); // 🔹 Para redirigir entre rutas
+
   return (
     <HomeContainer>
       <AnimatedBackground />
@@ -31,7 +34,7 @@ const Home = () => {
           </div>
           <h2>Inventario</h2>
           <p>Control total sobre tus productos, categorías y existencias.</p>
-          <button>Entrar</button>
+          <button onClick={() => navigate("/inventario")}>Entrar</button>
         </Card>
 
         <Card color1="#0052cc" color2="#0080ff">
@@ -40,7 +43,7 @@ const Home = () => {
           </div>
           <h2>Facturación</h2>
           <p>Genera facturas, cotizaciones y gestiona tus ventas fácilmente.</p>
-          <button>Entrar</button>
+          <button onClick={() => navigate("/facturacion")}>Entrar</button>
         </Card>
 
         <Card color1="#cc0000" color2="#ff3333">
@@ -49,7 +52,7 @@ const Home = () => {
           </div>
           <h2>Marcas</h2>
           <p>Administra marcas, proveedores y catálogos de productos.</p>
-          <button>Entrar</button>
+          <button onClick={() => navigate("/marcas")}>Entrar</button>
         </Card>
 
         <Card color1="#001f33" color2="#003366">
@@ -58,7 +61,7 @@ const Home = () => {
           </div>
           <h2>Movimientos</h2>
           <p>Consulta entradas, salidas y ajustes de stock en tiempo real.</p>
-          <button>Entrar</button>
+          <button onClick={() => navigate("/movimientos")}>Entrar</button>
         </Card>
 
         <Card color1="#660000" color2="#990000">
@@ -67,7 +70,7 @@ const Home = () => {
           </div>
           <h2>Categorías</h2>
           <p>Organiza tus productos en grupos y mejora la gestión visual.</p>
-          <button>Entrar</button>
+          <button onClick={() => navigate("/categorias")}>Entrar</button>
         </Card>
 
         <Card color1="#004d40" color2="#009688">
@@ -76,7 +79,8 @@ const Home = () => {
           </div>
           <h2>Configuración</h2>
           <p>Administra usuarios, permisos y preferencias del sistema.</p>
-          <button>Entrar</button>
+          {/* ✅ Redirección hacia la vista de Configuración */}
+          <button onClick={() => navigate("/configuracion")}>Entrar</button>
         </Card>
       </MainContent>
 
@@ -125,7 +129,6 @@ const HomeContainer = styled.div`
   position: relative;
 `;
 
-// Fondo animado con gradiente dinámico
 const AnimatedBackground = styled.div`
   position: absolute;
   inset: 0;

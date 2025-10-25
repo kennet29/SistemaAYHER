@@ -21,10 +21,19 @@ model User {
 }
 
 //// =========================
-////  INVENTARIO (tu script)
+////  INVENTARIO
 //// =========================
 
 model Marca {
+  id          Int          @id @default(autoincrement())
+  nombre      String       @unique
+  descripcion String?
+  inventarios Inventario[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Categoria {
   id          Int          @id @default(autoincrement())
   nombre      String       @unique
   descripcion String?
@@ -57,16 +66,29 @@ model Inventario {
   numeroParte                String
   marcaId                    Int
   marca                      Marca                     @relation(fields: [marcaId], references: [id])
+  categoriaId                Int
+  categoria                  Categoria                 @relation(fields: [categoriaId], references: [id])
   nombre                     String
   descripcion                String?
   stockActual                Int                       @default(0)
+
+  //// 🔹 Valores en córdobas
   costoPromedioCordoba       Decimal                   @default(0)
   precioVentaPromedioCordoba Decimal                   @default(0)
   precioVentaSugeridoCordoba Decimal                   @default(0)
+
+  //// 🔹 Valores en dólares
+  costoPromedioDolar         Decimal                   @default(0)
+  precioVentaPromedioDolar   Decimal                   @default(0)
+  precioVentaSugeridoDolar   Decimal                   @default(0)
+
+  //// 🔹 Relaciones con sustitutos
   codigoSustituto            String?
   marcaSustitutoId           Int?
   sustituto                  Inventario?               @relation("Sustituto", fields: [codigoSustituto, marcaSustitutoId], references: [numeroParte, marcaId])
   sustituciones              Inventario[]              @relation("Sustituto")
+
+  //// 🔹 Relaciones con movimientos
   movimientos                MovimientoInventario[]
   detalleCompras             DetalleCompra[]
   detalleVentas              DetalleVenta[]
@@ -74,6 +96,7 @@ model Inventario {
   detalleDevCompras          DetalleDevolucionCompra[]
   detalleCambiosSalida       DetalleCambio[]           @relation("CambioSalida")
   detalleCambiosEntrada      DetalleCambio[]           @relation("CambioEntrada")
+
   createdAt                  DateTime                  @default(now())
   updatedAt                  DateTime                  @updatedAt
 
@@ -88,8 +111,13 @@ model MovimientoInventario {
   tipoMovimiento             TipoMovimiento @relation(fields: [tipoMovimientoId], references: [id])
   fecha                      DateTime       @default(now())
   cantidad                   Int
+  //// 🔹 Valores en córdobas
   costoUnitarioCordoba       Decimal?
   precioVentaUnitarioCordoba Decimal?
+  //// 🔹 Valores en dólares
+  costoUnitarioDolar         Decimal?
+  precioVentaUnitarioDolar   Decimal?
+  //// 🔹 Tipo de cambio aplicado
   tipoCambioValor            Decimal?
   observacion                String?
   usuario                    String?
@@ -106,7 +134,10 @@ model Compra {
   fecha            DateTime           @default(now())
   proveedor        String
   numeroFactura    String?
+  //// 🔹 Totales
   totalCordoba     Decimal?
+  totalDolar       Decimal?
+  //// 🔹 Tipo de cambio usado
   tipoCambioValor  Decimal            @default(36.50)
   usuario          String?
   observacion      String?
@@ -123,7 +154,10 @@ model DetalleCompra {
   inventarioId         Int
   inventario           Inventario @relation(fields: [inventarioId], references: [id])
   cantidad             Int
+  //// 🔹 Valores en córdobas
   costoUnitarioCordoba Decimal
+  //// 🔹 Valores en dólares
+  costoUnitarioDolar   Decimal
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
 }
@@ -137,7 +171,10 @@ model Venta {
   fecha           DateTime          @default(now())
   cliente         String?
   numeroFactura   String?
+  //// 🔹 Totales
   totalCordoba    Decimal?
+  totalDolar      Decimal?
+  //// 🔹 Tipo de cambio usado
   tipoCambioValor Decimal           @default(36.50)
   usuario         String?
   observacion     String?
@@ -154,7 +191,10 @@ model DetalleVenta {
   inventarioId          Int
   inventario            Inventario @relation(fields: [inventarioId], references: [id])
   cantidad              Int
+  //// 🔹 Valores en córdobas
   precioUnitarioCordoba Decimal
+  //// 🔹 Valores en dólares
+  precioUnitarioDolar   Decimal
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
 }
@@ -183,7 +223,10 @@ model DetalleDevolucionVenta {
   inventarioId          Int
   inventario            Inventario      @relation(fields: [inventarioId], references: [id])
   cantidad              Int
+  //// 🔹 Valores en córdobas
   precioUnitarioCordoba Decimal
+  //// 🔹 Valores en dólares
+  precioUnitarioDolar   Decimal
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
 }
@@ -208,7 +251,10 @@ model DetalleDevolucionCompra {
   inventarioId         Int
   inventario           Inventario       @relation(fields: [inventarioId], references: [id])
   cantidad             Int
+  //// 🔹 Valores en córdobas
   costoUnitarioCordoba Decimal
+  //// 🔹 Valores en dólares
+  costoUnitarioDolar   Decimal
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 }
@@ -239,7 +285,25 @@ model DetalleCambio {
   inventarioEntrada     Inventario @relation("CambioEntrada", fields: [inventarioEntradaId], references: [id])
   cantidadSalida        Int
   cantidadEntrada       Int
+  //// 🔹 Valores en córdobas
   precioUnitarioCordoba Decimal
+  //// 🔹 Valores en dólares
+  precioUnitarioDolar   Decimal
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
+}
+
+model Configuracion {
+  id             Int       @id @default(autoincrement())
+  ruc            String    @unique
+  razonSocial    String
+  direccion      String
+  telefono1      String?
+  telefono2      String?
+  correo         String?
+  sitioWeb       String?
+  logoUrl        String?   // Ruta o URL del logo de la empresa
+  mensajeFactura String?   // Mensaje opcional para pie de facturas o notas
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }

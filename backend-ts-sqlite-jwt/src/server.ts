@@ -14,7 +14,7 @@ import { compraRouter } from './modules/compras/compras.routes';
 import { ventaRouter } from './modules/ventas/ventas.routes';
 import { devolucionRouter } from './modules/devoluciones/devolucion.routes';
 import { cambioRouter } from './modules/cambio/cambio.routes';
-
+import { configuracionRouter } from './modules/configuracion/configuracion.routes';
 const app = express();
 
 app.use(helmet());
@@ -32,6 +32,7 @@ import { reportesRouter } from './modules/reportes/reportes.routes';
 // ...
 app.use('/api/tipo-cambio', tipoCambioRouter);
 app.use('/api/reportes', reportesRouter);
+app.use('/api/configuracion',configuracionRouter);
 // NUEVOS
 app.use('/api/marcas', marcaRouter);
 app.use('/api/inventario', inventarioRouter);
