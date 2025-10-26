@@ -8,6 +8,7 @@ import { userRouter } from './modules/user/user.routes';
 
 // NUEVOS
 import { marcaRouter } from './modules/marca/marca.routes';
+import {categoriaRouter} from './modules/categoria/categoria.routes'
 import { inventarioRouter } from './modules/inventario/inventario.routes';
 import { tipoMovimientoRouter } from './modules/tipo-movimiento/tipo-movimiento.routes';
 import { compraRouter } from './modules/compras/compras.routes';
@@ -41,6 +42,7 @@ app.use('/api/compras', compraRouter);
 app.use('/api/ventas', ventaRouter);
 app.use('/api/devoluciones', devolucionRouter);
 app.use('/api/cambios', cambioRouter);
+app.use('/api/categorias',categoriaRouter);
 
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error(err);

@@ -28,25 +28,43 @@ export const upsertConfiguracion = async (req: Request, res: Response) => {
   try {
     const data = req.body;
 
+    // 🔹 Eliminar campos no válidos (por si vienen del frontend)
+    delete (data as any).message;
+
     // 🔹 Verificar si ya existe una configuración
     const existente = await prisma.configuracion.findFirst();
 
     let config;
     if (existente) {
+      // ✅ Si ya existe, la actualiza
       config = await prisma.configuracion.update({
         where: { id: existente.id },
         data,
       });
     } else {
-      config = await prisma.configuracion.create({ data });
+      // ✅ Si no existe, crea una nueva (sin incluir "message")
+      config = await prisma.configuracion.create({
+        data: {
+          ruc: data.ruc || "12345",
+          razonSocial: data.razonSocial || "AYHER",
+          direccion: data.direccion || "Dirección de prueba",
+          telefono1: data.telefono1 || "555555",
+          telefono2: data.telefono2 || "5555555",
+          correo: data.correo || "testeo@gmail.com",
+          sitioWeb: data.sitioWeb || "ayher.com",
+          logoUrl: data.logoUrl || null,
+          mensajeFactura: data.mensajeFactura || "Mensaje de prueba",
+        },
+      });
     }
 
     res.json(config);
   } catch (error) {
-    console.error('Error al guardar configuración:', error);
-    res.status(500).json({ message: 'Error al guardar configuración', error });
+    console.error("Error al guardar configuración:", error);
+    res.status(500).json({ message: "Error al guardar configuración", error });
   }
 };
+
 
 /**
  * 📌 Eliminar configuración (opcional)
