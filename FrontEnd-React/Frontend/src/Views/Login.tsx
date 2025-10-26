@@ -1,13 +1,62 @@
-import React from 'react';
-import styled from 'styled-components';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from "react";
+import styled from "styled-components";
+import { useNavigate } from "react-router-dom";
+
+const API_URL = "http://localhost:4000/api/auth";
+
+// 🔹 Función para decodificar el token sin librerías externas
+function decodeToken(token: string) {
+  try {
+    const payload = token.split(".")[1];
+    return JSON.parse(atob(payload));
+  } catch {
+    return null;
+  }
+}
+
+// 🔹 Guardar token y usuario en cookies seguras
+function saveAuthCookies(token: string) {
+  const user = decodeToken(token);
+  const userData = encodeURIComponent(JSON.stringify(user));
+
+  // 7 días de duración
+  const maxAge = 7 * 24 * 60 * 60;
+
+  document.cookie = `token=${token}; path=/; max-age=${maxAge}; secure; samesite=strict`;
+  document.cookie = `user=${userData}; path=/; max-age=${maxAge}; secure; samesite=strict`;
+}
 
 const Form = () => {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    navigate('/home');
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_URL}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Credenciales inválidas");
+
+      // ✅ Guardar token y usuario en cookies
+      saveAuthCookies(data.token);
+
+      // ✅ Redirigir al Home
+      navigate("/home");
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -17,8 +66,13 @@ const Form = () => {
         <div className="title-2"><span>AYHER</span></div>
 
         <div className="input-container">
-          <input className="input-mail" type="email" placeholder="Email" required />
-          <span> </span>
+          <input
+            className="input-mail"
+            name="email"
+            type="email"
+            placeholder="Correo electrónico"
+            required
+          />
         </div>
 
         {/* 💰 Animación de signos de dólar */}
@@ -30,82 +84,94 @@ const Form = () => {
         </section>
 
         <div className="input-container">
-          <input className="input-pwd" type="password" placeholder="Contraseña" required />
+          <input
+            className="input-pwd"
+            name="password"
+            type="password"
+            placeholder="Contraseña"
+            required
+          />
         </div>
 
-        <button type="submit" className="submit">
-          <span className="sign-text">Iniciar Sesión</span>
+        <button type="submit" className="submit" disabled={loading}>
+          {loading ? "Iniciando..." : "Iniciar Sesión"}
         </button>
       </form>
     </StyledWrapper>
   );
 };
 
+export default Form;
+
+// ======================================================
+// 🎨 ESTILOS
+// ======================================================
 const StyledWrapper = styled.div`
-  position: fixed; /* Ocupa toda la pantalla */
+  position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
   display: flex;
-  justify-content: center; /* Centra horizontalmente */
-  align-items: center;     /* Centra verticalmente */
+  justify-content: center;
+  align-items: center;
   background: radial-gradient(circle at top, #00111a 0%, #000 100%);
   overflow: hidden;
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
-
-  /* Asegura que html y body también ocupen todo */
-  &,
-  body,
-  html {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    padding: 0;
-  }
 
   .form {
     position: relative;
     display: block;
     padding: 2.2rem;
     max-width: 350px;
-    background: linear-gradient(14deg, rgba(2,0,36, 0.8) 0%, rgba(24, 24, 65, 0.7) 66%, 
-              rgb(20, 76, 99) 100%), radial-gradient(circle, rgba(2,0,36, 0.5) 0%, 
-              rgba(32, 15, 53, 0.2) 65%, rgba(14, 29, 28, 0.9) 100%);
+    background: linear-gradient(
+        14deg,
+        rgba(2, 0, 36, 0.8) 0%,
+        rgba(24, 24, 65, 0.7) 66%,
+        rgb(20, 76, 99) 100%
+      ),
+      radial-gradient(
+        circle,
+        rgba(2, 0, 36, 0.5) 0%,
+        rgba(32, 15, 53, 0.2) 65%,
+        rgba(14, 29, 28, 0.9) 100%
+      );
     border: 2px solid #fff;
-    box-shadow: rgba(0,212,255) 0px 0px 50px -15px;
+    box-shadow: rgba(0, 212, 255, 0.7) 0px 0px 40px -15px;
     border-radius: 10px;
     z-index: 1;
   }
 
-  /*------ Inputs y botón -------*/
+  /* ----- Inputs ----- */
   .input-container {
     position: relative;
   }
 
-  .input-container input, .form button {
-    outline: none;
-    border: 2px solid #ffffff;
-    margin: 8px 0;
-    font-family: monospace;
-  }
-
   .input-container input {
-    background-color: #fff;
-    padding: 6px;
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #e8f9ff;
+    padding: 6px 10px;
     font-size: 0.875rem;
     width: 250px;
     border-radius: 4px;
+    border: 2px solid #ffffff;
+    margin: 8px 0;
+    font-family: monospace;
+    transition: all 0.3s ease;
   }
 
-  .input-mail:focus::placeholder,
-  .input-pwd:focus::placeholder {
-    opacity: 0;
-    transition: opacity .9s;
+  .input-container input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
   }
 
+  .input-container input:focus {
+    border-color: #00ffcc;
+    box-shadow: 0 0 8px #00ffcc;
+    background-color: rgba(0, 255, 204, 0.15);
+  }
+
+  /* ----- Botón ----- */
   .submit {
     display: block;
     padding: 8px;
@@ -125,7 +191,12 @@ const StyledWrapper = styled.div`
     cursor: pointer;
   }
 
-  /*------ Títulos -------*/
+  .submit:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  /* ----- Títulos ----- */
   .form-title {
     font-size: 1.25rem;
     font-family: monospace;
@@ -150,11 +221,11 @@ const StyledWrapper = styled.div`
   }
 
   @keyframes flickering {
-    0%,100% { opacity: 1; }
-    42%,43%,48%,49% { opacity: 0; }
+    0%, 100% { opacity: 1; }
+    42%, 43%, 48%, 49% { opacity: 0; }
   }
 
-  /*------ 💸 Signos de dólar flotando -------*/
+  /* ----- Dólares flotantes ----- */
   .bg-stars {
     position: absolute;
     top: 0;
@@ -186,7 +257,6 @@ const StyledWrapper = styled.div`
   .dollar:nth-child(3) { top: 60%; left: 70%; animation-delay: 2s; }
   .dollar:nth-child(4) { top: 90%; left: 85%; animation-delay: 1.5s; }
 
-  /*------ Responsividad -------*/
   @media (max-width: 480px) {
     .form {
       max-width: 300px;
@@ -198,5 +268,3 @@ const StyledWrapper = styled.div`
     }
   }
 `;
-
-export default Form;

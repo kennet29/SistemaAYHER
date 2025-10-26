@@ -1,8 +1,26 @@
 import React, { useEffect, useState } from "react";
 import styled, { keyframes } from "styled-components";
-import { FaCog, FaSave } from "react-icons/fa";
+import { FaCog, FaSave, FaArrowLeft } from "react-icons/fa";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const API_URL = "http://localhost:4000/api/configuracion";
+
+// 🔹 Leer cookies manualmente
+function getCookie(name: string) {
+  const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
+// 🔹 Decodificar token JWT
+function decodeToken(token: string) {
+  try {
+    const payload = token.split(".")[1];
+    return JSON.parse(atob(payload));
+  } catch {
+    return null;
+  }
+}
 
 const ConfiguracionView = () => {
   const [config, setConfig] = useState({
@@ -17,43 +35,64 @@ const ConfiguracionView = () => {
     mensajeFactura: "",
   });
 
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // 🔹 Obtener configuración actual
   useEffect(() => {
+    const token = getCookie("token");
+    if (!token) {
+      toast.error("⚠️ No hay sesión activa. Inicia sesión nuevamente.");
+      setTimeout(() => (window.location.href = "/"), 2000);
+      return;
+    }
+
+    const decoded = decodeToken(token);
+    if (decoded) {
+      setUser(decoded);
+      console.log("👤 Usuario autenticado:", decoded);
+    } else {
+      toast.error("⚠️ Token inválido o expirado. Inicia sesión nuevamente.");
+      setTimeout(() => (window.location.href = "/"), 2000);
+      return;
+    }
+
+    // 🔹 Obtener configuración
     fetch(API_URL, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
       .then((data) => {
         if (data) setConfig(data);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        toast.error("❌ Error al cargar configuración.");
+        setLoading(false);
+      });
   }, []);
 
-  // 🔹 Guardar cambios
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    const token = getCookie("token");
 
     try {
       const res = await fetch(API_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(config),
       });
 
       if (!res.ok) throw new Error("Error al guardar configuración");
 
-      alert("✅ Configuración guardada correctamente");
+      toast.success("✅ Configuración guardada correctamente");
     } catch (error) {
       console.error(error);
-      alert("❌ No se pudo guardar la configuración");
+      toast.error("❌ No se pudo guardar la configuración");
     } finally {
       setSaving(false);
     }
@@ -64,12 +103,19 @@ const ConfiguracionView = () => {
   return (
     <Container>
       <AnimatedBackground />
+      <ToastContainer position="top-right" autoClose={3000} />
+
+      {/* 🔹 Botón de volver */}
+      <BackButton onClick={() => (window.location.href = "/home")}>
+        <FaArrowLeft /> Volver
+      </BackButton>
+
       <Header>
         <div className="title">
           <FaCog className="icon" />
           <h1>Configuración General</h1>
         </div>
-        <p>Administra la información principal de tu empresa</p>
+        <p>Bienvenido</p>
       </Header>
 
       <FormContainer onSubmit={handleSubmit}>
@@ -89,7 +135,9 @@ const ConfiguracionView = () => {
             type="text"
             placeholder="Nombre legal de la empresa"
             value={config.razonSocial}
-            onChange={(e) => setConfig({ ...config, razonSocial: e.target.value })}
+            onChange={(e) =>
+              setConfig({ ...config, razonSocial: e.target.value })
+            }
             required
           />
 
@@ -97,7 +145,9 @@ const ConfiguracionView = () => {
           <textarea
             placeholder="Ingrese la dirección completa"
             value={config.direccion}
-            onChange={(e) => setConfig({ ...config, direccion: e.target.value })}
+            onChange={(e) =>
+              setConfig({ ...config, direccion: e.target.value })
+            }
             required
           />
 
@@ -106,7 +156,9 @@ const ConfiguracionView = () => {
             type="text"
             placeholder="Ejemplo: +505 8888-8888"
             value={config.telefono1}
-            onChange={(e) => setConfig({ ...config, telefono1: e.target.value })}
+            onChange={(e) =>
+              setConfig({ ...config, telefono1: e.target.value })
+            }
           />
 
           <label>Teléfono 2</label>
@@ -114,7 +166,9 @@ const ConfiguracionView = () => {
             type="text"
             placeholder="Ejemplo: +505 7777-7777"
             value={config.telefono2}
-            onChange={(e) => setConfig({ ...config, telefono2: e.target.value })}
+            onChange={(e) =>
+              setConfig({ ...config, telefono2: e.target.value })
+            }
           />
 
           <label>Correo</label>
@@ -122,7 +176,9 @@ const ConfiguracionView = () => {
             type="email"
             placeholder="correo@empresa.com"
             value={config.correo}
-            onChange={(e) => setConfig({ ...config, correo: e.target.value })}
+            onChange={(e) =>
+              setConfig({ ...config, correo: e.target.value })
+            }
           />
 
           <label>Sitio Web</label>
@@ -130,7 +186,9 @@ const ConfiguracionView = () => {
             type="text"
             placeholder="https://empresa.com"
             value={config.sitioWeb}
-            onChange={(e) => setConfig({ ...config, sitioWeb: e.target.value })}
+            onChange={(e) =>
+              setConfig({ ...config, sitioWeb: e.target.value })
+            }
           />
 
           <label>Logo (URL)</label>
@@ -138,7 +196,9 @@ const ConfiguracionView = () => {
             type="text"
             placeholder="https://ruta-del-logo.png"
             value={config.logoUrl}
-            onChange={(e) => setConfig({ ...config, logoUrl: e.target.value })}
+            onChange={(e) =>
+              setConfig({ ...config, logoUrl: e.target.value })
+            }
           />
 
           {config.logoUrl && (
@@ -170,7 +230,7 @@ const ConfiguracionView = () => {
 
 export default ConfiguracionView;
 
-// ======================= 🎨 ESTILOS ==========================
+// === 🎨 ESTILOS ===
 const wave = keyframes`
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
@@ -203,6 +263,35 @@ const AnimatedBackground = styled.div`
   animation: ${wave} 12s ease infinite;
   opacity: 0.09;
   z-index: 0;
+`;
+
+const BackButton = styled.button`
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: linear-gradient(135deg, #004aad, #ff3131);
+  color: white;
+  font-weight: 600;
+  border: none;
+  border-radius: 0.6em;
+  padding: 0.5em 1.2em;
+  cursor: pointer;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 0.95em;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: all 0.3s ease;
+
+  &:hover {
+    transform: scale(1.05);
+    background: linear-gradient(135deg, #ff3131, #004aad);
+  }
+
+  svg {
+    font-size: 1.1em;
+  }
 `;
 
 const Header = styled.header`
@@ -247,12 +336,6 @@ const FormContainer = styled.form`
   backdrop-filter: blur(10px);
   border-radius: 1em;
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-  z-index: 1;
-  transition: 0.3s ease;
-
-  &:hover {
-    transform: translateY(-3px);
-  }
 `;
 
 const SectionTitle = styled.h2`
@@ -280,26 +363,19 @@ const InputGrid = styled.div`
   textarea {
     width: 100%;
     padding: 0.8em;
-    border: 1.5px solid #ccd6eb;
+    border: 2px solid #5a6d90; /* 🔹 Borde oscuro */
     border-radius: 0.6em;
     font-size: 1em;
     background-color: rgba(255, 255, 255, 0.95);
-    color: #001a33; /* ✅ Texto visible */
+    color: #001a33;
     font-weight: 500;
-    transition: all 0.25s ease;
-  }
+    transition: all 0.3s ease;
 
-  input::placeholder,
-  textarea::placeholder {
-    color: #7a8ca9; /* ✅ Placeholder visible */
-  }
-
-  input:focus,
-  textarea:focus {
-    border-color: #004aad;
-    background: #f4f8ff;
-    box-shadow: 0 0 6px rgba(0, 74, 173, 0.2);
-    outline: none;
+    &:focus {
+      outline: none;
+      border-color: #003399;
+      box-shadow: 0 0 6px rgba(0, 51, 153, 0.3);
+    }
   }
 
   textarea {
@@ -322,7 +398,6 @@ const LogoPreview = styled.div`
     max-height: 130px;
     border-radius: 0.6em;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
-    border: 2px solid #004aad33;
   }
 `;
 
@@ -343,13 +418,7 @@ const SaveButton = styled.button`
   transition: all 0.3s ease;
 
   &:hover {
-    transform: scale(1.03);
-    box-shadow: 0 0 1em rgba(255, 49, 49, 0.35);
-  }
-
-  &:disabled {
-    background: #a0a0a0;
-    cursor: not-allowed;
+    transform: scale(1.02);
   }
 `;
 

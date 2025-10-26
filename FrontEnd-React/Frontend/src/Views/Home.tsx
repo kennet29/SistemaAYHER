@@ -8,6 +8,7 @@ import {
   FaChartLine,
   FaThLarge,
   FaCog,
+  FaDollarSign,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 
@@ -73,13 +74,22 @@ const Home = () => {
           <button onClick={() => navigate("/categorias")}>Entrar</button>
         </Card>
 
+        {/* 🔹 Nueva Card: Tipo de Cambio */}
+        <Card color1="#00695c" color2="#26a69a">
+          <div className="icon-circle">
+            <FaDollarSign />
+          </div>
+          <h2>Tipo de Cambio</h2>
+          <p>Consulta y actualiza el valor actual del dólar.</p>
+          <button onClick={() => navigate("/tipo-cambio")}>Entrar</button>
+        </Card>
+
         <Card color1="#004d40" color2="#009688">
           <div className="icon-circle">
             <FaCog />
           </div>
           <h2>Configuración</h2>
           <p>Administra usuarios, permisos y preferencias del sistema.</p>
-          {/* ✅ Redirección hacia la vista de Configuración */}
           <button onClick={() => navigate("/configuracion")}>Entrar</button>
         </Card>
       </MainContent>

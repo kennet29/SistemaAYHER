@@ -1,0 +1,273 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+/* ===== CONTENEDOR GENERAL ===== */
+.inventario-container {
+  width: 100vw;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #ffffff 0%, #eef3ff 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: 'Poppins', sans-serif;
+  position: relative;
+}
+
+/* ===== FONDO ANIMADO ===== */
+.inventario-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(-45deg, #004aad, #ff3131, #001a33, #007bff);
+  background-size: 400% 400%;
+  animation: wave 12s ease infinite;
+  opacity: 0.08;
+  z-index: -1;
+}
+
+@keyframes wave {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ===== CABECERA ===== */
+.inventario-header {
+  width: 100%;
+  text-align: center;
+  background: linear-gradient(90deg, #001f4d, #004aad);
+  color: white;
+  padding: 2em 0;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+.inventario-header .icon {
+  font-size: 2.2em;
+}
+
+/* ===== BOTÓN VOLVER ===== */
+.inventario-back-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: linear-gradient(135deg, #004aad, #ff3131);
+  color: white;
+  font-weight: 600;
+  border: none;
+  border-radius: 0.6em;
+  padding: 0.6em 1.3em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.inventario-back-btn:hover {
+  transform: scale(1.05);
+  opacity: 0.9;
+}
+
+/* ===== TARJETA DE FORMULARIO ===== */
+.inventario-card {
+  width: 90%;
+  background: white;
+  border-radius: 1em;
+  padding: 2em;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  margin-top: 2em;
+}
+
+/* ===== TÍTULO DE SECCIÓN ===== */
+.inventario-title {
+  font-size: 1.4em;
+  color: #004aad;
+  border-left: 6px solid #ff3131;
+  padding-left: 10px;
+  margin-bottom: 1em;
+}
+
+/* ===== FORMULARIO ===== */
+.inventario-form {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5em;
+}
+
+.inventario-form label {
+  font-weight: 600;
+  color: #00264d;
+}
+
+.inventario-form input,
+.inventario-form select,
+.inventario-form textarea {
+  width: 50%;
+  padding: 0.7em;
+  border: 2px solid #5a6d90;
+  border-radius: 0.6em;
+  font-size: 1em;
+  background: #fff;
+  color:black;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.inventario-form input:focus,
+.inventario-form select:focus,
+.inventario-form textarea:focus {
+  border-color: #004aad;
+  box-shadow: 0 0 5px rgba(0, 74, 173, 0.5);
+  outline: none;
+}
+
+/* ===== FILAS ===== */
+.inventario-row {
+  display: flex;
+  gap: 1.2em;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.inventario-row div {
+  flex: 1;
+  min-width: 30%;
+}
+
+/* ===== BOTÓN GUARDAR ===== */
+.inventario-save-btn {
+  background: linear-gradient(135deg, #004aad, #ff3131);
+  color: white;
+  font-weight: 700;
+  border: none;
+  border-radius: 0.8em;
+  padding: 1em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.inventario-save-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 74, 173, 0.4);
+}
+
+/* ===== ACCIONES ===== */
+.inventario-actions {
+  display: flex;
+  gap: 0.8em;
+  justify-content: center;
+}
+
+.action-btn {
+  border: none;
+  border-radius: 0.5em;
+  padding: 0.6em 0.9em;
+  cursor: pointer;
+  color: white;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.action-btn.edit {
+  background: linear-gradient(135deg, #007bff, #004aad);
+}
+
+.action-btn.delete {
+  background: linear-gradient(135deg, #ff4d4d, #cc0000);
+}
+
+.action-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* ===== TABLA ===== */
+.inventario-table {
+  width: 97%;
+  max-width: 1400px;
+  background: white;
+  border-radius: 1em;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+  margin: 2.5em 0;
+  padding: 1.5em;
+  overflow-x: auto;
+}
+
+/* ===== ESTILOS PERSONALIZADOS PARA DataTable ===== */
+.rdt_Table {
+  font-size: 0.95rem;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.rdt_TableHead {
+  background: linear-gradient(90deg, #004aad, #007bff);
+  color: #000000;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rdt_TableHeadRow {
+  min-height: 55px !important;
+}
+
+.rdt_TableRow {
+  font-size: 0.95rem;
+  height: 58px !important;
+  transition: background 0.2s ease;
+}
+
+.rdt_TableRow:hover {
+  background-color: #f0f6ff;
+}
+
+.rdt_TableCol {
+  padding: 14px !important;
+}
+
+.rdt_TableCell {
+  padding: 14px !important;
+  font-size: 0.96rem;
+  color: #00264d;
+}
+
+/* Hace las columnas más grandes */
+.rdt_TableCol,
+.rdt_TableCell {
+  min-width: 500px;
+}
+
+.rdt_Pagination {
+  border-top: 2px solid #004aad;
+  background-color: #f9fbff;
+  font-weight: 500;
+
+}
+
+/* ===== TOTALES ===== */
+.inventario-totales {
+  text-align: right;
+  font-weight: 600;
+  margin-top: 1em;
+  color: #00264d;
+  padding-right: 1em;
+}
+
+.inventario-totales p {
+  margin: 4px 0;
+  font-size: 1rem;
+}
+
+/* ===== CARGANDO ===== */
+.inventario-loading {
+  text-align: center;
+  margin-top: 20%;
+  font-size: 1.3em;
+  color: #004aad;
+  font-weight: 600;
+}
+
+/* ===== PIE DE PÁGINA ===== */
+.inventario-footer {
+  width: 100%;
+  text-align: center;
+  background: #001a33;
+  color: white;
+  padding: 1.2% 0;
+  margin-top: auto;
+  font-size: 0.9em;
+}
