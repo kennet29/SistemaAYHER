@@ -9,11 +9,12 @@ import {
   FaThLarge,
   FaCog,
   FaDollarSign,
+  FaUserFriends,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 
 const Home = () => {
-  const navigate = useNavigate(); // 🔹 Para redirigir entre rutas
+  const navigate = useNavigate();
 
   return (
     <HomeContainer>
@@ -34,7 +35,7 @@ const Home = () => {
             <FaBoxOpen />
           </div>
           <h2>Inventario</h2>
-          <p>Control total sobre tus productos, categorías y existencias.</p>
+          <p>Control total sobre tus productos, existencias y repuestos.</p>
           <button onClick={() => navigate("/inventario")}>Entrar</button>
         </Card>
 
@@ -43,8 +44,18 @@ const Home = () => {
             <FaCashRegister />
           </div>
           <h2>Facturación</h2>
-          <p>Genera facturas, cotizaciones y gestiona tus ventas fácilmente.</p>
+          <p>Emití facturas, remisiones y cotizaciones fácilmente.</p>
           <button onClick={() => navigate("/facturacion")}>Entrar</button>
+        </Card>
+
+        {/* ✅ Nueva Card Clientes */}
+        <Card color1="#00695c" color2="#26a69a">
+          <div className="icon-circle">
+            <FaUserFriends />
+          </div>
+          <h2>Clientes</h2>
+          <p>Administra tus clientes y su historial de compras y crédito.</p>
+          <button onClick={() => navigate("/clientes")}>Entrar</button>
         </Card>
 
         <Card color1="#cc0000" color2="#ff3333">
@@ -52,7 +63,7 @@ const Home = () => {
             <FaTags />
           </div>
           <h2>Marcas</h2>
-          <p>Administra marcas, proveedores y catálogos de productos.</p>
+          <p>Organiza tus proveedores y catálogos de productos.</p>
           <button onClick={() => navigate("/marcas")}>Entrar</button>
         </Card>
 
@@ -61,7 +72,7 @@ const Home = () => {
             <FaExchangeAlt />
           </div>
           <h2>Movimientos</h2>
-          <p>Consulta entradas, salidas y ajustes de stock en tiempo real.</p>
+          <p>Consulta entradas, salidas y ajustes de inventario.</p>
           <button onClick={() => navigate("/movimientos")}>Entrar</button>
         </Card>
 
@@ -70,17 +81,16 @@ const Home = () => {
             <FaThLarge />
           </div>
           <h2>Categorías</h2>
-          <p>Organiza tus productos en grupos y mejora la gestión visual.</p>
+          <p>Clasificación total del catálogo de productos.</p>
           <button onClick={() => navigate("/categorias")}>Entrar</button>
         </Card>
 
-        {/* 🔹 Nueva Card: Tipo de Cambio */}
         <Card color1="#00695c" color2="#26a69a">
           <div className="icon-circle">
             <FaDollarSign />
           </div>
           <h2>Tipo de Cambio</h2>
-          <p>Consulta y actualiza el valor actual del dólar.</p>
+          <p>Consulta y actualiza el valor del dólar.</p>
           <button onClick={() => navigate("/tipo-cambio")}>Entrar</button>
         </Card>
 
@@ -89,7 +99,7 @@ const Home = () => {
             <FaCog />
           </div>
           <h2>Configuración</h2>
-          <p>Administra usuarios, permisos y preferencias del sistema.</p>
+          <p>Gestión del sistema, usuarios y preferencias.</p>
           <button onClick={() => navigate("/configuracion")}>Entrar</button>
         </Card>
       </MainContent>
@@ -103,7 +113,8 @@ const Home = () => {
 
 export default Home;
 
-// ✨ Animaciones
+/* ========== ANIMACIONES ========== */
+
 const wave = keyframes`
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
@@ -126,7 +137,8 @@ const pulse = keyframes`
   50% { opacity: 1; }
 `;
 
-// 🎨 Estilos principales
+/* ========== ESTILOS BASE ========== */
+
 const HomeContainer = styled.div`
   width: 100vw;
   height: 100vh;
@@ -178,8 +190,6 @@ const Header = styled.header`
     font-size: 2.4em;
     font-weight: 700;
     margin: 0;
-    letter-spacing: 0.05em;
-    text-shadow: 0 0.1em 0.2em rgba(0, 0, 0, 0.3);
   }
 
   p {
@@ -234,7 +244,6 @@ const Card = styled.div<{ color1: string; color2: string }>`
     justify-content: center;
     align-items: center;
     font-size: 1.9em;
-    color: #fff;
     animation: ${glow} 5s ease-in-out infinite, ${pulse} 6s ease-in-out infinite;
   }
 
@@ -242,13 +251,11 @@ const Card = styled.div<{ color1: string; color2: string }>`
     font-size: 1.4em;
     font-weight: 700;
     margin-bottom: 0.5em;
-    text-shadow: 0 0.05em 0.15em rgba(0, 0, 0, 0.2);
   }
 
   p {
     font-size: 0.95em;
     margin-bottom: 6%;
-    color: #f0f0f0;
   }
 
   button {
@@ -260,7 +267,6 @@ const Card = styled.div<{ color1: string; color2: string }>`
     padding: 0.6em 1.5em;
     cursor: pointer;
     transition: all 0.3s ease;
-    text-transform: uppercase;
   }
 
   button:hover {
@@ -280,6 +286,4 @@ const Footer = styled.footer`
   font-size: 0.9em;
   letter-spacing: 0.05em;
   box-shadow: 0 -0.5vh 1.5vh rgba(0, 0, 0, 0.3);
-  position: relative;
-  z-index: 1;
 `;

@@ -4,7 +4,6 @@ import { authenticate } from '../../middleware/auth';
 
 export const tipoCambioRouter = Router();
 
-// Solo ADMIN puede crear/actualizar
-tipoCambioRouter.post('/', authenticate, ctrl.create);
-tipoCambioRouter.get('/', authenticate, ctrl.list);
+tipoCambioRouter.post('/',  ctrl.create);
+tipoCambioRouter.get('/',  ctrl.list);
 tipoCambioRouter.get('/latest',  ctrl.getLatest);

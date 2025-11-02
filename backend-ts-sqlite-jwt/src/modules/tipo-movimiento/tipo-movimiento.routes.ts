@@ -5,16 +5,16 @@ import { authenticate } from '../../middleware/auth';
 export const tipoMovimientoRouter = Router();
 
 // 📌 Crear nuevo tipo de movimiento
-tipoMovimientoRouter.post('/', authenticate, ctrl.create);
+tipoMovimientoRouter.post('/',  ctrl.create);
 
 // 📌 Listar todos
-tipoMovimientoRouter.get('/', authenticate, ctrl.list);
+tipoMovimientoRouter.get('/',  ctrl.list);
 
 // 📌 Obtener por ID
-tipoMovimientoRouter.get('/:id', authenticate, ctrl.get);
+tipoMovimientoRouter.get('/:id',  ctrl.get);
 
 // 📌 Actualizar tipo de movimiento
-tipoMovimientoRouter.put('/:id', authenticate, ctrl.update);
+tipoMovimientoRouter.put('/:id',  ctrl.update);
 
 // 📌 Eliminar tipo de movimiento
-tipoMovimientoRouter.delete('/:id', authenticate, ctrl.remove);
+tipoMovimientoRouter.delete('/:id',  ctrl.remove);

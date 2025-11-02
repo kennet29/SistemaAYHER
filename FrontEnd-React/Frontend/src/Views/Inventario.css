@@ -2,7 +2,7 @@
 
 /* ===== CONTENEDOR GENERAL ===== */
 .inventario-container {
-  width: 100vw;
+  width: 100%;
   min-height: 100vh;
   background: linear-gradient(180deg, #ffffff 0%, #eef3ff 100%);
   display: flex;
@@ -10,11 +10,13 @@
   align-items: center;
   font-family: 'Poppins', sans-serif;
   position: relative;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  padding: 0 1%;
 }
 
 /* ===== FONDO ANIMADO ===== */
 .inventario-bg {
-  position: absolute;
   inset: 0;
   background: linear-gradient(-45deg, #004aad, #ff3131, #001a33, #007bff);
   background-size: 400% 400%;
@@ -36,11 +38,12 @@
   background: linear-gradient(90deg, #001f4d, #004aad);
   color: white;
   padding: 2em 0;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+
 }
 
 .inventario-header .icon {
   font-size: 2.2em;
+  margin-bottom: 0.4em;
 }
 
 /* ===== BOTÓN VOLVER ===== */
@@ -65,79 +68,102 @@
 
 /* ===== TARJETA DE FORMULARIO ===== */
 .inventario-card {
-  width: 90%;
-  background: white;
+  width: 95%;
+  max-width: 1100px;
+  background: #fff;
   border-radius: 1em;
-  padding: 2em;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-  margin-top: 2em;
+  padding: 2em 3em;
+  margin-top: 2.5em;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  border: 2px solid rgba(0, 74, 173, 0.3);
 }
 
-/* ===== TÍTULO DE SECCIÓN ===== */
+/* ===== TÍTULO ===== */
 .inventario-title {
-  font-size: 1.4em;
+  font-size: 1.5em;
   color: #004aad;
   border-left: 6px solid #ff3131;
   padding-left: 10px;
   margin-bottom: 1em;
+  font-weight: 700;
 }
 
 /* ===== FORMULARIO ===== */
 .inventario-form {
   display: flex;
   flex-direction: column;
-  gap: 2.5em;
+  gap: 2em;
 }
 
+/* ===== FILAS DE INPUTS ===== */
+.inventario-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5em;
+  align-items: flex-start;
+  background: #fdfdfd;
+  border: 2px solid rgba(0, 74, 173, 0.25);
+  border-radius: 0.8em;
+  padding: 1.2em 1.5em;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease, transform 0.2s ease;
+}
+
+.inventario-row:hover {
+  transform: scale(1.01);
+  box-shadow: 0 5px 18px rgba(0, 74, 173, 0.25);
+}
+
+/* ===== INPUTS ===== */
 .inventario-form label {
+  display: block;
   font-weight: 600;
   color: #00264d;
+  margin-bottom: 6px;
 }
 
 .inventario-form input,
 .inventario-form select,
 .inventario-form textarea {
-  width: 50%;
-  padding: 0.7em;
+  width: 100%;
+  padding: 0.7em 0.9em;
   border: 2px solid #5a6d90;
   border-radius: 0.6em;
   font-size: 1em;
   background: #fff;
-  color:black;
+  color: #000;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  box-sizing: border-box;
 }
 
 .inventario-form input:focus,
 .inventario-form select:focus,
 .inventario-form textarea:focus {
   border-color: #004aad;
-  box-shadow: 0 0 5px rgba(0, 74, 173, 0.5);
+  box-shadow: 0 0 6px rgba(0, 74, 173, 0.4);
   outline: none;
 }
 
-/* ===== FILAS ===== */
-.inventario-row {
-  display: flex;
-  gap: 1.2em;
-  flex-wrap: wrap;
-  justify-content: space-between;
-}
-
-.inventario-row div {
-  flex: 1;
-  min-width: 30%;
+.inventario-form small {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.85em;
+  color: #004aad;
 }
 
 /* ===== BOTÓN GUARDAR ===== */
 .inventario-save-btn {
+  align-self: center;
   background: linear-gradient(135deg, #004aad, #ff3131);
   color: white;
   font-weight: 700;
   border: none;
   border-radius: 0.8em;
-  padding: 1em;
+  padding: 1em 2.5em;
   cursor: pointer;
   transition: all 0.3s ease;
+  font-size: 1.05em;
+  margin-top: 1.5em;
 }
 
 .inventario-save-btn:hover {
@@ -176,66 +202,27 @@
 
 /* ===== TABLA ===== */
 .inventario-table {
-  width: 97%;
-  max-width: 1400px;
+  width: 95%;
+  max-width: 1300px;
   background: white;
   border-radius: 1em;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
   margin: 2.5em 0;
   padding: 1.5em;
   overflow-x: auto;
+  border: 2px solid rgba(0, 74, 173, 0.25);
 }
 
-/* ===== ESTILOS PERSONALIZADOS PARA DataTable ===== */
-.rdt_Table {
-  font-size: 0.95rem;
-  border-radius: 10px;
-  overflow: hidden;
-}
-
+/* ===== DataTable ===== */
 .rdt_TableHead {
   background: linear-gradient(90deg, #004aad, #007bff);
-  color: #000000;
+  color: #ffffff;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.rdt_TableHeadRow {
-  min-height: 55px !important;
-}
-
-.rdt_TableRow {
-  font-size: 0.95rem;
-  height: 58px !important;
-  transition: background 0.2s ease;
 }
 
 .rdt_TableRow:hover {
   background-color: #f0f6ff;
-}
-
-.rdt_TableCol {
-  padding: 14px !important;
-}
-
-.rdt_TableCell {
-  padding: 14px !important;
-  font-size: 0.96rem;
-  color: #00264d;
-}
-
-/* Hace las columnas más grandes */
-.rdt_TableCol,
-.rdt_TableCell {
-  min-width: 500px;
-}
-
-.rdt_Pagination {
-  border-top: 2px solid #004aad;
-  background-color: #f9fbff;
-  font-weight: 500;
-
 }
 
 /* ===== TOTALES ===== */
@@ -250,6 +237,41 @@
 .inventario-totales p {
   margin: 4px 0;
   font-size: 1rem;
+}
+
+/* ===== BUSCADOR ===== */
+.inventario-filter-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 2px solid rgba(0, 74, 173, 0.3);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+  padding: 10px;
+  margin: 20px auto;
+  width: 80%;
+  max-width: 1000px;
+}
+
+.inventario-filter-box input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #bbb;
+  border-radius: 6px;
+  outline: none;
+  font-size: 15px;
+}
+
+.inventario-filter-box input:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 4px rgba(0, 123, 255, 0.4);
+}
+
+.filter-icon {
+  margin-right: 10px;
+  color: #007bff;
+  font-size: 18px;
 }
 
 /* ===== CARGANDO ===== */
@@ -270,4 +292,28 @@
   padding: 1.2% 0;
   margin-top: auto;
   font-size: 0.9em;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 900px) {
+  .inventario-card {
+    width: 95%;
+    padding: 1.5em;
+  }
+
+  .inventario-row {
+    grid-template-columns: 1fr;
+  }
+
+  .inventario-save-btn {
+    width: 100%;
+  }
+
+  .inventario-filter-box {
+    width: 90%;
+  }
+
+  .inventario-header {
+    font-size: 0.9rem;
+  }
 }

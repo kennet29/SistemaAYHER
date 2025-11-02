@@ -5,6 +5,7 @@ import {
   FaTrash,
   FaArrowLeft,
   FaBoxOpen,
+  FaSearch,
 } from "react-icons/fa";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -28,6 +29,7 @@ const InventarioView = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tipoCambio, setTipoCambio] = useState<number>(36.5);
+  const [filtro, setFiltro] = useState("");
   const [totales, setTotales] = useState({
     valorTotalC: 0,
     valorTotalD: 0,
@@ -136,6 +138,16 @@ const InventarioView = () => {
     }
   };
 
+  const itemsFiltrados = useMemo(() => {
+    const q = filtro.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(
+      (i) =>
+        i.nombre?.toLowerCase().includes(q) ||
+        i.numeroParte?.toLowerCase().includes(q)
+    );
+  }, [filtro, items]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = getCookie("token") || localStorage.getItem("token");
@@ -197,17 +209,17 @@ const InventarioView = () => {
 
   const handleEdit = (item: any) => {
     setForm({
-      numeroParte: item.numeroParte,
-      nombre: item.nombre,
+      numeroParte: item.numeroParte || "",
+      nombre: item.nombre || "",
       descripcion: item.descripcion || "",
-      marcaId: item.marcaId,
-      categoriaId: item.categoriaId,
-      stockActual: item.stockActual,
-      costoPromedioCordoba: Number(item.costoPromedioCordoba),
-      precioVentaPromedioCordoba: Number(item.precioVentaPromedioCordoba),
-      precioVentaSugeridoCordoba: Number(item.precioVentaSugeridoCordoba),
+      marcaId: Number(item.marcaId || 0),
+      categoriaId: Number(item.categoriaId || 0),
+      stockActual: Number(item.stockActual || 0),
+      costoPromedioCordoba: Number(item.costoPromedioCordoba || 0),
+      precioVentaPromedioCordoba: Number(item.precioVentaPromedioCordoba || 0),
+      precioVentaSugeridoCordoba: Number(item.precioVentaSugeridoCordoba || 0),
       codigoSustituto: item.codigoSustituto || "",
-      marcaSustitutoId: item.marcaSustitutoId || 0,
+      marcaSustitutoId: Number(item.marcaSustitutoId || 0),
     });
     setEditing(item.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -270,12 +282,8 @@ const InventarioView = () => {
     {
       name: "Código Sustituto",
       selector: (r: any) => {
-        const sustituto = items.find(
-          (i) => i.numeroParte === r.codigoSustituto
-        );
-        return sustituto
-          ? `${sustituto.numeroParte} — ${sustituto.nombre}`
-          : "—";
+        const sustituto = items.find((i) => i.numeroParte === r.codigoSustituto);
+        return sustituto ? `${sustituto.numeroParte} — ${sustituto.nombre}` : "—";
       },
     },
     {
@@ -286,10 +294,14 @@ const InventarioView = () => {
       name: "Acciones",
       cell: (r: any) => (
         <div className="inventario-actions">
-          <button className="action-btn edit" onClick={() => handleEdit(r)}>
+          <button className="action-btn edit" onClick={() => handleEdit(r)} title="Editar">
             <FaEdit />
           </button>
-          <button className="action-btn delete" onClick={() => handleDelete(r.id)}>
+          <button
+            className="action-btn delete"
+            onClick={() => handleDelete(r.id)}
+            title="Eliminar"
+          >
             <FaTrash />
           </button>
         </div>
@@ -316,11 +328,11 @@ const InventarioView = () => {
         <FaBoxOpen className="icon" />
         <h1>Gestión de Inventario</h1>
         <p>
-          Tipo de cambio actual:{" "}
-          <strong>{tipoCambio.toFixed(2)} C$ = 1 US$</strong>
+          Tipo de cambio actual: <strong>{tipoCambio.toFixed(2)} C$ = 1 US$</strong>
         </p>
       </header>
 
+      {/* ===== Formulario Crear/Editar ===== */}
       <div className="inventario-card">
         <h2 className="inventario-title">
           {editing ? "Editar Producto" : "Nuevo Producto"}
@@ -333,9 +345,8 @@ const InventarioView = () => {
               <input
                 type="text"
                 value={form.numeroParte}
-                onChange={(e) =>
-                  setForm({ ...form, numeroParte: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, numeroParte: e.target.value })}
+                required
               />
             </div>
             <div>
@@ -344,6 +355,7 @@ const InventarioView = () => {
                 type="text"
                 value={form.nombre}
                 onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                required
               />
             </div>
           </div>
@@ -353,9 +365,7 @@ const InventarioView = () => {
               <label>Marca</label>
               <select
                 value={form.marcaId}
-                onChange={(e) =>
-                  setForm({ ...form, marcaId: Number(e.target.value) })
-                }
+                onChange={(e) => setForm({ ...form, marcaId: Number(e.target.value) })}
               >
                 <option value={0}>Seleccione</option>
                 {marcas.map((m) => (
@@ -365,6 +375,7 @@ const InventarioView = () => {
                 ))}
               </select>
             </div>
+
             <div>
               <label>Categoría</label>
               <select
@@ -389,9 +400,8 @@ const InventarioView = () => {
               <input
                 type="number"
                 value={form.stockActual}
-                onChange={(e) =>
-                  setForm({ ...form, stockActual: Number(e.target.value) })
-                }
+                onChange={(e) => setForm({ ...form, stockActual: Number(e.target.value) })}
+                min={0}
               />
             </div>
             <div>
@@ -400,12 +410,12 @@ const InventarioView = () => {
                 type="number"
                 value={form.costoPromedioCordoba}
                 onChange={(e) =>
-                  setForm({
-                    ...form,
-                    costoPromedioCordoba: Number(e.target.value),
-                  })
+                  setForm({ ...form, costoPromedioCordoba: Number(e.target.value) })
                 }
+                min={0}
+                step="0.01"
               />
+              <small>≈ {formUSD.costoPromedioDolar.toFixed(2)} US$</small>
             </div>
             <div>
               <label>Precio Venta Promedio (C$)</label>
@@ -418,19 +428,48 @@ const InventarioView = () => {
                     precioVentaPromedioCordoba: Number(e.target.value),
                   })
                 }
+                min={0}
+                step="0.01"
+              />
+              <small>≈ {formUSD.precioVentaPromedioDolar.toFixed(2)} US$</small>
+            </div>
+          </div>
+
+          <div className="inventario-row">
+            <div>
+              <label>Precio Venta Sugerido (C$)</label>
+              <input
+                type="number"
+                value={form.precioVentaSugeridoCordoba}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    precioVentaSugeridoCordoba: Number(e.target.value),
+                  })
+                }
+                min={0}
+                step="0.01"
+              />
+              <small>≈ {formUSD.precioVentaSugeridoDolar.toFixed(2)} US$</small>
+            </div>
+            <div>
+              <label>Descripción</label>
+              <input
+                type="text"
+                value={form.descripcion}
+                onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
+                placeholder="Opcional"
               />
             </div>
           </div>
 
-          {/* === CAMPOS DE SUSTITUTO === */}
+          {/* === Sustitutos === */}
           <div className="inventario-row">
             <div>
               <label>Código Sustituto</label>
               <select
                 value={form.codigoSustituto}
-                onChange={(e) =>
-                  setForm({ ...form, codigoSustituto: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, codigoSustituto: e.target.value })}
               >
                 <option value="">Seleccione un producto</option>
                 {items
@@ -448,10 +487,7 @@ const InventarioView = () => {
               <select
                 value={form.marcaSustitutoId}
                 onChange={(e) =>
-                  setForm({
-                    ...form,
-                    marcaSustitutoId: Number(e.target.value),
-                  })
+                  setForm({ ...form, marcaSustitutoId: Number(e.target.value) })
                 }
               >
                 <option value={0}>Seleccione</option>
@@ -470,10 +506,21 @@ const InventarioView = () => {
         </form>
       </div>
 
+      {/* ===== Buscador + Tabla ===== */}
+      <div className="inventario-filter-box">
+        <FaSearch className="filter-icon" />
+        <input
+          type="text"
+          placeholder="Buscar por nombre o número de parte..."
+          value={filtro}
+          onChange={(e) => setFiltro(e.target.value)}
+        />
+      </div>
+
       <div className="inventario-table">
         <DataTable
           columns={columns}
-          data={items}
+          data={itemsFiltrados}
           pagination
           highlightOnHover
           striped
@@ -501,9 +548,7 @@ const InventarioView = () => {
         </div>
       </div>
 
-      <footer className="inventario-footer">
-        © 2025 AYHER — Todos los derechos reservados
-      </footer>
+      <footer className="inventario-footer">© 2025 AYHER — Todos los derechos reservados</footer>
     </div>
   );
 };

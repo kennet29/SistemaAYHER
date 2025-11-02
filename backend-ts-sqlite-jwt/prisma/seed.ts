@@ -29,6 +29,8 @@ async function seedTipoMovimiento() {
     { nombre: 'Devolución a Proveedor', afectaStock: true, esEntrada: false, descripcion: 'Devolución al proveedor' },
     { nombre: 'Cambio Entrada', afectaStock: true, esEntrada: true,  descripcion: 'Entrada por cambio' },
     { nombre: 'Cambio Salida',  afectaStock: true, esEntrada: false, descripcion: 'Salida por cambio' },
+    { nombre: "Salida por Remisión", afectaStock: true, esEntrada: false, descripcion: "Salida de inventario por remisión" },
+
   ];
 
   for (const tm of data) {
@@ -38,7 +40,8 @@ async function seedTipoMovimiento() {
       create: tm
     });
   }
-  console.log('✅ TipoMovimiento seed listo.');
+
+  console.log('✅ Tipos de Movimiento listos.');
 }
 
 async function main() {

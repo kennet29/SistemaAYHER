@@ -1,0 +1,268 @@
+/* ===== CONTENEDOR GENERAL ===== */
+.movimientos-container {
+  width: 100vw;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f6f8ff 0%, #dfe7ff 100%);
+  font-family: "Poppins", sans-serif;
+  padding: 25px 4vw;
+  color: #1b1b1b;
+  box-sizing: border-box;
+}
+
+/* ===== TÍTULO ===== */
+h1 {
+  text-align: center;
+  color: #003399;
+  font-size: 2.2rem;
+  font-weight: 800;
+  margin-bottom: 25px;
+  text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+/* ===== FORMULARIO ===== */
+.movimiento-form {
+  background: #ffffff;
+  padding: 25px;
+  border-radius: 16px;
+  border: 2px solid #00000050;
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto 40px auto;
+  transition: all 0.3s ease;
+}
+
+.movimiento-form:hover {
+  box-shadow: 0 14px 45px rgba(0, 0, 0, 0.65);
+}
+
+/* ===== GRUPOS DE INPUTS ===== */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.form-group label {
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #002266;
+}
+
+/* ===== INPUTS Y SELECTS ===== */
+.form-group input,
+.form-group select {
+  width: 50%;
+  padding: 10px 12px;
+  border: 2px solid #00000070;
+  border-radius: 10px;
+  font-size: 15px;
+  background: #f8faff;
+  color: black;
+  text-align: center;
+  transition: all 0.2s ease-in-out;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: #000000;
+  outline: none;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
+}
+
+/* ===== BUSCADOR ===== */
+.buscador {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #f0f4ff;
+  border: 2px solid #00000070;
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: black;
+  width: 50%;
+  margin: 0 auto 25px auto;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+  transition: all 0.3s ease;
+}
+
+.buscador:hover {
+  box-shadow: 0 10px 45px rgba(0, 0, 0, 0.6);
+}
+
+.icono-buscar {
+  color: #000000;
+  font-size: 18px;
+}
+
+.buscador input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 15px;
+  width: 100%;
+  color: black;
+  text-align: center;
+}
+
+/* ===== TABLA DE PRODUCTOS SELECCIONADOS ===== */
+.tabla-items {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 25px;
+  width: 100%;
+}
+
+.tabla-items h3 {
+  margin-bottom: 10px;
+  color: #000000;
+  font-weight: 700;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.tabla-items table {
+  width: 70%;
+  border-collapse: collapse;
+  background: #ffffff;
+  border: 2px solid #00000090;
+  border-radius: 14px;
+  box-shadow: 0 12px 45px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.tabla-items table:hover {
+  box-shadow: 0 14px 60px rgba(0, 0, 0, 0.85);
+}
+
+.tabla-items th {
+  background: #000000;
+  color: #ffffff;
+  padding: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: inset 0 -2px 8px rgba(255, 255, 255, 0.15);
+}
+
+.tabla-items td {
+  padding: 10px;
+  border-bottom: 1px solid #b5b5b5;
+  color: #111;
+}
+
+.tabla-items tr:hover {
+  background: #e5e5e5;
+  transition: background 0.2s ease-in-out;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ===== INPUT CANTIDAD ===== */
+.tabla-items input[type="number"] {
+  width: 125px;
+  color: black;
+  text-align: center;
+  border: 2px solid #00000070;
+  border-radius: 6px;
+  padding: 4px 6px;
+  background: #f8faff;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease-in-out;
+}
+
+.tabla-items input:focus {
+  border-color: #000000;
+  outline: none;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+/* ===== BOTONES ===== */
+.btn-agregar {
+  background: #000000;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.btn-agregar:hover {
+  background: #222222;
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.65);
+}
+
+.btn-eliminar {
+  background: #cc0000;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.btn-eliminar:hover {
+  background: #990000;
+  transform: scale(1.05);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.7);
+}
+
+.btn-registrar {
+  display: block;
+  margin: 40px auto 0 auto;
+  background: #000000;
+  color: #ffffff;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s ease;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.8);
+}
+
+.btn-registrar:hover {
+  background: #111111;
+  transform: translateY(-3px);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.9);
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  .form-group input,
+  .form-group select,
+  .buscador {
+    width: 90%;
+  }
+
+  .tabla-items table {
+    width: 95%;
+    font-size: 14px;
+  }
+
+  .tabla-items th,
+  .tabla-items td {
+    padding: 8px;
+  }
+
+  .tabla-items input {
+    width: 75px;
+  }
+
+  .btn-registrar {
+    width: 80%;
+  }
+}

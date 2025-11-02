@@ -16,6 +16,8 @@ import { ventaRouter } from './modules/ventas/ventas.routes';
 import { devolucionRouter } from './modules/devoluciones/devolucion.routes';
 import { cambioRouter } from './modules/cambio/cambio.routes';
 import { configuracionRouter } from './modules/configuracion/configuracion.routes';
+import { remisionRouter } from './modules/remision/remision.routes';
+
 const app = express();
 
 app.use(helmet());
@@ -29,11 +31,15 @@ app.use('/api/auth', authRouter);
 app.use('/api/users', userRouter);
 import { tipoCambioRouter } from './modules/tipo-cambio/tipo-cambio.routes';
 import { reportesRouter } from './modules/reportes/reportes.routes';
-
+import { movimientoInventarioRouter } from './modules/movimientoInventario/MovimientoInventario.routes';
+import { clienteRouter } from './modules/clientes/cliente.routes';
 // ...
 app.use('/api/tipo-cambio', tipoCambioRouter);
 app.use('/api/reportes', reportesRouter);
+app.use('/api/remision',remisionRouter);
+app.use('/api/clientes',clienteRouter);
 app.use('/api/configuracion',configuracionRouter);
+app.use('/api/remision',remisionRouter);
 // NUEVOS
 app.use('/api/marcas', marcaRouter);
 app.use('/api/inventario', inventarioRouter);
@@ -43,6 +49,7 @@ app.use('/api/ventas', ventaRouter);
 app.use('/api/devoluciones', devolucionRouter);
 app.use('/api/cambios', cambioRouter);
 app.use('/api/categorias',categoriaRouter);
+app.use('/api/MovimientoInventario',movimientoInventarioRouter);
 
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error(err);

@@ -1,0 +1,167 @@
+/* ===== CONTENEDOR GENERAL ===== */
+.rem-container {
+  width: 100vw;
+  min-height: 100vh;
+  padding: 20px 4vw;
+  background: linear-gradient(180deg, #ffffff 0%, #eef3ff 100%);
+  font-family: "Poppins", sans-serif;
+  color: #0d2a52;
+  box-sizing: border-box;
+}
+
+/* ===== TITULO ===== */
+.rem-title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #003399;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+/* ===== CARD ===== */
+.rem-card {
+  background: #ffffff;
+  padding: 18px 22px;
+  border-radius: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+  margin-bottom: 24px;
+  border: 1px solid rgba(0,0,0,0.10);
+}
+
+/* ===== GRID 2 ===== */
+.rem-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 180px;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+/* ===== INPUTS ===== */
+.rem-input,
+.rem-textarea,
+.rem-product-input,
+.rem-qty-input {
+  width: 70%;
+  padding: 6px 9px;
+  border-radius: 6px;
+  border: 1px solid #c7d4ef;
+  background: #f9fbff;
+  color: #003366;
+  font-size: 0.85rem;
+  outline: none;
+  margin-bottom: 10px;
+  transition: .2s;
+  height: 36px;
+}
+
+.rem-textarea {
+  height: auto;
+  min-height: 70px;
+  resize: vertical;
+}
+
+.rem-input:focus,
+.rem-textarea:focus,
+.rem-product-input:focus,
+.rem-qty-input:focus {
+  border-color: #0047b3;
+  box-shadow: 0 0 3px rgba(0, 82, 204, 0.25);
+}
+
+/* ===== PRODUCT TABLE ROWS ===== */
+.rem-row {
+  display: grid;
+  grid-template-columns: 4fr 1fr auto;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rem-qty-input {
+  text-align: center;
+  height: 34px;
+}
+
+/* ===== BOTONES ===== */
+.rem-btn {
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 10px 18px;
+  font-size: 0.9rem;
+  transition: .2s;
+}
+
+/* Agregar */
+.rem-add-btn {
+  background: #004aad;
+  color: #fff;
+  margin-top: 6px;
+  margin-right: 15px;
+}
+.rem-add-btn:hover { background: #003799; }
+
+/* Guardar */
+.rem-save-btn {
+  background: #008c1a;
+  color: #fff;
+  padding: 11px 20px;
+  box-shadow: 0 2px 6px rgba(0,128,0,0.25);
+  margin-top: 14px;
+}
+.rem-save-btn:hover { background: #006a14; }
+
+/* Eliminar fila */
+.rem-delete-btn {
+  background: #ffe2e2;
+  color: #c30000;
+  border: 1px solid #ffb3b3;
+  padding: 6px;
+  border-radius: 6px;
+}
+.rem-delete-btn:hover { background: #ffb3b3; }
+
+/* ===== TABLA PENDIENTES ===== */
+.rem-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.rem-table th {
+  background: #003399;
+  color: white;
+  padding: 10px;
+  font-size: 0.9rem;
+}
+
+.rem-table td {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+}
+
+/* Botones */
+.rem-table-btn {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  font-weight: 600;
+  margin-right: 5px;
+}
+
+.rem-view-btn { background: #e6f0ff; color: #004aad; border: 1px solid #004aad; }
+.rem-complete-btn { background: #e7ffe9; color: #008c1a; border: 1px solid #00a61e; }
+.rem-cancel-btn { background: #ffecec; color: #c30000; border: 1px solid #ff7a7a; }
+
+.rem-view-btn:hover { background: #cce0ff; }
+.rem-complete-btn:hover { background: #caffd1; }
+.rem-cancel-btn:hover { background: #ffb3b3; }
+
+/* Responsive */
+@media (max-width: 700px) {
+  .rem-grid-2 { grid-template-columns: 1fr; }
+}
