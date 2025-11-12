@@ -1,0 +1,16 @@
+/* Proforma-specific tweaks */
+.proforma-page{ --col-actions: 140px; }
+.proforma-page{
+  font-family: 'Inter', 'Poppins', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+/* Logo en pantalla removido por solicitud; estilos eliminados */
+.proforma-page .delete-btn{
+  width:100%;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+}
+.proforma-page .delete-btn svg{ margin-right: 6px; }
+/* Local fonts (no external requests) */
+@import url('../assets/fonts/fonts.css');

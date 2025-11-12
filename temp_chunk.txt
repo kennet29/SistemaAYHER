@@ -1,0 +1,87 @@
+﻿  flex-direction: column;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+}
+.rem-close-btn{
+  margin-top: 10px;
+  background: #1f2937;
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.rem-close-btn:hover{ background:#111827; }
+
+/* ===== EXTRA BUTTONS (History/Excel) ===== */
+/* Toggle HistÃ³rico/Pendientes */
+.rem-history-btn{
+  background: #e6f0ff;
+  color: #004aad;
+  border: 1px solid #004aad;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 22px; /* mÃ¡s separaciÃ³n del contenido/modal */
+}
+.rem-history-btn:hover{ background: #cce0ff; }
+
+/* BotÃ³n Excel (detalle y tabla) */
+.rem-excel-btn{
+  background: #e7ffe9;
+  color: #008c1a;
+  border: 1px solid #00a61e;
+  cursor: pointer;
+}
+.rem-excel-btn:hover{ background: #caffd1; }
+
+/* ===== Compact product search width ===== */
+/* Constrain the product search container and input so it doesn't span too wide */
+.rem-typeahead { width: 100%; max-width: 380px; }
+.rem-row .rem-product-input { max-width: 380px; }
+
+@media (max-width: 900px) {
+  .rem-typeahead { max-width: 320px; }
+  .rem-row .rem-product-input { max-width: 320px; }
+}
+
+@media (max-width: 640px) {
+  .rem-typeahead { max-width: 100%; }
+  .rem-row .rem-product-input { max-width: 100%; }
+}
+
+/* ===== Align delete button under header ===== */
+/* Make the delete button fill its grid cell to align with 'Acciones' header */
+.rem-row .rem-delete-btn {
+  width: auto;
+  max-width: 96px;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  text-align: center;
+  justify-self: start;
+}
+@media (max-width: 640px) {
+  .rem-row .rem-delete-btn { max-width: 80px; }
+}
+
+/* ===== DataTable headers (scoped) ===== */
+/* Productos (editable) */
+.rem-items-table .rdt_TableHeadRow { background: #ffffff; border-bottom: 2px solid #ffd6d6; }
+.rem-items-table .rdt_TableCol { color: #c30000; font-weight: 700; white-space: nowrap; }
+.rem-items-table .rdt_TableCol > div { justify-content: flex-start; text-align: left; }
+
+/* Remisiones (pendientes/histÃ³rico) */
+.rem-remisiones-table .rdt_TableHeadRow { background: #ffffff; border-bottom: 2px solid #ffd6d6; }
+.rem-remisiones-table .rdt_TableCol { color: #c30000; font-weight: 700; white-space: nowrap; }
+
+/* Detalle de remisiÃ³n */
+.rem-detalle-table .rdt_TableHeadRow { background: #ffffff; border-bottom: 2px solid #ffd6d6; }
+.rem-detalle-table .rdt_TableCol { color: #c30000; font-weight: 700; white-space: nowrap; }
+
+/* Pendientes (react-data-table-component) */
+.rem-pendientes-table .rdt_TableHeadRow { background: #eef5ff; border-bottom: 2px solid #ffd6d6; }
+.rem-pendientes-table .rdt_TableCol { color: #c30000; font-weight: 700; white-space: nowrap; }
+.rem-pendientes-table .rdt_TableRow:hover { background: #f7fbff; }
+.rem-pendientes-table .rdt_TableCell { padding-top: 10px; padding-bottom: 10px; }

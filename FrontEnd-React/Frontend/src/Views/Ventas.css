@@ -1,0 +1,181 @@
+/* src/Views/Ventas.css - Estilos aislados para Ventas */
+
+/* ================== */
+/*    Variables       */
+/* ================== */
+:root{
+  --brand-1:#003399;
+  --brand-2:#0052cc;
+  --bg-1:#eef3ff;
+  --text-1:#001a33;
+
+  --input-border:#6b7a99;
+  --input-border-focus:#3451b2;
+  --input-shadow-focus: rgba(52,81,178,.25);
+
+  --ctrl-font: .9rem;
+  --ctrl-pad-y: .45rem;
+  --ctrl-pad-x: .6rem;
+  --icon-size: 36px;
+  --icon-size-sm: 32px;
+}
+
+/* ================== */
+/*     Base App       */
+/* ================== */
+.fact-page{
+  width:100%;min-height:100vh;overflow-x:hidden;
+  background:linear-gradient(180deg,#ffffff 0%,var(--bg-1) 100%);
+  font-family:"Poppins",sans-serif;color:var(--text-1);
+}
+.fact-page, html, body{margin:0;padding:0}
+html, body{overflow-x:hidden;background:#ffffff}
+.fact-header{
+  width:100%;padding:1.2rem 2rem;
+  background:linear-gradient(270deg,var(--brand-1),var(--brand-2));
+  color:#fff;display:flex;align-items:center;gap:1rem;
+  position:sticky;top:0;z-index:100;box-shadow:0 4px 15px rgba(0,0,70,.2)
+}
+.ventas-page .fact-header h1{ color:#fff; }
+.fact-header .back-btn{
+  background:transparent;border:none;color:#fff;font-weight:700;
+  padding:.35rem .6rem;border-radius:.4rem;cursor:pointer
+}
+.fact-header .back-btn:hover{ text-decoration:underline; }
+.fact-header h1{margin:0;font-weight:700;font-size:1.9rem}
+.fact-content{width:min(1200px,95%);margin:2rem auto;display:grid;gap:1.5rem}
+.ventas-page .fact-content{width:100%}
+.card{
+  background:#fff;padding:1.2rem;border-radius:10px;
+  box-shadow:0 4px 15px rgba(0,0,0,.08);
+  border:1px solid #e3e9f5
+}
+
+/* Inputs básicos dentro de tarjeta */
+.card input[type="text"],
+.card input[type="search"],
+.card input[type="number"],
+.card input[type="date"]{
+  padding: var(--ctrl-pad-y) var(--ctrl-pad-x);
+  border-radius:.5rem;
+  border:1px solid var(--input-border);
+  background:#fff;
+  color:inherit;
+  font-size: var(--ctrl-font);
+}
+.card input:focus{
+  border-color:var(--input-border-focus);
+  outline:none;
+  box-shadow:0 0 0 3px var(--input-shadow-focus);
+}
+
+/* ================== */
+/*   Controles/Btns   */
+/* ================== */
+button{cursor:pointer}
+.icon-btn{
+  width: var(--icon-size);
+  height: var(--icon-size);
+  display:inline-flex;align-items:center;justify-content:center;
+  border-radius:.6rem;border:1px solid #bcd3ff;background:#eaf1ff;color:#000000;font-size:16px
+}
+.icon-btn:hover{background:#d9e7ff;color:black}
+
+/* ================== */
+/*     Ventas UI      */
+/* ================== */
+.toolbar{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:.6rem}
+.toolbar .flex-spacer{flex:1}
+.metrics{display:flex;gap:.5rem;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:.35rem;padding:.18rem .55rem;border-radius:999px;background:#eaf1ff;border:1px solid #bcd3ff;color:#003c8a;font-weight:600;font-size:.9rem}
+.chip--danger{background:#ffe9e9;border-color:#ffb3b3;color:#b00020}
+.chip--muted{background:#f1f4f8;border-color:#d8e1ee;color:#445}
+
+/* Helpers para DataTable */
+.rdt_TableHead .rdt_TableHeadRow,
+.rdt_TableBody .rdt_TableRow{align-items:center}
+.rdt_TableHead .rdt_TableCol,
+.rdt_TableBody .rdt_TableCell{
+  display:flex;align-items:center;justify-content:center;
+  text-align:center;
+}
+.rdt_TableHeadRow,
+.rdt_TableRow{ min-height: 60px !important; }
+.rdt_TableRow{ border-bottom: 1px solid #9aa9c9 !important; }
+.rdt_TableHeadRow{ border-bottom: 2px solid #7d8fb8 !important; }
+.num-right{display:block;width:100%;text-align:right}
+
+/* ================== */
+/*      Modales       */
+/* ================== */
+.picker-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.55);
+  display:flex;justify-content:center;align-items:center;z-index:9999
+}
+.picker-card{
+  background:#fff;width:min(1000px,95%);padding:1.2rem;border-radius:12px;
+  box-shadow:0 8px 30px rgba(0,0,0,.25);position:relative
+}
+.picker-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:.7rem}
+.picker-title{font-size:1.2rem;font-weight:700;display:flex;gap:.6rem;align-items:center}
+.picker-close{
+  background:#111;color:#fff;border:none;width:34px;height:34px;border-radius:8px;font-size:16px
+}
+
+/* ================== */
+/*   Tabla detalles   */
+/* ================== */
+.rem-modal{max-height:70vh;overflow:auto;display:flex;flex-direction:column;gap:.9rem;padding-right:.25rem}
+.rem-table{padding:.2rem 0 1rem 0}
+.rem-head,.rem-row{display:grid;grid-template-columns:4fr .8fr 1.2fr 64px;align-items:center}
+.rem-head{
+  position:sticky;top:0;background:#f0f6ff;border-bottom:1px solid #dbe7ff;
+  padding:.5rem 1rem;font-weight:700;color:#053a7a;z-index:1
+}
+.rem-body{display:flex;flex-direction:column}
+.rem-row{padding:.5rem 1rem;border-bottom:1px dashed #e3ebfa;font-size:.95rem}
+.rem-row:nth-child(odd){background:#ffffff}
+.rem-row:nth-child(even){background:#fbfdff}
+.rem-row:hover{background:#eef5ff}
+.rem-col{display:flex;align-items:center}
+.rem-col--product{gap:.35rem;overflow:hidden}
+.rem-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rem-col--qty,.rem-col--price,.rem-col--action{justify-content:center}
+
+/* ================== */
+/*   Ventas table     */
+/* ================== */
+.ventas-table-wrap{
+  display:flex;
+  justify-content:flex-start; /* alinea a la izquierda dentro de la card */
+}
+.ventas-table{
+  width:90%;
+  margin-left:0;   /* sin margen a la izquierda */
+  margin-right:auto; /* conserva proporcin hacia la derecha */
+  padding-right:1rem; /* respiro a la derecha sin romper el centrado */
+  box-sizing:border-box;
+  overflow-x:auto;
+}
+
+/* Separador entre tablas (historial vs detalles) */
+.ventas-separator{
+  width:90%;
+  height:1px;
+  background:linear-gradient(90deg, transparent, #dfe7f5, transparent);
+  margin:1rem auto;
+}
+
+/* Contenedor centrado para barra superior (buscador + métricas) */
+.ventas-center{ width:90%; margin:0 auto; }
+.ventas-page .toolbar .flex-spacer{ flex: 0 0 1rem; }
+@media (max-width: 700px){
+  .ventas-page .toolbar .flex-spacer{ flex: 1 1 auto; }
+}
+
+/* ================== */
+/*    Breakpoints     */
+/* ================== */
+@media (max-width:500px){
+  :root{ --icon-size: var(--icon-size-sm); }
+}

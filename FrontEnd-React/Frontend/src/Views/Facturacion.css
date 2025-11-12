@@ -1,67 +1,134 @@
-/* src/pages/Facturacion.css — versión compacta y responsive */
+/* Facturacion.css — component-scoped, responsive, rebuilt from scratch */
 
-/* ================== */
-/*    Variables       */
-/* ================== */
+/* ==========================
+   Design Tokens
+========================== */
 :root{
-  --brand-1:#003399;
-  --brand-2:#0052cc;
-  --bg-1:#eef3ff;
-  --text-1:#001a33;
+  /* Brand */
+  --brand-1:#0b58f0;
+  --brand-2:#0a3ec9;
+  --brand-3:#072b8a;
 
-  --input-border:#6b7a99;
-  --input-border-focus:#3451b2;
-  --input-shadow-focus: rgba(52,81,178,.25);
+  /* Surface & Text */
+  --bg:#f5f7ff;
+  --surface:#ffffff;
+  --text:#0c1b33;
+  --muted:#5a6b85;
 
-  /* Tamaños compactos */
-  --ctrl-font: .9rem;
-  --ctrl-pad-y: .45rem;
-  --ctrl-pad-x: .6rem;
-  --icon-size: 36px;
-  --icon-size-sm: 32px;
+  /* Inputs */
+  --border:#b8c6e0;
+  --border-strong:#8fa4ca;
+  --focus:#2e6bed;
+  --focus-shadow: rgba(46,107,237,.25);
 
-  /* Columnas tabla artículos (fluid con clamp) */
+  /* Buttons */
+  --primary:#11a46a;
+  --primary-hover:#0e8a5a;
+  --ghost-bg:#eef4ff;
+  --ghost-border:#c7d6ff;
+
+  /* Layout */
+  --radius-sm:8px;
+  --radius-md:10px;
+  --radius-lg:12px;
+  --shadow-sm:0 2px 10px rgba(0,0,0,.06);
+  --shadow-md:0 6px 20px rgba(0,0,0,.08);
+
+  /* Items grid columns */
   --col-qty: clamp(56px, 7vw, 80px);
-  --col-price: clamp(88px, 10vw, 116px);
-  --col-rem: 42px;
-  --col-actions: 48px;
+  --col-price: clamp(92px, 10vw, 124px);
+  --col-subtotal: clamp(96px, 12vw, 140px);
+  --col-rem: 44px;
+  --col-actions: 96px;
+
+  /* Controls */
+  --ctrl-font: .92rem;
+  --ctrl-pad-y: .5rem;
+  --ctrl-pad-x: .65rem;
+  --icon-size: 34px;
 }
 
-/* ================== */
-/*     Base App       */
-/* ================== */
+/* ==========================
+   Root Containers
+========================== */
+html, body, #root{ width:100vw; max-width:100vw; margin:0; padding:0; overflow-x:hidden; }
+.view-container{
+  width:100vw;
+  max-width:100vw;
+  min-height:100vh;
+  margin:0;
+  display:flex;
+  flex-direction:column;
+}
+
 .fact-page{
-  width:100vw;min-height:100vh;
-  background:linear-gradient(180deg,#ffffff 0%,var(--bg-1) 100%);
-  font-family:"Poppins",sans-serif;color:var(--text-1);
-}
-.fact-header{
-  width:100%;padding:1.2rem 2rem;
-  background:linear-gradient(270deg,var(--brand-1),var(--brand-2));
-  color:#fff;display:flex;align-items:center;gap:1rem;
-  position:sticky;top:0;z-index:100;box-shadow:0 4px 15px rgba(0,0,70,.2)
-}
-.fact-header .icon{font-size:2.3rem;color:#ffdddd}
-.fact-header h1{margin:0;font-weight:700;font-size:1.9rem}
-.fact-content{width:min(1200px,95%);margin:2rem auto;display:grid;gap:1.5rem}
-.card{
-  background:#fff;padding:1.2rem;border-radius:10px;
-  box-shadow:0 4px 15px rgba(0,0,0,.08);
-  border:1px solid #e3e9f5
+  width:100vw;
+  max-width:100vw;
+  display:flex;
+  flex-direction:column;
+  color:var(--text);
+  font-family:"Inter", "Poppins", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
 
-/* ================== */
-/*   Grid cabecera    */
-/* ================== */
+/* ==========================
+   Header
+========================== */
+.fact-header{
+  position:sticky; top:0; z-index:50;
+  display:flex; align-items:center; gap:1rem;
+  padding:1rem 1.5rem;
+  background:linear-gradient(270deg,var(--brand-2),var(--brand-1));
+  color:#fff; box-shadow:0 4px 16px rgba(0,22,80,.25);
+}
+.fact-header .icon{ font-size:2.1rem; color:#ffdede; }
+.fact-header h1{ margin:0; font-weight:800; letter-spacing:.2px; color:#fff; }
+.fact-header .back-btn{
+  background:transparent; color:#fff; border:none; cursor:pointer; font-weight:700;
+  padding:.35rem .6rem; border-radius:var(--radius-sm);
+}
+.fact-header .back-btn:hover{ text-decoration:underline; }
+
+/* ==========================
+   Top Navigation
+========================== */
+.nav-buttons{ display:flex; gap:.75rem; flex-wrap:wrap; padding:1rem 1.25rem 0 1.25rem; }
+.nav-buttons .ghost{
+  display:inline-flex; align-items:center; gap:.4rem;
+  background:var(--ghost-bg); border:1px solid var(--ghost-border); color:#0b3a9b;
+  padding:.55rem .8rem; border-radius:var(--radius-sm); font-weight:700; cursor:pointer;
+}
+.nav-buttons .ghost:hover{ background:#e3ecff; }
+
+/* ==========================
+   Main Content Area
+========================== */
+.fact-content{
+  width:100vw;
+  max-width:100vw;
+  display:grid;
+  gap:1.2rem;
+}
+
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  box-shadow:var(--shadow-sm);
+  padding:1rem;
+}
+
+/* ==========================
+   Header Form Grid
+========================== */
 .grid-3{
   display:grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap:.9rem;
+  grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
+  gap:1rem;
+  margin-bottom:.5rem;
 }
+.grid-3 label{ display:flex; flex-direction:column; gap:.35rem; font-weight:600; color:#18315b; }
 
-/* ================== */
-/*  Controles global  */
-/* ================== */
+/* Controls (card and pickers) */
 .card select,
 .card input[type="text"],
 .card input[type="number"],
@@ -70,221 +137,184 @@
 .picker-card input[type="search"],
 .picker-card input[type="number"],
 .picker-card input[type="date"]{
-  width:100%;
-  padding: var(--ctrl-pad-y) var(--ctrl-pad-x);
-  border-radius:.5rem;
-  border:1px solid var(--input-border);
-  background:#fff;
-  margin-top:.2rem;
-  font-size: var(--ctrl-font);
-  color:inherit;
+  width:85%;
+  max-width:360px;
+  padding:var(--ctrl-pad-y) var(--ctrl-pad-x);
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border);
+  background:#fff; color:var(--text);
+  font-size:var(--ctrl-font);
 }
+
 .card select:focus,
 .card input:focus,
 .picker-card input:focus{
-  border-color:var(--input-border-focus);
-  outline:none;
-  box-shadow:0 0 0 3px var(--input-shadow-focus);
+  outline:none; border-color:var(--focus);
+  box-shadow:0 0 0 3px var(--focus-shadow);
 }
 
-/* ================== */
-/*   Items (tabla)    */
-/* ================== */
-.items-container{margin-top:.9rem}
+/* ==========================
+   Items Table
+========================== */
+.items-container{ margin-top:.6rem; width:92%; margin-left:auto; margin-right:auto; }
 
 .items-header,
 .item-row{
   display:grid;
   grid-template-columns:
-    1fr               /* Producto */
-    var(--col-qty)    /* Cant */
-    var(--col-price)  /* Precio */
-    var(--col-rem)    /* Rem. */
-    var(--col-actions);/* Acciones */
-  gap:.5rem;
-  align-items:center;
-  text-align:center;
+    1fr /* producto */
+    var(--col-qty) /* cant */
+    var(--col-price) /* precio */
+    var(--col-subtotal) /* subtotal */
+    var(--col-rem) /* remision */
+    var(--col-actions) /* acciones */;
+  gap:.9rem; align-items:center; text-align:center;
 }
+
+/* Extra vertical space between rows */
+.item-row{ padding:.35rem 0; margin:.4rem 0 .8rem; }
 
 .items-header{
-  font-weight:700;color:#003366;border-bottom:2px solid #d1d9e6;
-  padding-bottom:.35rem;font-size:.9rem
+  padding:.25rem 0 .5rem 0;
+  border-bottom:2px solid var(--border-strong);
+  font-weight:800; color:#073a86; letter-spacing:.3px;
 }
 
-/* Texto producto más compacto pero legible */
+/* Producto (texto + botón buscar) */
 .item-row input[type="text"]{
-  padding:.45rem .55rem;
-  font-size:.9rem;
-  border:1px solid var(--input-border);
-  text-align:left; /* mejor lectura para nombres largos */
+  width:100%;
+  padding:.45rem .55rem; border:1px solid var(--border);
+  border-radius:var(--radius-sm); font-size:.92rem; text-align:left;
 }
 
-/* Cantidad / Precio aún más compactos */
-.item-row input{text-align:center}
-.qty-input{
-  width:100%;
-  padding:.35rem .4rem;
-  font-size:.9rem;
-  border-radius:.5rem;
-  border:1px solid var(--input-border);
-}
+.qty-input,
 .price-input{
-  width:100%;
-  padding:.35rem .4rem;
-  font-size:.9rem;
-  border-radius:.5rem;
-  border:1px solid var(--input-border);
+  width:100%; text-align:center; font-size:.95rem;
+  padding:.4rem .45rem; border:1px solid var(--border);
+  border-radius:var(--radius-sm);
 }
 
-/* Centrado rápido reutilizable */
-.center{display:flex;align-items:center;justify-content:center}
+.center{ display:flex; align-items:center; justify-content:center; }
+.item-row input[type="checkbox"]{ transform:scale(1.25); }
 
-/* Botones icono compactos */
-button{cursor:pointer}
+/* Icon buttons */
 .icon-btn{
-  width: var(--icon-size);
-  height: var(--icon-size);
-  display:inline-flex;align-items:center;justify-content:center;
-  border-radius:.6rem;border:1px solid #bcd3ff;background:#eaf1ff;color:#003c8a;font-size:16px
+  width:var(--icon-size); height:var(--icon-size);
+  display:inline-flex; align-items:center; justify-content:center;
+  background:#eef4ff; color:#092b7e; border:1px solid var(--ghost-border);
+  border-radius:10px; font-size:16px; cursor:pointer;
 }
-.icon-btn:hover{background:#d9e7ff}
+.icon-btn:hover{ background:#e0eaff; }
 
-/* Botón eliminar (mismo tamaño de ícono) */
-button.danger{
-  background:#ffe5e5;color:#a40000;border:1px solid #ffb3b3;border-radius:.5rem;
-  padding:0;width:var(--icon-size);height:var(--icon-size);display:inline-flex;align-items:center;justify-content:center
+.danger{
+  background:#ff2e2e; color:#fff; border:1px solid #ffb4b4;
 }
-button.danger:hover{background:#ffcccc}
+.danger:hover{ background:#e21d1d; }
 
-/* Botón "Agregar línea" */
+/* Textual delete button */
+.delete-btn{
+  width:auto; height:auto; padding:.45rem .75rem; font-weight:800;
+  border-radius:10px; background:#ff2e2e; color:#fff; border:1px solid #ffb4b4;
+}
+.delete-btn:hover{ background:#e21d1d; }
+
 .items-container > button{
-  margin-top:.7rem;padding:.65rem 1rem;border:none;background:#0052cc;color:#fff;border-radius:.6rem;font-weight:600
+  margin-top:.75rem; border:none; border-radius:10px; cursor:pointer;
+  background:var(--brand-1); color:#fff; padding:.7rem 1rem; font-weight:700;
 }
-.items-container > button:hover{background:#003c99}
+.items-container > button:hover{ background:var(--brand-3); }
 
-/* ================== */
-/*  Resumen/Acciones  */
-/* ================== */
-.resumen{display:flex;justify-content:flex-end}
+/* ==========================
+   Summary + Actions
+========================== */
+.resumen{ display:flex; justify-content:flex-start; width:100%; }
 .resumen .right{
-  background:#fff;border-radius:.9rem;padding:1rem;box-shadow:0 2px 12px rgba(0,0,0,.06);
-  border:1px solid #e3e9f5;width:280px
+  width:min(320px, 95%); background:var(--surface);
+  border:1px solid var(--border); border-radius:12px;
+  box-shadow:var(--shadow-sm); padding:1rem;
 }
-.resumen .row{display:flex;justify-content:space-between;padding:.35rem 0;font-size:1rem}
-.actions{display:flex;gap:1rem;flex-wrap:wrap}
-.actions button{padding:.7rem 1.1rem;font-weight:bold;border-radius:.6rem;border:none}
-.actions .primary{background:#00a86b;color:#fff}.actions .primary:hover{background:#008c59}
-.actions .ghost{background:#eaf1ff;border:1px solid #bcd3ff;color:#003c8a}
+.resumen .row{ display:flex; justify-content:space-between; padding:.35rem 0; font-size:1.05rem; }
+.resumen .total b{ font-size:1.15rem; }
 
-/* ================== */
-/*      Modales       */
-/* ================== */
+.actions{ display:flex; gap:.8rem; flex-wrap:wrap; padding:1rem 0; }
+.actions button{ border:none; border-radius:10px; font-weight:800; padding:.7rem 1.05rem; cursor:pointer; }
+.actions .primary{ background:var(--primary); color:#fff; }
+.actions .primary:hover{ background:var(--primary-hover); }
+.actions .ghost{ background:var(--ghost-bg); border:1px solid var(--ghost-border); color:#0b3a9b; }
+
+/* ==========================
+   Modals (Product / Remisión)
+========================== */
 .picker-overlay{
-  position:fixed;inset:0;background:rgba(0,0,0,.55);
-  display:flex;justify-content:center;align-items:center;z-index:9999
+  position:fixed; inset:0; z-index:1000;
+  background:rgba(0,0,0,.55);
+  display:flex; align-items:center; justify-content:center;
 }
-.picker-card{
-  background:#fff;width:min(1000px,95%);padding:1.2rem;border-radius:12px;
-  box-shadow:0 8px 30px rgba(0,0,0,.25);position:relative
-}
-.picker-card--rem{width:min(1120px,96%)}
-.picker-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:.7rem}
-.picker-title{font-size:1.2rem;font-weight:700;display:flex;gap:.6rem;align-items:center}
-.picker-close{
-  background:#111;color:#fff;border:none;width:34px;height:34px;border-radius:8px;font-size:16px
+.picker-card{ width:min(1100px, 95%); background:#fff; border-radius:12px; padding:1rem; box-shadow:var(--shadow-md); }
+.picker-card--rem{ width:min(1200px, 96%); }
+.picker-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:.6rem; }
+.picker-title{ display:flex; align-items:center; gap:.55rem; font-weight:800; }
+.picker-close{ width:34px; height:34px; border:none; border-radius:10px; background:#0f172a; color:#fff; cursor:pointer; }
+.center-cell{ display:inline-block; width:100%; text-align:center; }
+
+/* Remisión search input (narrower than full width) */
+.picker-card--rem .remision-search{
+  width:70%;
+  max-width:520px;
+  padding:.6rem .8rem;
+  border-radius:8px;
+  border:1px solid var(--border);
+  font-size:var(--ctrl-font);
 }
 
-/* ================== */
-/*  Remisión (tabla)  */
-/* ================== */
-.rem-modal{max-height:70vh;overflow:auto;display:flex;flex-direction:column;gap:.9rem;padding-right:.25rem}
-.rem-block{background:#f7faff;border:1px solid #dde7fb;border-radius:10px}
-.rem-block__head{
-  display:flex;gap:1.1rem;flex-wrap:wrap;padding:.7rem 1rem;border-bottom:1px solid #e4ecff;font-size:.9rem
-}
-.rem-table{padding:.2rem 0 1rem 0}
-.rem-head,.rem-row{display:grid;grid-template-columns:4fr .8fr 1.2fr 64px;align-items:center}
-.rem-head{
-  position:sticky;top:0;background:#f0f6ff;border-bottom:1px solid #dbe7ff;
-  padding:.5rem 1rem;font-weight:700;color:#053a7a;z-index:1
-}
-.rem-body{display:flex;flex-direction:column}
-.rem-row{padding:.5rem 1rem;border-bottom:1px dashed #e3ebfa;font-size:.95rem}
-.rem-row:nth-child(odd){background:#ffffff}
-.rem-row:nth-child(even){background:#fbfdff}
-.rem-row:hover{background:#eef5ff}
-.rem-col{display:flex;align-items:center}
-.rem-col--product{gap:.35rem;overflow:hidden}
-.rem-code{font-weight:600;white-space:nowrap}
-.rem-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rem-col--qty,.rem-col--price{justify-content:center}
-.rem-col--action{justify-content:center}
-.sel-btn{
-  width:32px;height:32px;background:#25c26e;border:none;border-radius:8px;color:#fff;font-size:16px;
-  display:inline-flex;align-items:center;justify-content:center
-}
-.sel-btn:hover{background:#19a95e}
-.sel-btn.disabled{background:#cbd3dd}
-
-/* ================== */
-/*  DataTable helper  */
-/* ================== */
+/* DataTable helpers */
 .rdt_TableHead .rdt_TableHeadRow,
-.rdt_TableBody .rdt_TableRow{align-items:center}
-.rdt_TableHead .rdt_TableCol,
-.rdt_TableBody .rdt_TableCell{
-  display:flex;align-items:center;justify-content:center;
-  text-align:center;
-}
-.num-right{display:block;width:100%;text-align:right}
+.rdt_TableBody .rdt_TableRow{ align-items:center; }
+.rdt_TableHead .rdt_TableCol, .rdt_TableBody .rdt_TableCell{ display:flex; justify-content:center; align-items:center; text-align:center; }
+.num-right{ display:block; width:100%; text-align:right; }
 
-/* ================== */
-/*    Checkbox size   */
-/* ================== */
-.item-row input[type="checkbox"]{
-  transform: scale(.9);
-}
+/* ==========================
+   Facturación-specific width behavior
+========================== */
+.facturacion-page{ width:100vw; max-width:100vw; }
+.facturacion-page .fact-content{ width:100vw; max-width:100vw; }
+.facturacion-page .nav-buttons{ width:100%; }
 
-/* ================== */
-/*    Breakpoints     */
-/* ================== */
-
-/* < 1200px: ligeramente más compacto */
-@media (max-width:1200px){
-  :root{
-    --icon-size: 34px;
-    --col-qty: clamp(52px, 7vw, 74px);
-    --col-price: clamp(84px, 10vw, 108px);
-  }
+/* ==========================
+   Responsive
+========================== */
+@media (max-width: 1100px){
+  :root{ --icon-size: 32px; }
 }
 
-/* < 900px: inputs y botones aún más chicos */
-@media (max-width:500px){
-  :root{
-    --icon-size: var(--icon-size-sm);
-  }
-  .items-header,.item-row{
+@media (max-width: 700px){
+  .card select,
+  .card input[type="text"],
+  .card input[type="number"],
+  .card input[type="date"]{ width:100%; max-width:none; }
+  .picker-card--rem .remision-search{ width:100%; max-width:none; }
+
+  .items-header, .item-row{
     grid-template-columns:
       1fr
-      clamp(52px, 12vw, 68px)
-      clamp(80px, 18vw, 104px)
+      clamp(52px, 18vw, 68px)
+      clamp(92px, 28vw, 120px)
+      clamp(96px, 28vw, 132px)
       40px
-      48px;
+      86px;
   }
-  .picker-card{width:96%}
 }
 
-/* < 600px: prioriza producto; controles muy compactos */
-@media (max-width:400px){
-  .items-header,.item-row{
-    grid-template-columns:
-      1fr
-      clamp(48px, 16vw, 64px)
-      clamp(74px, 26vw, 96px)
-      38px
-      46px;
-    gap:.4rem;
-  }
-  .card{padding:1rem}
-  .picker-title{font-size:1.05rem}
+@media (max-width: 420px){
+  .fact-header{ padding:.85rem 1rem; }
+  .nav-buttons{ padding: .8rem 1rem 0 1rem; }
+  .picker-card{ width:96%; }
+}
+/* Compact search button in product column */
+.item-row .product-search-btn{
+  width: 68px;
+  min-width: 68px;
+  height: 32px;
+  padding: 0 6px;
+  font-size: 0.85rem;
 }

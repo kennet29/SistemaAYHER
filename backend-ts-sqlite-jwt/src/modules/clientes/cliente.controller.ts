@@ -99,22 +99,37 @@ export const getClienteById = async (req: Request, res: Response) => {
 
 export const searchClientes = async (req: Request, res: Response) => {
   try {
-    const q = req.query.q?.toString() || "";
-
+    const q = (req.query.q?.toString() || "").trim();
     if (!q) return res.json([]);
 
-    const clientes = await prisma.cliente.findMany({
-      where: {
-        OR: [
-          { nombre: { contains: q, mode: "insensitive" } },
-          { empresa: { contains: q, mode: "insensitive" } },
-          { ruc: { contains: q, mode: "insensitive" } },
-        ],
-      },
-      take: 20,
-    });
-
-    return res.json(clientes);
+    // Primer intento: usando contains con mode (cuando el proveedor lo soporta)
+    try {
+      const clientes = await prisma.cliente.findMany({
+        where: {
+          OR: [
+            { nombre: { contains: q, mode: "insensitive" as any } },
+            { empresa: { contains: q, mode: "insensitive" as any } },
+            { ruc: { contains: q, mode: "insensitive" as any } },
+          ],
+        },
+        take: 20,
+      });
+      return res.json(clientes);
+    } catch (e: any) {
+      // Fallback para motores que no soportan `mode` (p.ej. SQLite), o cualquier error
+      try {
+        const all = await prisma.cliente.findMany({ take: 200 });
+        const ql = q.toLowerCase();
+        const pick = (s?: string | null) => (s || "").toLowerCase();
+        const filtered = all.filter((c: any) =>
+          pick(c.nombre).includes(ql) || pick(c.empresa).includes(ql) || pick(c.ruc).includes(ql)
+        ).slice(0, 20);
+        return res.json(filtered);
+      } catch (e2) {
+        console.error('[clientes] search fallback error:', e2);
+        return res.status(500).json({ message: "Error al buscar clientes" });
+      }
+    }
   } catch (err) {
     return res.status(500).json({ message: "Error al buscar clientes" });
   }

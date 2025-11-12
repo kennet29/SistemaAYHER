@@ -15,3 +15,9 @@ inventarioRouter.get('/report/con-sustituto/all',  ctrl.viewConSustituto);
 
 // Reemplazo del SP sp_BuscarProductoDisponible
 inventarioRouter.get('/buscar-disponible',  ctrl.buscarProductoDisponible);
+
+// Asignar ubicaciones en lote (A1..Z12)
+inventarioRouter.post('/asignar-ubicaciones', ctrl.asignarUbicaciones);
+
+// Bajo stock (stockActual <= stockMinimo)
+inventarioRouter.get('/low-stock', ctrl.listLowStock);

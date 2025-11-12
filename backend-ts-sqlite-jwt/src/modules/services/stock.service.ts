@@ -1,84 +1,122 @@
-import { PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
+// src/modules/services/stock.service.ts
+import { Prisma } from "@prisma/client";
+import { prisma } from "../../db/prisma";
 
 /**
- * Crea movimiento y ajusta stock.
- * Si recibe "tx", usa la transacción existente.
- * Si no, crea una nueva transacción.
+ * Inserta movimientos en batch y aplica los decrementos/ incrementos de stock agrupados.
+ * Debe ejecutarse SIEMPRE dentro del mismo `tx` que la venta.
+ */
+export async function crearMovimientosYAjustarStockBatch(args: {
+  tx: Prisma.TransactionClient;
+  movimientos: Array<{
+    inventarioId: number;
+    tipoMovimientoId: number;
+    cantidad: number;
+    // usamos solo precio de venta para salidas de venta
+    precioVentaUnitarioCordoba?: any;
+    tipoCambioValor?: any;
+    usuario?: string | null;
+    observacion?: string | null;
+  }>;
+  /**
+   * Map<inventarioId, cantidadASumarNegativaOUPositiva>
+   * Para salida: cantidad positiva aquí representa el decremento (internamente usamos { decrement }).
+   */
+  decrementarPorInventario: Map<number, number>;
+}) {
+  const { tx, movimientos, decrementarPorInventario } = args;
+
+  // 1) createMany movimientos (si hay)
+  if (movimientos.length) {
+    await tx.movimientoInventario.createMany({
+      data: movimientos.map((m) => ({
+        inventarioId: m.inventarioId,
+        tipoMovimientoId: m.tipoMovimientoId,
+        cantidad: m.cantidad,
+        precioVentaUnitarioCordoba: m.precioVentaUnitarioCordoba,
+        tipoCambioValor: m.tipoCambioValor,
+        usuario: m.usuario ?? null,
+        observacion: m.observacion ?? null,
+      })),
+    });
+  }
+
+  // 2) Ajustes de stock agrupados
+  for (const [inventarioId, cant] of decrementarPorInventario) {
+    if (cant > 0) {
+      // salida: decrement
+      await tx.inventario.update({
+        where: { id: inventarioId },
+        data: { stockActual: { decrement: cant } },
+      });
+    } else if (cant < 0) {
+      // entrada: increment (por completitud)
+      await tx.inventario.update({
+        where: { id: inventarioId },
+        data: { stockActual: { increment: Math.abs(cant) } },
+      });
+    }
+  }
+}
+
+/**
+ * Crea un único movimiento y ajusta el stock del producto según el tipo de movimiento.
+ * Debe ejecutarse dentro del mismo `tx` que la operación llamante.
  */
 export async function crearMovimientoYAjustarStock(args: {
+  tx: Prisma.TransactionClient;
   inventarioId: number;
   tipoMovimientoNombre: string;
   cantidad: number;
-  costoUnitarioCordoba?: string | number;
-  precioVentaUnitarioCordoba?: string | number;
-  tipoCambioValor?: string | number;
-  usuario?: string;
-  observacion?: string;
-  tx?: any; // ✅ tx permitido
+  precioVentaUnitarioCordoba?: any;
+  tipoCambioValor?: any;
+  usuario?: string | null;
+  observacion?: string | null;
 }) {
   const {
+    tx,
     inventarioId,
     tipoMovimientoNombre,
     cantidad,
-    costoUnitarioCordoba,
     precioVentaUnitarioCordoba,
     tipoCambioValor,
     usuario,
     observacion,
-    tx,
   } = args;
 
-  const db = tx ?? prisma; // ✅ Usa tx si viene, sino prisma normal
+  // 1) Obtener tipoMovimiento por nombre
+  const tipo = await tx.tipoMovimiento.findUnique({
+    where: { nombre: tipoMovimientoNombre },
+    select: { id: true, esEntrada: true },
+  });
+  if (!tipo) throw new Error("TipoMovimiento no encontrado");
 
-  const exec = async (trx: any) => {
-    // ✅ Buscar tipo movimiento
-    const tipo = await trx.tipoMovimiento.findUnique({
-      where: { nombre: tipoMovimientoNombre },
-    });
+  // 2) Crear movimiento
+  const movimiento = await tx.movimientoInventario.create({
+    data: {
+      inventarioId,
+      tipoMovimientoId: tipo.id,
+      cantidad,
+      precioVentaUnitarioCordoba: precioVentaUnitarioCordoba as any,
+      tipoCambioValor: tipoCambioValor as any,
+      usuario: usuario ?? null,
+      observacion: observacion ?? null,
+    },
+    include: { tipoMovimiento: true },
+  });
 
-    if (!tipo) {
-      throw new Error(`❌ TipoMovimiento no encontrado: ${tipoMovimientoNombre}`);
-    }
-
-    // ✅ Crear movimiento
-    const movimiento = await trx.movimientoInventario.create({
-      data: {
-        inventarioId,
-        tipoMovimientoId: tipo.id,
-        cantidad,
-        costoUnitarioCordoba: costoUnitarioCordoba as any,
-        precioVentaUnitarioCordoba: precioVentaUnitarioCordoba as any,
-        tipoCambioValor: tipoCambioValor as any,
-        usuario,
-        observacion,
-      },
-    });
-
-    // ✅ Ajustar stock
-    if (tipo.afectaStock) {
-      const factor = tipo.esEntrada ? 1 : -1;
-      await trx.inventario.update({
-        where: { id: inventarioId },
-        data: {
-          stockActual: { increment: factor * cantidad },
-        },
-      });
-    }
-
-    const inventario = await trx.inventario.findUnique({
+  // 3) Ajustar stock
+  if (tipo.esEntrada) {
+    await tx.inventario.update({
       where: { id: inventarioId },
-      select: { id: true, numeroParte: true, marcaId: true, stockActual: true },
+      data: { stockActual: { increment: cantidad } },
     });
-
-    return { movimiento, inventario };
-  };
-
-  // ✅ Si ya hay transacción, usa esa
-  if (tx) {
-    return await exec(tx);
+  } else {
+    await tx.inventario.update({
+      where: { id: inventarioId },
+      data: { stockActual: { decrement: cantidad } },
+    });
   }
 
-  // ✅ Si no hay, crea una nueva transacción
-  return await prisma.$transaction(exec);
+  return { movimiento };
 }

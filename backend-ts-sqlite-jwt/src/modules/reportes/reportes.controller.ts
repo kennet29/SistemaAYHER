@@ -48,3 +48,56 @@ export async function kardex(req: Request, res: Response) {
     movimientos: data
   });
 }
+
+// ===============================
+// 📊 Cartera de Clientes (totales por cliente: Crédito vs Contado)
+// ===============================
+export async function carteraClientes(_req: Request, res: Response) {
+  try {
+    const rows = await prisma.venta.groupBy({
+      by: ['clienteId', 'tipoPago'],
+      where: { clienteId: { not: null } },
+      _sum: { totalCordoba: true, totalDolar: true },
+    });
+
+    const clienteIds = Array.from(new Set(rows.map((r) => r.clienteId as number))).filter(Boolean) as number[];
+    const clientes = await prisma.cliente.findMany({
+      where: { id: { in: clienteIds } },
+      select: { id: true, nombre: true, empresa: true },
+    });
+    const mapCliente = new Map<number, { id: number; nombre: string | null; empresa: string | null }>();
+    for (const c of clientes) mapCliente.set(c.id, c as any);
+
+    const acc = new Map<number, any>();
+    for (const r of rows) {
+      const id = r.clienteId as number;
+      if (!acc.has(id)) {
+        const c = mapCliente.get(id);
+        acc.set(id, {
+          clienteId: id,
+          clienteNombre: (c?.nombre || c?.empresa || `Cliente ${id}`) as string,
+          totalContadoCordoba: 0,
+          totalCreditoCordoba: 0,
+          totalContadoDolar: 0,
+          totalCreditoDolar: 0,
+        });
+      }
+      const item = acc.get(id);
+      const sumC$ = Number(r._sum.totalCordoba || 0);
+      const sumUS$ = Number(r._sum.totalDolar || 0);
+      if (r.tipoPago === 'CONTADO') {
+        item.totalContadoCordoba += sumC$;
+        item.totalContadoDolar += sumUS$;
+      } else if (r.tipoPago === 'CREDITO') {
+        item.totalCreditoCordoba += sumC$;
+        item.totalCreditoDolar += sumUS$;
+      }
+    }
+
+    const data = Array.from(acc.values()).sort((a, b) => (b.totalContadoCordoba + b.totalCreditoCordoba) - (a.totalContadoCordoba + a.totalCreditoCordoba));
+    res.json({ data });
+  } catch (err) {
+    console.error('❌ Error en carteraClientes:', err);
+    res.status(500).json({ message: 'Error interno al calcular cartera de clientes' });
+  }
+}

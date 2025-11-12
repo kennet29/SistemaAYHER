@@ -7,10 +7,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:dev": "vite",
+    "electron:build": "electron-builder"
   },
   "dependencies": {
     "react": "^19.1.1",
+    "react-chartjs-2": "^5.3.1",
     "react-data-table-component": "^7.7.0",
     "react-dom": "^19.1.1",
     "react-icons": "^5.5.0",
@@ -31,6 +34,9 @@
     "globals": "^16.4.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.45.0",
-    "vite": "^7.1.12"
+    "vite": "^7.1.12",
+    "electron": "^33.0.0",
+    "vite-plugin-electron": "^0.28.8",
+    "electron-builder": "^24.13.3"
   }
 }

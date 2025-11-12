@@ -6,7 +6,8 @@ import {
   remisionesPendientes,
   marcarRemisionFacturada,
   imprimirRemisionExcel,
-  imprimirRemision
+  imprimirRemision,
+  imprimirRemisionPDF
 } from "./remision.controller";
 
 import { authenticate } from "../../middleware/auth";
@@ -25,6 +26,8 @@ remisionRouter.get("/export/excel",  imprimirRemisionExcel);
 
 // ✅ Exportar remisión individual Excel A4 para imprimir
 remisionRouter.get("/print/excel/:id",  imprimirRemisionExcel);
+
+remisionRouter.get("/print/pdf/:id",  imprimirRemisionPDF);
 
 // ✅ Imprimir remisión en HTML (por si la usas después)
 remisionRouter.get("/print/:id",  imprimirRemision);

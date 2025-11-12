@@ -6,3 +6,6 @@ export const reportesRouter = Router();
 
 // Kardex por producto
 reportesRouter.get('/kardex/:inventarioId', authenticate, ctrl.kardex);
+
+// Cartera de clientes (totales crédito vs contado)
+reportesRouter.get('/cartera-clientes', authenticate, ctrl.carteraClientes);

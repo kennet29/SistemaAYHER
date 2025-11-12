@@ -266,3 +266,58 @@ h1 {
     width: 80%;
   }
 }
+
+/* ===== Modal Detalle Movimiento ===== */
+.mov-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.mov-modal {
+  width: min(920px, 95%);
+  background: #fff;
+  border: 2px solid rgba(0,0,0,0.25);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+
+.mov-modal .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: linear-gradient(90deg, #003399, #0055cc);
+  color: #fff;
+}
+
+.mov-modal .modal-close {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.mov-modal .modal-body {
+  padding: 12px 14px;
+  color: #1b1b1b;
+}
+
+.mov-modal .modal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px 14px;
+}
+
+.mov-modal .modal-grid > div {
+  background: #f7faff;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 8px;
+  padding: 8px 10px;
+}

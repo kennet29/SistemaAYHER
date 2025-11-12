@@ -8,6 +8,7 @@ import type { TableColumn } from "react-data-table-component";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./Facturacion.css";
+import { useNavigate } from "react-router-dom";
 
 /* ===== Utils ===== */
 function getCookie(name: string) {
@@ -30,6 +31,7 @@ type LineItem = {
   producto: string;
   cantidad: number;
   precio: number;
+  precioBaseNIO?: number;
   esRemision?: boolean;
   remisionDetalleId?: number | null;
   inventarioId?: number | null;
@@ -76,6 +78,8 @@ const notify = {
 
 /* ===== Component ===== */
 const Facturacion: React.FC = () => {
+  const navigate = useNavigate();
+
   const [cliente, setCliente] = useState<number | "">("");
   const [clientesList, setClientesList] = useState<any[]>([]);
   const [fecha] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -95,7 +99,7 @@ const Facturacion: React.FC = () => {
   const [remisionSearch, setRemisionSearch] = useState("");
 
   const [items, setItems] = useState<LineItem[]>([
-    { id: cryptoId(), producto: "", cantidad: 1, precio: 0 },
+    { id: cryptoId(), producto: "", cantidad: 1, precio: 0, precioBaseNIO: 0 },
   ]);
 
   const [tipoPago, setTipoPago] = useState<"CONTADO" | "CREDITO">("CONTADO");
@@ -127,7 +131,6 @@ const Facturacion: React.FC = () => {
       .catch(() => setRemisiones([]));
   }, []);
 
-  /* ===== Helpers ===== */
   const getPrecioProducto = (p: Product, m: Moneda) => {
     const raw =
       m === "USD"
@@ -136,7 +139,24 @@ const Facturacion: React.FC = () => {
     return Number(raw) || 0;
   };
 
-  /* ===== Product filter ===== */
+  const getStock = (inventarioId?: number | null) => {
+    if (!inventarioId && inventarioId !== 0) return Infinity;
+    const p = productos.find((x) => Number(x.id) === Number(inventarioId));
+    return Number(p?.stockActual ?? 0) || 0;
+  };
+
+  const getCantidadUsada = (inventarioId?: number | null, excludeLineId?: string) => {
+    if (!inventarioId && inventarioId !== 0) return 0;
+    return items
+      .filter(
+        (it) =>
+          it.inventarioId === inventarioId &&
+          it.id !== excludeLineId &&
+          !it.esRemision // Las líneas de remisión ya salieron de inventario
+      )
+      .reduce((acc, it) => acc + (Number(it.cantidad) || 0), 0);
+  };
+
   const productosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     if (!q) return productos;
@@ -145,68 +165,75 @@ const Facturacion: React.FC = () => {
     );
   }, [busqueda, productos]);
 
-  /* ===== Product table columns ===== */
-  const columnasProductos: TableColumn<Product>[] = [
-    { name: "N° Parte", selector: (r) => r.numeroParte ?? "", sortable: true,
-      cell: (r) => <span className="center-cell">{r.numeroParte ?? ""}</span> },
-    { name: "Nombre", selector: (r) => r.nombre ?? "", sortable: true,
-      cell: (r) => <span className="center-cell">{r.nombre ?? ""}</span> },
-    {
-      name: "Precio",
-      selector: (r) => getPrecioProducto(r, moneda),
-      sortable: true,
-      cell: (r) => <span className="center-cell">{getPrecioProducto(r, moneda).toFixed(2)}</span>,
-    },
-    {
-      name: "Stock",
-      selector: (r) => Number(r.stockActual ?? 0),
-      sortable: true,
-      cell: (r) => <span className="center-cell">{Number(r.stockActual ?? 0)}</span>,
-    },
-  ];
-
-  /* ===== Totals ===== */
   const total = useMemo(
     () => items.reduce((acc, it) => acc + (Number(it.cantidad) || 0) * (Number(it.precio) || 0), 0),
     [items]
   );
 
-  /* ===== Currency sync ===== */
   useEffect(() => {
-    if (prevMoneda.current === moneda) return;
-    if (!tipoCambio || tipoCambio <= 0) {
-      prevMoneda.current = moneda;
-      return;
-    }
+    // Derivar precio mostrado desde base en C$ para evitar acumulación por toggles
     setItems((curr) =>
       curr.map((it) => {
-        if (it.esRemision) return it;
-        const p = Number(it.precio) || 0;
-        const converted =
-          prevMoneda.current === "NIO" && moneda === "USD" ? p / tipoCambio : p * tipoCambio;
-        return { ...it, precio: Number(converted.toFixed(4)) };
+        const base = Number(it.precioBaseNIO ?? it.precio ?? 0) || 0;
+        if (moneda === "USD") {
+          if (!tipoCambio || tipoCambio <= 0) return it; // select USD está deshabilitado cuando no hay TC
+          const shown = Number((base / tipoCambio).toFixed(4));
+          return { ...it, precio: shown };
+        } else {
+          return { ...it, precio: Number(base.toFixed(4)) };
+        }
       })
     );
     prevMoneda.current = moneda;
   }, [moneda, tipoCambio]);
 
-  /* ===== Actions ===== */
   function addRow() {
-    setItems((s) => [...s, { id: cryptoId(), producto: "", cantidad: 1, precio: 0 }]);
+    setItems((s) => [...s, { id: cryptoId(), producto: "", cantidad: 1, precio: 0, precioBaseNIO: 0 }]);
   }
+
   function updateItem(id: string, patch: Partial<LineItem>) {
     setItems((arr) =>
       arr.map((it) => {
         if (it.id !== id) return it;
-        const next: LineItem = { ...it, ...patch };
-        next.cantidad = Math.max(1, Number(next.cantidad) || 1);
-        next.precio = Math.max(0, Number(next.precio) || 0);
+
+        let next: LineItem = { ...it, ...patch };
+        // Normalizar precio y mantener base en C$
+        if (patch.hasOwnProperty("precio")) {
+          const precioNum = Math.max(0, Number(next.precio) || 0);
+          next.precio = precioNum;
+          if (moneda === "USD") {
+            if (tipoCambio && tipoCambio > 0) {
+              next.precioBaseNIO = Number((precioNum * tipoCambio).toFixed(4));
+            }
+          } else {
+            next.precioBaseNIO = Number(precioNum.toFixed(4));
+          }
+        }
+
+        if (typeof next.inventarioId === "number" && !next.esRemision) {
+          const solicitada = Number(patch.cantidad ?? next.cantidad ?? 0);
+          const stock = getStock(next.inventarioId);
+          const usadasOtras = getCantidadUsada(next.inventarioId, id);
+          const disponibleParaEsta = Math.max(0, stock - usadasOtras);
+          const ajustada = Math.min(Math.max(0, solicitada || 0), disponibleParaEsta);
+
+          if (solicitada > ajustada) {
+            notify.warn(`Cantidad ajustada a disponible: ${ajustada} (stock: ${stock}, usadas: ${usadasOtras}).`);
+          }
+          next.cantidad = ajustada;
+        } else {
+          next.cantidad = Math.max(0, Number(next.cantidad) || 0);
+        }
         return next;
       })
     );
   }
+
   function removeRow(id: string) {
-    setItems((arr) => (arr.length === 1 ? arr : arr.filter((it) => it.id !== id)));
+    setItems((arr) => {
+      const next = arr.filter((it) => it.id !== id);
+      return next.length ? next : [{ id: cryptoId(), producto: "", cantidad: 1, precio: 0, precioBaseNIO: 0 }];
+    });
     notify.ok("Línea eliminada");
   }
 
@@ -216,8 +243,30 @@ const Facturacion: React.FC = () => {
     if (!validLines.length) return void notify.warn("Agregue al menos una línea válida.");
     if (!tipoCambio && moneda === "USD") return void notify.warn("No hay tipo de cambio para convertir a C$.");
 
-    const precioCordoba = (precioActual: number) => {
-      if (moneda === "NIO") return precioActual;
+    const errores: string[] = [];
+    const porProducto = new Map<number, number>();
+    for (const l of validLines) {
+      if (typeof l.inventarioId !== "number") continue;
+      // No validar contra stock las líneas provenientes de remisión
+      if (l.remisionDetalleId) continue;
+      porProducto.set(l.inventarioId, (porProducto.get(l.inventarioId) || 0) + Number(l.cantidad || 0));
+    }
+    for (const [invId, cant] of porProducto) {
+      const stock = getStock(invId);
+      if (cant > stock) {
+        const p = productos.find((x) => Number(x.id) === Number(invId));
+        const etiqueta = `${p?.numeroParte ?? ""} — ${p?.nombre ?? ""}`.trim() || `#${invId}`;
+        errores.push(`${etiqueta}: solicitado ${cant}, stock ${stock}`);
+      }
+    }
+    if (errores.length) {
+      notify.err(`No puede facturar más que el stock:\n• ${errores.join("\n• ")}`);
+      return;
+    }
+
+    const precioCordoba = (precioActual: number, base?: number) => {
+      if (typeof base === "number") return Number(base.toFixed(4));
+      if (moneda === "NIO") return Number((precioActual).toFixed(4));
       if (!tipoCambio) return 0;
       return Number((precioActual * tipoCambio).toFixed(4));
     };
@@ -232,7 +281,7 @@ const Facturacion: React.FC = () => {
       detalles: validLines.map((i) => ({
         inventarioId: i.inventarioId,
         cantidad: i.cantidad,
-        precioUnitarioCordoba: precioCordoba(i.precio),
+        precioUnitarioCordoba: precioCordoba(i.precio, i.precioBaseNIO),
         remisionDetalleId: i.remisionDetalleId ?? null,
       })),
     };
@@ -257,7 +306,14 @@ const Facturacion: React.FC = () => {
     }
   }
 
-  /* ===== Remisión DataTable ===== */
+  const usedRemisionIds = useMemo(() => {
+    const s = new Set<number>();
+    for (const it of items) {
+      if (typeof it.remisionDetalleId === "number") s.add(it.remisionDetalleId);
+    }
+    return s;
+  }, [items]);
+
   type RemRow = {
     remisionId: number;
     fecha: string;
@@ -270,14 +326,6 @@ const Facturacion: React.FC = () => {
     numeroParte?: string;
     yaAgregado: boolean;
   };
-
-  const usedRemisionIds = useMemo(() => {
-    const s = new Set<number>();
-    for (const it of items) {
-      if (typeof it.remisionDetalleId === "number") s.add(it.remisionDetalleId);
-    }
-    return s;
-  }, [items]);
 
   const remisionRows: RemRow[] = useMemo(() => {
     const clienteId = typeof cliente === "number" ? cliente : -1;
@@ -331,6 +379,7 @@ const Facturacion: React.FC = () => {
       name: "Seleccionar",
       cell: (r) => (
         <button
+          type="button"
           className={`sel-btn${r.yaAgregado ? " disabled" : ""}`}
           onClick={() => {
             if (!filaSeleccionRemision) return;
@@ -362,11 +411,19 @@ const Facturacion: React.FC = () => {
 
   /* ===== UI ===== */
   return (
-    <div className="fact-page">
+    <div className="view-container">
+      <div className="fact-page facturacion-page">
       <header className="fact-header">
+        <button className="back-btn" title="Volver" onClick={() => navigate("/home")}>Volver</button>
         <FaCashRegister className="icon" />
         <div><h1>Facturación</h1></div>
       </header>
+
+      <div className="nav-buttons" style={{ display: "flex", gap: "10px" }}>
+        <button className="ghost" onClick={() => navigate("/proforma")}>🧾 Proforma</button>
+        <button className="ghost" onClick={() => navigate("/remisiones")}>📦 Remisiones</button>
+        <button className="ghost" onClick={() => navigate("/ventas")}>📜 Historial ventas</button>
+      </div>
 
       <div className="fact-content">
         <div className="card">
@@ -390,7 +447,6 @@ const Facturacion: React.FC = () => {
                 value={moneda}
                 onChange={(e) => setMoneda(e.target.value as Moneda)}
                 disabled={!tipoCambio}
-                title={!tipoCambio ? "Requiere tipo de cambio" : ""}
               >
                 <option value="NIO">Córdobas (NIO)</option>
                 <option value="USD">Dólares (USD)</option>
@@ -428,13 +484,20 @@ const Facturacion: React.FC = () => {
           </div>
 
           <div className="items-container">
+            
+            {/* ✅ SUBTOTAL HEADER */}
             <div className="items-header">
-              <span>Producto</span><span>Cant</span><span>Precio</span><span>Rem.</span><span>-</span>
+              <span>Producto</span>
+              <span>Cant</span>
+              <span>Precio</span>
+              <span>Subtotal</span> {/* ✅ */}
+              <span>Rem.</span>
+              <span>-</span>
             </div>
 
             {items.map((it) => (
               <div className="item-row" key={it.id}>
-                <div style={{ display: "flex", gap: ".3rem" }}>
+                <div style={{ display: "flex", gap: ".3rem",color:"black",backgroundColor:"white" }}>
                   <input
                     type="text"
                     value={it.producto}
@@ -443,6 +506,8 @@ const Facturacion: React.FC = () => {
                     onChange={(e) => updateItem(it.id, { producto: e.target.value })}
                   />
                   <button
+                    type="button"
+                    style={{marginLeft:"15px",width:"75px",border:"2px solid black"}}
                     className="icon-btn"
                     onClick={() => {
                       if (cliente === "") {
@@ -454,14 +519,14 @@ const Facturacion: React.FC = () => {
                     }}
                     title="Buscar producto"
                   >
-                    <FaSearch />
+                    Buscar
                   </button>
                 </div>
 
                 <input
                   className="qty-input"
                   type="number"
-                  min={1}
+                  min={0}
                   disabled={it.esRemision}
                   value={it.cantidad}
                   onChange={(e) => updateItem(it.id, { cantidad: Number(e.target.value) })}
@@ -476,6 +541,18 @@ const Facturacion: React.FC = () => {
                   value={it.precio}
                   onChange={(e) => updateItem(it.id, { precio: Number(e.target.value) })}
                 />
+
+                {/* ✅ SUBTOTAL CELL */}
+                <span
+                  style={{
+                    padding: "4px 8px",
+                    fontWeight: "600",
+                    minWidth: "80px",
+                    textAlign: "right"
+                  }}
+                >
+                  {formatMoney((Number(it.cantidad) || 0) * (Number(it.precio) || 0), moneda)}
+                </span>
 
                 <div className="center">
                   <input
@@ -497,13 +574,19 @@ const Facturacion: React.FC = () => {
                   />
                 </div>
 
-                <button className="danger icon-btn" onClick={() => removeRow(it.id)} title="Eliminar línea">
-                  <FaTrash />
+                <button
+                  type="button"
+                  className="danger delete-btn"
+                  onClick={() => removeRow(it.id)}
+                  title="Eliminar línea"
+                  aria-label="Borrar línea"
+                >
+                  Borrar
                 </button>
               </div>
             ))}
 
-            <button onClick={addRow}><FaPlus /> Agregar línea</button>
+            <button type="button" onClick={addRow}><FaPlus /> Agregar línea</button>
           </div>
         </div>
 
@@ -518,23 +601,32 @@ const Facturacion: React.FC = () => {
         </div>
 
         <div className="actions">
-          <button className="primary" onClick={guardar}><FaSave /> Guardar</button>
-          <button className="ghost" onClick={() => window.print()}><FaPrint /> Imprimir</button>
+          <button type="button" className="primary" onClick={guardar}><FaSave /> Guardar</button>
+          <button type="button" className="ghost" onClick={() => window.print()}><FaPrint /> Imprimir</button>
         </div>
 
-        {/* Modal Productos */}
+        {/* MODALES — Productos */}
         {pickerAbierto && (
           <div className="picker-overlay" role="dialog" aria-modal="true">
             <div className="picker-card">
               <div className="picker-top">
                 <h3 className="picker-title"><FaSearch /> Productos</h3>
-                <button className="picker-close" onClick={() => setPickerAbierto(false)}><FaTimes /></button>
+                <button type="button" className="picker-close" onClick={() => setPickerAbierto(false)}><FaTimes /></button>
               </div>
 
               <input placeholder="Buscar..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
 
               <DataTable
-                columns={columnasProductos as any}
+                columns={[
+                  { name: "Parte", selector: (r: Product) => r.numeroParte as any },
+                  { name: "Nombre", selector: (r: Product) => r.nombre as any, grow: 2 },
+                  {
+                    name: "Precio",
+                    selector: (r: Product) => getPrecioProducto(r, moneda) as any,
+                    cell: (r: Product) => formatMoney(getPrecioProducto(r, moneda), moneda),
+                  },
+                  { name: "Stock", selector: (r: Product) => r.stockActual as any },
+                ] as unknown as TableColumn<Product>[]}
                 data={productosFiltrados}
                 pagination
                 highlightOnHover
@@ -545,14 +637,30 @@ const Facturacion: React.FC = () => {
                 }}
                 onRowClicked={(p: Product) => {
                   if (!pickerTargetId) return;
-                  const precioSel = getPrecioProducto(p, moneda);
-                  updateItem(pickerTargetId, {
-                    producto: `${p.numeroParte ?? ""} — ${p.nombre ?? ""}`.trim(),
-                    precio: precioSel,
-                    inventarioId: Number(p.id),
-                    esRemision: false,
-                    remisionDetalleId: null
-                  });
+                  const stock = Number(p.stockActual ?? 0) || 0;
+                  if (stock <= 0) {
+                    notify.warn("Este producto no tiene stock disponible.");
+                    return;
+                  }
+                  const baseNIO = getPrecioProducto(p, "NIO");
+                  const precioSel = moneda === "USD" ? (tipoCambio ? Number((baseNIO / tipoCambio).toFixed(4)) : 0) : Number(baseNIO.toFixed(4));
+                  const cantInicial = Math.min(1, stock);
+                  setItems((prev) =>
+                    prev.map((it) =>
+                      it.id === pickerTargetId
+                        ? {
+                            ...it,
+                            producto: `${p.numeroParte ?? ""} — ${p.nombre ?? ""}`.trim(),
+                            precio: precioSel,
+                            precioBaseNIO: Number(baseNIO.toFixed(4)),
+                            inventarioId: Number(p.id),
+                            esRemision: false,
+                            remisionDetalleId: null,
+                            cantidad: cantInicial,
+                          }
+                        : it
+                    )
+                  );
                   setPickerAbierto(false);
                   setBusqueda("");
                   notify.ok("Producto agregado");
@@ -562,23 +670,23 @@ const Facturacion: React.FC = () => {
           </div>
         )}
 
-        {/* Modal Remisiones */}
+        {/* MODAL Remisiones */}
         {pickerRemisionAbierto && (
           <div className="picker-overlay" role="dialog" aria-modal="true">
             <div className="picker-card picker-card--rem">
               <div className="picker-top">
                 <h3 className="picker-title"><FaSearch /> Seleccionar Remisión</h3>
-                <button className="picker-close" onClick={() => setPickerRemisionAbierto(false)}>
+                <button type="button" className="picker-close" onClick={() => setPickerRemisionAbierto(false)}>
                   <FaTimes />
                 </button>
               </div>
 
-              <div style={{ marginBottom: ".6rem" }}>
+              <div style={{ marginBottom: ".6rem", display: "flex", justifyContent: "center" }}>
                 <input
+                  className="remision-search"
                   placeholder="Buscar por remisión, cliente, parte o producto..."
                   value={remisionSearch}
                   onChange={(e) => setRemisionSearch(e.target.value)}
-                  style={{ width: "100%", padding: ".6rem .8rem", borderRadius: 8, border: "1px solid var(--input-border)" }}
                 />
               </div>
 
@@ -601,6 +709,7 @@ const Facturacion: React.FC = () => {
       </div>
 
       <ToastContainer newestOnTop closeOnClick pauseOnHover draggable />
+      </div>
     </div>
   );
 };

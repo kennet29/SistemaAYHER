@@ -1,0 +1,21 @@
+/* Local webfonts for Proforma (no external network) */
+/* Drop the actual font files (.woff2) in this folder with these names: */
+/*  - Inter-Variable.woff2 (variable or regular Inter)
+    - Poppins-SemiBold.woff2 (optional: for headings) */
+
+@font-face {
+  font-family: 'Inter';
+  src: url('./Inter-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Poppins';
+  src: url('./Poppins-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+

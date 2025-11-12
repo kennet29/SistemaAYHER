@@ -4,6 +4,7 @@ import DataTable from "react-data-table-component";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./Movimientos.css";
+import { fmtDateTime } from "../utils/dates";
 
 const API_MOVIMIENTOS = "http://localhost:4000/api/MovimientoInventario";
 const API_TIPOS = "http://localhost:4000/api/tipos-movimiento";
@@ -26,6 +27,7 @@ const MovimientosView = () => {
     tipoMovimientoId: "",
     observacion: "",
   });
+  const [detalle, setDetalle] = useState<any | null>(null);
 
   // 🔹 Cargar datos
   useEffect(() => {
@@ -142,13 +144,34 @@ const MovimientosView = () => {
   const columnasMovimientos = [
     { name: "ID", selector: (r: any) => r.id, sortable: true, width: "70px" },
     { name: "Producto", selector: (r: any) => r.inventario?.nombre || "—" },
+    { name: "N° Parte", selector: (r: any) => r.inventario?.numeroParte || "—", sortable: true },
+    { name: "Marca", selector: (r: any) => {
+        const prod = productos.find((p: any) => p.id === (r.inventario?.id ?? r.inventarioId));
+        return prod?.marca?.nombre || "—";
+      }
+    },
     { name: "Tipo", selector: (r: any) => r.tipoMovimiento?.nombre || "—" },
     { name: "Cantidad", selector: (r: any) => r.cantidad },
     { name: "Observación", selector: (r: any) => r.observacion || "—" },
     {
       name: "Fecha",
-      selector: (r: any) => new Date(r.createdAt).toLocaleString(),
+      selector: (r: any) => r.createdAt,
       sortable:true,
+      cell: (r: any) => <span>{fmtDateTime(r.createdAt)}</span>
+    },
+    {
+      name: "Acciones",
+      cell: (r: any) => (
+        <button
+          type="button"
+          className="btn-agregar"
+          onClick={() => setDetalle(r)}
+          title="Ver detalle"
+        >
+          Ver
+        </button>
+      ),
+      right: true,
     },
   ];
 
@@ -265,6 +288,22 @@ const MovimientosView = () => {
         highlightOnHover
         dense
       />
+
+      {detalle && (
+        <div className="mov-modal-overlay" onClick={() => setDetalle(null)}>
+          <div className="mov-modal" onClick={(e) => e.stopPropagation()}>
+            <header className="modal-header">
+              <h3>Observación del Movimiento #{detalle.id}</h3>
+              <button className="modal-close" onClick={() => setDetalle(null)}>×</button>
+            </header>
+            <div className="modal-body">
+              <div style={{ whiteSpace: 'pre-wrap' }}>
+                {detalle.observacion || '—'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

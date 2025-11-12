@@ -71,16 +71,136 @@
 }
 
 /* ===== PRODUCT TABLE ROWS ===== */
+.rem-head {
+  display: grid;
+  /* Producto | Cantidad | Precio | Subtotal | Acciones */
+  grid-template-columns: 2.4fr 0.7fr 0.9fr 1fr 120px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  background: #eef5ff;
+  border: 1px solid #e3ebfa;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: .95rem;
+}
+/* Force header labels to stay on one row and exact columns */
+.rem-head span { white-space: nowrap; }
+.rem-head span:nth-child(1) { grid-column: 1; grid-row: 1; }
+.rem-head span:nth-child(2) { grid-column: 2; grid-row: 1; }
+.rem-head span:nth-child(3) { grid-column: 3; grid-row: 1; }
+.rem-head span:nth-child(4) { grid-column: 4; grid-row: 1; }
+.rem-head span:nth-child(5) { grid-column: 5; grid-row: 1; }
+
 .rem-row {
   display: grid;
-  grid-template-columns: 4fr 1fr auto;
+  grid-template-columns: 2.4fr 0.7fr 0.9fr 1fr 120px;
   gap: 8px;
   margin-bottom: 8px;
+  padding: 8px 12px;
+  align-items: center;
 }
+
+/* Allow items to shrink inside grid cells to avoid wrapping */
+.rem-row > * { min-width: 0; }
 
 .rem-qty-input {
   text-align: center;
   height: 34px;
+}
+
+/* Que los controles llenen su celda para alinear con encabezados */
+.rem-row .rem-product-input,
+.rem-row .rem-qty-input {
+  width: 100%;
+}
+
+/* Compactar controles dentro de la fila */
+.rem-row .rem-product-input,
+.rem-row .rem-qty-input {
+  height: 32px;
+  font-size: 0.8rem;
+  padding: 4px 8px;
+}
+
+/* Reducir aún más ancho visual de controles dentro de su celda */
+.rem-row .rem-product-input { width: 100%; min-width: 140px; }
+.rem-row .rem-qty-input { width: 100%; max-width: 90px; }
+/* Compact delete button */
+.rem-row .rem-delete-btn {
+  width: auto;
+  min-width: 88px;
+  padding: 4px 8px;
+  font-size: 0.82rem;
+  line-height: 1.1;
+  justify-self: center;
+}
+
+/* ====== Typeahead styles ====== */
+.rem-typeahead { position: relative; }
+.rem-suggestions {
+  position: absolute;
+  top: 34px; /* below input */
+  left: 0;
+  width: 100%;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #c7d4ef;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  z-index: 1000;
+}
+.rem-suggestion-item {
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.rem-suggestion-item:hover { background: #eef5ff; }
+.rem-suggestion-title { color: #003366; font-weight: 600; font-size: 0.85rem; }
+.rem-suggestion-meta { color: #0052cc; font-size: 0.78rem; margin-left: 10px; }
+
+/* ===== Responsive tweaks ===== */
+@media (max-width: 900px) {
+  .rem-head { grid-template-columns: 2.2fr 0.6fr 0.85fr 0.9fr 120px; }
+  .rem-row  { grid-template-columns: 2.2fr 0.6fr 0.85fr 0.9fr 120px; gap: 6px; }
+  .rem-row .rem-qty-input { max-width: 72px; height: 30px; }
+  .rem-row .rem-product-input { min-width: 120px; height: 30px; }
+  .rem-suggestions { top: 32px; }
+  .rem-suggestion-title { font-size: 0.8rem; }
+  .rem-suggestion-meta { font-size: 0.72rem; }
+}
+
+@media (max-width: 640px) {
+  .rem-head { grid-template-columns: 1.6fr 0.6fr 0.8fr 0.9fr 100px; font-size: 0.85rem; }
+  .rem-row  { grid-template-columns: 1.6fr 0.6fr 0.8fr 0.9fr 100px; gap: 6px; }
+  .rem-row .rem-qty-input { max-width: 64px; }
+  .rem-row .rem-product-input { min-width: 100px; }
+  .rem-row .rem-delete-btn { padding: 4px; font-size: 0.78rem; }
+}
+
+/* Celdas numéricas y encabezados alineados a la izquierda en grilla */
+.rem-price-cell { display: flex; align-items: center; justify-content: flex-start; padding-right: 0; }
+.num-right { display: inline-block; width: auto; text-align: left; }
+
+/* Encabezados del grid alineados a la izquierda */
+.rem-head span { text-align: left; justify-self: start; }
+
+/* Centrar controles y botón en sus celdas (excepto el buscador de producto que debe ir a la izquierda) */
+.rem-row .rem-delete-btn { justify-self: start; }
+.rem-row .rem-product-input { margin-left: 0; margin-right: 0; }
+.rem-row .rem-typeahead { justify-self: start; }
+/* Alinear cantidad hacia la izquierda */
+.rem-row .rem-qty-input { justify-self: start; }
+
+/* Mostrar el stock en línea para no aumentar la altura de la fila */
+.rem-row small {
+  display: inline-block;
+  margin-left: 8px;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
 /* ===== BOTONES ===== */
@@ -144,6 +264,32 @@
   border-bottom: 1px solid #ddd;
 }
 
+/* Alineación por columna para tablas de detalle (Parte, Producto, Cant., Precios, Subtotales) */
+.rem-table th:nth-child(1),
+.rem-table td:nth-child(1),
+.rem-table th:nth-child(2),
+.rem-table td:nth-child(2) { text-align: left; }
+
+.rem-table th:nth-child(3),
+.rem-table td:nth-child(3) { text-align: center; }
+
+.rem-table th:nth-child(4),
+.rem-table td:nth-child(4),
+.rem-table th:nth-child(5),
+.rem-table td:nth-child(5),
+.rem-table th:nth-child(6),
+.rem-table td:nth-child(6),
+.rem-table th:nth-child(7),
+.rem-table td:nth-child(7) { text-align: right; }
+
+/* Un poco de espacio para valores numéricos a la derecha */
+.rem-table td:nth-child(4),
+.rem-table td:nth-child(5),
+.rem-table td:nth-child(6),
+.rem-table td:nth-child(7) {
+  padding-right: 14px;
+}
+
 /* Botones */
 .rem-table-btn {
   padding: 6px 10px;
@@ -152,6 +298,10 @@
   font-weight: 600;
   margin-right: 5px;
 }
+.rem-table-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Stock bajo o en cero en tablas */
+.rem-stock-low { color: #c30000 !important; font-weight: 700; }
 
 .rem-view-btn { background: #e6f0ff; color: #004aad; border: 1px solid #004aad; }
 .rem-complete-btn { background: #e7ffe9; color: #008c1a; border: 1px solid #00a61e; }
@@ -165,3 +315,113 @@
 @media (max-width: 700px) {
   .rem-grid-2 { grid-template-columns: 1fr; }
 }
+
+/* ===== MODAL OVERLAY ===== */
+.rem-modal{
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,.55);
+  display: grid;
+  place-items: center;
+  z-index: 2147483647; /* aseguramos que quede por encima de cualquier tabla */
+  overflow: auto;
+  padding: 20px;
+}
+.rem-modal-content{
+  background: #fff;
+  width: min(1000px, 96%);
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.3);
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+}
+.rem-close-btn{
+  margin-top: 10px;
+  background: #1f2937;
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.rem-close-btn:hover{ background:#111827; }
+
+/* ===== EXTRA BUTTONS (History/Excel) ===== */
+/* Toggle Histórico/Pendientes */
+.rem-history-btn{
+  background: #e6f0ff;
+  color: #004aad;
+  border: 1px solid #004aad;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 22px; /* más separación del contenido/modal */
+}
+.rem-history-btn:hover{ background: #cce0ff; }
+
+/* Botón Excel (detalle y tabla) */
+.rem-excel-btn{
+  background: #e7ffe9;
+  color: #008c1a;
+  border: 1px solid #00a61e;
+  cursor: pointer;
+}
+.rem-excel-btn:hover{ background: #caffd1; }
+
+/* ===== Compact product search width ===== */
+/* Constrain the product search container and input so it doesn't span too wide */
+.rem-typeahead { width: 100%; max-width: 380px; }
+.rem-row .rem-product-input { max-width: 380px; }
+
+@media (max-width: 900px) {
+  .rem-typeahead { max-width: 320px; }
+  .rem-row .rem-product-input { max-width: 320px; }
+}
+
+@media (max-width: 640px) {
+  .rem-typeahead { max-width: 100%; }
+  .rem-row .rem-product-input { max-width: 100%; }
+}
+
+/* ===== Align delete button under header ===== */
+/* Make the delete button fill its grid cell to align with 'Acciones' header */
+.rem-row .rem-delete-btn {
+  width: auto;
+  max-width: 96px;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  text-align: center;
+  justify-self: start;
+}
+@media (max-width: 640px) {
+  .rem-row .rem-delete-btn { max-width: 80px; }
+}
+
+/* ===== DataTable headers (scoped) ===== */
+/* Productos (editable) */
+.rem-items-table .rdt_TableHeadRow { background: #ffffff; border-bottom: 2px solid #ffd6d6; }
+.rem-items-table .rdt_TableCol { color: #c30000; font-weight: 700; white-space: nowrap; }
+.rem-items-table .rdt_TableCol > div { justify-content: flex-start; text-align: left; }
+
+/* Remisiones (pendientes/histórico) */
+.rem-remisiones-table .rdt_TableHeadRow { background: #ffffff; border-bottom: 2px solid #ffd6d6; }
+.rem-remisiones-table .rdt_TableCol { color: #c30000; font-weight: 700; white-space: nowrap; }
+
+/* Detalle de remisión */
+.rem-detalle-table .rdt_TableHeadRow { background: #ffffff; border-bottom: 2px solid #ffd6d6; }
+.rem-detalle-table .rdt_TableCol { color: #c30000; font-weight: 700; white-space: nowrap; }
+
+/* Pendientes (react-data-table-component) */
+.rem-pendientes-table .rdt_TableHeadRow { background: #eef5ff; border-bottom: 2px solid #ffd6d6; }
+.rem-pendientes-table .rdt_TableCol { color: #c30000; font-weight: 700; white-space: nowrap; }
+.rem-pendientes-table .rdt_TableRow:hover { background: #f7fbff; }
+.rem-pendientes-table .rdt_TableCell { padding-top: 10px; padding-bottom: 10px; }

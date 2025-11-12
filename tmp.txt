@@ -1,0 +1,204 @@
+(
+  { empresa, cliente, detalles, totalCordoba, totalDolar, tipoCambio }: any,
+  res: Response
+) {
+  const doc = new PDFDocument({ size: "A4", margin: 40 });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="proforma.pdf"`);
+  doc.pipe(res);
+
+  const fmtNIO = (n: number) => {
+    try { return new Intl.NumberFormat('es-NI', { style: 'currency', currency: 'NIO', minimumFractionDigits: 2 }).format(Number(n||0)); } catch { return `C$ ${Number(n||0).toFixed(2)}`; }
+  };
+  const fmtUSD = (n: number) => {
+    try { return new Intl.NumberFormat('es-NI', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(Number(n||0)); } catch { return `$ ${Number(n||0).toFixed(2)}`; }
+  };
+
+  const pageWidth = doc.page.width;
+  const pageHeight = doc.page.height;
+  const left = doc.page.margins.left;
+  const right = pageWidth - doc.page.margins.right;
+  const contentWidth = right - left;
+
+  const drawWatermark = () => {
+    doc.save();
+    doc.fillColor('#1f2937').fillOpacity(0.06);
+    doc.font('Helvetica-Bold').fontSize(110);
+    const originX = pageWidth / 2; const originY = pageHeight / 2;
+    doc.rotate(-30, { origin: [originX, originY] });
+    doc.text('PROFORMA', originX - 300, originY - 60, { width: 600, align: 'center' });
+    doc.restore();
+  };
+
+  const drawFooter = () => {
+    const footerBase = pageHeight - doc.page.margins.bottom;
+    const textY = footerBase - 10;
+    doc.save();
+    doc.moveTo(left, footerBase - 16).lineTo(right, footerBase - 16).stroke('#e5e7eb');
+    doc.fontSize(8).fillColor('#374151').font('Helvetica');
+    const pageNum = (doc as any).page?.number || 1;
+    doc.text('Precios expresados en CÛrdobas (NIO). Equivalentes en USD al tipo de cambio indicado. Vigencia: 7 dÌas.', left, textY, { width: contentWidth - 80, lineBreak: false, ellipsis: true });
+    doc.text(P·gina , right - 60, textY, { width: 60, align: 'right', lineBreak: false });
+    doc.restore();
+  };
+  
+  const addNewPage = () => {
+    doc.addPage();
+    drawWatermark();
+    drawFooter();
+  };
+
+
+
+
+
+  // Header band
+  const headerTop = 36;
+  const headerHeight = 86;
+  doc.save();
+  doc.rect(left, headerTop, contentWidth, headerHeight).fill("#eef2ff");
+  doc.restore();
+
+  const resolveLogoPath = (): string | null => {
+    const candidates: string[] = [];
+    const declared = empresa?.logoUrl && typeof empresa.logoUrl === 'string' ? empresa.logoUrl : null;
+    if (declared) candidates.push(declared);
+    const cwd = process.cwd();
+    candidates.push(path.join(cwd, "FrontEnd-React", "Frontend", "src", "img", "logo.png"));
+    candidates.push(path.join(cwd, "src", "img", "logo.png"));
+    candidates.push(path.join(__dirname, "../../../../../FrontEnd-React/Frontend/src/img/logo.png"));
+    for (const p of candidates) { try { if (p && fs.existsSync(p)) return p; } catch {} }
+    return null;
+  };
+  const logoPath = resolveLogoPath();
+  if (logoPath) { try { doc.image(logoPath, left + 10, headerTop + 10, { width: 108 }); } catch {} }
+
+  doc
+    .fillColor('#0f172a')
+    .fontSize(18)
+    .font("Helvetica-Bold")
+    .text(empresa?.razonSocial || "EMPRESA", left + 140, headerTop + 10, { width: contentWidth - 148 })
+    .moveDown(0.2)
+    .fontSize(10)
+    .font("Helvetica")
+    .text(`RUC: ${empresa?.ruc ?? ""}`)
+    .text(`Direcci√≥n: ${empresa?.direccion ?? ""}`)
+    .text(`Tel: ${[empresa?.telefono1, empresa?.telefono2].filter(Boolean).join(" / ")}`)
+    .text(`Correo: ${empresa?.correo ?? ""}`)
+    .text(`Sitio Web: ${empresa?.sitioWeb ?? ""}`);
+
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(16)
+    .fillColor('#0b3a9b')
+    .text("PROFORMA", left, headerTop + headerHeight + 12, { align: "center", width: contentWidth });
+
+  const metaTop = headerTop + headerHeight + 36;
+  doc.save();
+  doc.roundedRect(left, metaTop, contentWidth, 54, 6).stroke("#cbd5e1");
+  doc.restore();
+  doc
+    .fontSize(11)
+    .fillColor('#111827')
+    .font("Helvetica")
+    .text(`Cliente: ${cliente?.nombre ?? "N/A"}`, left + 10, metaTop + 10, { width: contentWidth / 2 - 12 })
+    .text(`Fecha: ${new Date().toLocaleDateString()}`, left + contentWidth / 2, metaTop + 10, { width: contentWidth / 2 - 12, align: 'right' })
+    .text(`Tipo de cambio: ${tipoCambio ? Number(tipoCambio).toFixed(4) : '-'}`, left + contentWidth / 2, metaTop + 28, { width: contentWidth / 2 - 12, align: 'right' });
+
+  const tableTop = metaTop + 72;
+  const wCant = 60;
+  const wPrecio = 90;
+  const wSub = 100;
+  let wParte = 90;
+  let wNombre = contentWidth - (wParte + wCant + wPrecio + wSub);
+  if (wNombre < 130) {
+    const deficit = 130 - wNombre;
+    const reducible = Math.min(deficit, Math.max(40, wParte) - 40);
+    wParte = Math.max(40, wParte - reducible);
+    wNombre = contentWidth - (wParte + wCant + wPrecio + wSub);
+  }
+  const colX = [left, left + wParte, left + wParte + wNombre, left + wParte + wNombre + wCant, right - wSub];
+
+  const drawTableHeader = (yHeader: number) => {
+    doc.save();
+    doc.rect(left, yHeader - 6, contentWidth, 22).fill('#e5edff');
+    doc.restore();
+    doc.font("Helvetica-Bold").fillColor('#0f172a').fontSize(10);
+    doc.text("Parte", colX[0], yHeader - 4, { width: wParte });
+    doc.text("Nombre", colX[1], yHeader - 4, { width: wNombre });
+    doc.text("Cant", colX[2], yHeader - 4, { width: wCant, align: 'right' });
+    doc.text("Precio", colX[3], yHeader - 4, { width: wPrecio, align: 'right' });
+    doc.text("Subtotal", colX[4], yHeader - 4, { width: wSub, align: 'right' });
+    doc.moveTo(left, yHeader + 12).lineTo(right, yHeader + 12).stroke('#cbd5e1');
+    doc.font("Helvetica").fillColor('#111827');
+  };
+
+  const bottomMargin = doc.page.margins.bottom;
+  const startY = tableTop + 20;
+  const rowFont = 10;
+  let rowHeight = 20;
+  const rows = Array.isArray(detalles) ? detalles : [];
+  doc.fontSize(rowFont);
+
+  const truncate = (text: string, maxWidth: number) => {
+    if (!text) return "";
+    let t = String(text);
+    while (doc.widthOfString(t) > maxWidth && t.length > 1) t = t.slice(0, -1);
+    if (t.length < String(text).length) t = t.slice(0, Math.max(0, t.length - 1)) + '‚Ä¶';
+    return t;
+  };
+
+  drawWatermark();
+  drawFooter();
+
+  drawTableHeader(tableTop);
+  let y = startY;
+  const usableBottom = pageHeight - bottomMargin - 110;
+
+  rows.forEach((d: any, idx: number) => {
+    if (y + rowHeight > usableBottom) {
+      addNewPage();
+      const yHeader = doc.page.margins.top + 10;
+      drawTableHeader(yHeader);
+      y = yHeader + 20;
+    }
+    if (idx % 2 === 0) {
+      doc.save();
+      doc.rect(left, y - (rowHeight - 2), contentWidth, rowHeight).fill('#f8fafc');
+      doc.restore();
+    }
+    const cantidad = Number(d.cantidad || 0);
+    const precio = Number(d.precio || 0);
+    const subtotal = cantidad * precio;
+    const parteTxt = truncate(d.numeroParte ?? "", wParte - 6);
+    const nombreTxt = truncate(d.nombre ?? "", wNombre - 6);
+    doc.fillColor('#111827');
+    doc.text(parteTxt, colX[0] + 3, y - (rowHeight - 6), { width: wParte - 6 });
+    doc.text(nombreTxt, colX[1] + 3, y - (rowHeight - 6), { width: wNombre - 6 });
+    doc.text(String(cantidad), colX[2], y - (rowHeight - 6), { width: wCant, align: 'right' });
+    doc.text(fmtNIO(precio), colX[3], y - (rowHeight - 6), { width: wPrecio, align: 'right' });
+    doc.text(fmtNIO(subtotal), colX[4], y - (rowHeight - 6), { width: wSub, align: 'right' });
+    y += rowHeight;
+  });
+
+  // Totales
+  y += 12;
+  const totalsBoxWidth = 230;
+  const totalsTop = y;
+  doc.save();
+  doc.roundedRect(right - totalsBoxWidth, totalsTop, totalsBoxWidth, 60, 8).fill('#f1f5f9');
+  doc.restore();
+  doc.font("Helvetica-Bold").fontSize(11).fillColor('#0f172a').text('Resumen', right - totalsBoxWidth + 12, totalsTop + 8);
+  doc.font("Helvetica").fontSize(10).fillColor('#111827');
+  doc.text('Total C$', right - totalsBoxWidth + 12, totalsTop + 26, { width: 100 });
+  doc.text(fmtNIO(Number(totalCordoba||0)), right - 12, totalsTop + 26, { width: 120, align: 'right' });
+  doc.text('Total $', right - totalsBoxWidth + 12, totalsTop + 42, { width: 100 });
+  doc.text(fmtUSD(Number(totalDolar||0)), right - 12, totalsTop + 42, { width: 120, align: 'right' });
+
+  if (empresa?.mensajeFactura) {
+    doc.moveDown(2);
+    doc.fontSize(10).font("Helvetica-Oblique").fillColor('#374151').text(empresa.mensajeFactura, { align: "center" });
+  }
+
+  

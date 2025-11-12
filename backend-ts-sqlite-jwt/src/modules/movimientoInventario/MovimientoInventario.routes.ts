@@ -5,7 +5,7 @@ import { authenticate } from "../../middleware/auth";
 export const movimientoInventarioRouter = Router();
 
 // 📋 Listar todos los movimientos
-movimientoInventarioRouter.get("/", authenticate, ctrl.list);
+movimientoInventarioRouter.get("/",  ctrl.list);
 
 // ➕ Registrar nuevo movimiento
-movimientoInventarioRouter.post("/", authenticate, ctrl.create);
+movimientoInventarioRouter.post("/",  ctrl.create);

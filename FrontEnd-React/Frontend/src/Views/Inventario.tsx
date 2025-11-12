@@ -6,15 +6,24 @@ import {
   FaArrowLeft,
   FaBoxOpen,
   FaSearch,
+  FaEye,
 } from "react-icons/fa";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import DataTable from "react-data-table-component";
 import "./Inventario.css";
+import { getApiBaseSync } from "../api/base";
+import { fmtDateTime } from "../utils/dates";
 
-const API_URL = "http://localhost:4000/api/inventario";
-const API_MARCA = "http://localhost:4000/api/marcas";
-const API_CATEGORIA = "http://localhost:4000/api/categorias";
+// Ubicaciones físicas válidas: A1..A12, B1..B12, ... Z1..Z12
+const UBICACIONES = Array.from({ length: 26 }, (_, i) =>
+  String.fromCharCode(65 + i)
+).flatMap((l) => Array.from({ length: 12 }, (_, j) => `${l}${j + 1}`));
+
+const API_BASE = getApiBaseSync();
+const API_URL = `${API_BASE}/api/inventario`;
+const API_MARCA = `${API_BASE}/api/marcas`;
+const API_CATEGORIA = `${API_BASE}/api/categorias`;
 
 function getCookie(name: string) {
   const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
@@ -30,6 +39,7 @@ const InventarioView = () => {
   const [saving, setSaving] = useState(false);
   const [tipoCambio, setTipoCambio] = useState<number>(36.5);
   const [filtro, setFiltro] = useState("");
+  const [view, setView] = useState<any | null>(null);
   const [totales, setTotales] = useState({
     valorTotalC: 0,
     valorTotalD: 0,
@@ -43,13 +53,26 @@ const InventarioView = () => {
     descripcion: "",
     marcaId: 0,
     categoriaId: 0,
+    stockMinimo: 0,
+    ubicacion: "",
     stockActual: 0,
     costoPromedioCordoba: 0,
     precioVentaPromedioCordoba: 0,
     precioVentaSugeridoCordoba: 0,
     codigoSustituto: "",
     marcaSustitutoId: 0,
+    compatibilidadMaquinas: [] as string[],
+    preciosCompetencia: [] as any[],
   });
+
+  // Estado temporal para agregar/editar precios de competencia
+  const [pcForm, setPcForm] = useState({
+    proveedor: "",
+    precioCordoba: "",
+    precioDolar: "",
+    referencia: "",
+  });
+  const [pcEditIdx, setPcEditIdx] = useState<number | null>(null);
 
   const formUSD = useMemo(() => {
     const toUSD = (v: number) => (tipoCambio > 0 ? v / tipoCambio : 0);
@@ -97,11 +120,29 @@ const InventarioView = () => {
         const ventaD = Number(i.precioVentaPromedioDolar ?? 0);
         const stock = Number(i.stockActual ?? 0);
 
+        // Normalizar posibles strings JSON → arrays
+        const toArray = (v: any) => {
+          if (Array.isArray(v)) return v;
+          if (typeof v === "string") {
+            try {
+              const parsed = JSON.parse(v);
+              return Array.isArray(parsed) ? parsed : [];
+            } catch {
+              return [];
+            }
+          }
+          return [];
+        };
+        const compat = toArray(i.compatibilidadMaquinas);
+        const compPrecios = toArray(i.preciosCompetencia);
+
         const utilidadC = ventaC - costoC;
         const utilidadD = ventaD - costoD;
 
         return {
           ...i,
+          compatibilidadMaquinas: compat,
+          preciosCompetencia: compPrecios,
           costoPromedioCordoba: costoC,
           costoPromedioDolar: costoD,
           precioVentaPromedioCordoba: ventaC,
@@ -158,15 +199,36 @@ const InventarioView = () => {
 
     setSaving(true);
     try {
+      // No enviar campos vacíos para evitar errores si el backend aún no migró
+      const payload: any = { ...form };
+      if (!payload.compatibilidadMaquinas || payload.compatibilidadMaquinas.length === 0) {
+        delete payload.compatibilidadMaquinas;
+      }
+      if (!payload.preciosCompetencia || payload.preciosCompetencia.length === 0) {
+        delete payload.preciosCompetencia;
+      }
+      if (!payload.ubicacion) {
+        delete payload.ubicacion;
+      }
+      if (!(Number(payload.stockMinimo) > 0)) {
+        delete payload.stockMinimo;
+      }
+
+      console.log("[Inventario.submit] payload:", payload);
       const res = await fetch(editing ? `${API_URL}/${editing}` : API_URL, {
         method: editing ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
 
+      let resJson: any = null;
+      try {
+        resJson = await res.json();
+      } catch {}
+      console.log("[Inventario.submit] response ok:", res.ok, "status:", res.status, "json:", resJson);
       if (!res.ok) throw new Error("Error al guardar producto");
 
       toast.success(editing ? "✅ Producto actualizado" : "✅ Producto agregado");
@@ -176,12 +238,16 @@ const InventarioView = () => {
         descripcion: "",
         marcaId: 0,
         categoriaId: 0,
+        stockMinimo: 0,
+        ubicacion: "",
         stockActual: 0,
         costoPromedioCordoba: 0,
         precioVentaPromedioCordoba: 0,
         precioVentaSugeridoCordoba: 0,
         codigoSustituto: "",
         marcaSustitutoId: 0,
+        compatibilidadMaquinas: [],
+        preciosCompetencia: [],
       });
       setEditing(null);
       fetchData();
@@ -214,15 +280,49 @@ const InventarioView = () => {
       descripcion: item.descripcion || "",
       marcaId: Number(item.marcaId || 0),
       categoriaId: Number(item.categoriaId || 0),
+      stockMinimo: Number(item.stockMinimo || 0),
+      ubicacion: item.ubicacion || "",
       stockActual: Number(item.stockActual || 0),
       costoPromedioCordoba: Number(item.costoPromedioCordoba || 0),
       precioVentaPromedioCordoba: Number(item.precioVentaPromedioCordoba || 0),
       precioVentaSugeridoCordoba: Number(item.precioVentaSugeridoCordoba || 0),
       codigoSustituto: item.codigoSustituto || "",
       marcaSustitutoId: Number(item.marcaSustitutoId || 0),
+      compatibilidadMaquinas: Array.isArray(item.compatibilidadMaquinas)
+        ? item.compatibilidadMaquinas
+        : [],
+      preciosCompetencia: Array.isArray(item.preciosCompetencia)
+        ? item.preciosCompetencia
+        : [],
     });
     setEditing(item.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Helpers para resaltar celda de stock
+  const isLowStock = (r: any) => {
+    const min = Number(r.stockMinimo || 0);
+    const stock = Number(r.stockActual || 0);
+    // Rojo si: tiene mínimo y está por debajo/igual, o si no hay mínimo pero el stock es 0
+    if (min > 0) return stock <= min;
+    return stock === 0;
+  };
+  const isNearStock = (r: any) => {
+    const min = Number(r.stockMinimo || 0);
+    const stock = Number(r.stockActual || 0);
+    if (min <= 0) {
+      // Sin mínimo: considerar "próximo" si stock entre 1 y 3
+      return stock > 0 && stock <= 3;
+    }
+    if (stock <= min) return false;
+    const threshold = Math.max(1, Math.ceil(min * 0.1)); // 10% o al menos 1 unidad
+    return stock <= min + threshold;
+  };
+  const isComfortableStock = (r: any) => {
+    const min = Number(r.stockMinimo || 0);
+    const stock = Number(r.stockActual || 0);
+    if (min <= 0) return stock > 3; // sin mínimo: suficiente si > 3
+    return stock > min + Math.max(1, Math.ceil(min * 0.1));
   };
 
   const columns = [
@@ -230,7 +330,20 @@ const InventarioView = () => {
     { name: "Nombre", selector: (r: any) => r.nombre, grow: 2 },
     { name: "Marca", selector: (r: any) => r.marca?.nombre || "—" },
     { name: "Categoría", selector: (r: any) => r.categoria?.nombre || "—" },
-    { name: "Stock", selector: (r: any) => r.stockActual, center: true },
+    {
+      name: "Stock",
+      selector: (r: any) => r.stockActual,
+      center: true,
+    },
+    { name: "Stock Min", selector: (r: any) => (Number(r.stockMinimo) > 0 ? Number(r.stockMinimo) : '—'), center: true },
+    { name: "Ubicación", selector: (r: any) => r.ubicacion || "—", center: true },
+    {
+      name: "Compatibilidad",
+      selector: (r: any) =>
+        Array.isArray(r.compatibilidadMaquinas) && r.compatibilidadMaquinas.length
+          ? `${r.compatibilidadMaquinas.length} máquinas`
+          : "—",
+    },
     {
       name: "Costo (C$/US$)",
       selector: (r: any) =>
@@ -294,6 +407,13 @@ const InventarioView = () => {
       name: "Acciones",
       cell: (r: any) => (
         <div className="inventario-actions">
+          <button
+            className="action-btn edit"
+            onClick={() => setView(r)}
+            title="Ver"
+          >
+            <FaEye />
+          </button>
           <button className="action-btn edit" onClick={() => handleEdit(r)} title="Editar">
             <FaEdit />
           </button>
@@ -394,6 +514,24 @@ const InventarioView = () => {
             </div>
           </div>
 
+          {/* === Ubicación física === */}
+          <div className="inventario-row">
+            <div>
+              <label>Ubicación física</label>
+              <select
+                value={form.ubicacion || ""}
+                onChange={(e) => setForm({ ...form, ubicacion: e.target.value || "" })}
+              >
+                <option value="">— Sin ubicación —</option>
+                {UBICACIONES.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <div className="inventario-row">
             <div>
               <label>Stock Actual</label>
@@ -403,6 +541,16 @@ const InventarioView = () => {
                 onChange={(e) => setForm({ ...form, stockActual: Number(e.target.value) })}
                 min={0}
               />
+            </div>
+            <div>
+              <label>Stock Mínimo</label>
+              <input
+                type="number"
+                value={form.stockMinimo}
+                onChange={(e) => setForm({ ...form, stockMinimo: Number(e.target.value) })}
+                min={0}
+              />
+              <small>Se marcará en rojo si está por debajo</small>
             </div>
             <div>
               <label>Costo Promedio (C$)</label>
@@ -500,6 +648,187 @@ const InventarioView = () => {
             </div>
           </div>
 
+          {/* === Compatibilidad con máquinas === */}
+          <div className="inventario-row">
+            <div className="compat-box">
+              <label>Compatibilidad con máquinas</label>
+              <div className="compat-input">
+                <input
+                  type="text"
+                  placeholder="Agregar modelo o máquina..."
+                  onKeyDown={(e: any) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const val = (e.target.value || "").trim();
+                      if (!val) return;
+                      if (form.compatibilidadMaquinas.includes(val)) return;
+                      setForm({
+                        ...form,
+                        compatibilidadMaquinas: [...form.compatibilidadMaquinas, val],
+                      });
+                      e.target.value = "";
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const input = (document.querySelector(
+                      ".compat-input input"
+                    ) as HTMLInputElement)!;
+                    const val = (input.value || "").trim();
+                    if (!val) return;
+                    if (form.compatibilidadMaquinas.includes(val)) return;
+                    setForm({
+                      ...form,
+                      compatibilidadMaquinas: [...form.compatibilidadMaquinas, val],
+                    });
+                    input.value = "";
+                  }}
+                >
+                  Agregar
+                </button>
+              </div>
+              <div className="compat-chips">
+                {form.compatibilidadMaquinas.map((m, idx) => (
+                  <span key={idx} className="chip">
+                    {m}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          compatibilidadMaquinas: form.compatibilidadMaquinas.filter(
+                            (x) => x !== m
+                          ),
+                        })
+                      }
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* === Precios competencia === */}
+          <div className="inventario-row">
+            <div className="pc-box">
+              <label>Precios de proveedores competidores</label>
+              <div className="pc-form">
+                <input
+                  type="text"
+                  placeholder="Proveedor"
+                  value={pcForm.proveedor}
+                  onChange={(e) => setPcForm({ ...pcForm, proveedor: e.target.value })}
+                />
+                <input
+                  type="number"
+                  placeholder="Precio C$"
+                  value={pcForm.precioCordoba}
+                  onChange={(e) => setPcForm({ ...pcForm, precioCordoba: e.target.value })}
+                  step="0.01"
+                  min={0}
+                />
+                <input
+                  type="number"
+                  placeholder="Precio US$"
+                  value={pcForm.precioDolar}
+                  onChange={(e) => setPcForm({ ...pcForm, precioDolar: e.target.value })}
+                  step="0.01"
+                  min={0}
+                />
+                <input
+                  type="text"
+                  placeholder="Referencia/Notas (opcional)"
+                  value={pcForm.referencia}
+                  onChange={(e) => setPcForm({ ...pcForm, referencia: e.target.value })}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!pcForm.proveedor.trim()) {
+                      toast.warning("Proveedor es requerido");
+                      return;
+                    }
+                    const entry = {
+                      proveedor: pcForm.proveedor.trim(),
+                      precioCordoba: pcForm.precioCordoba ? Number(pcForm.precioCordoba) : undefined,
+                      precioDolar: pcForm.precioDolar ? Number(pcForm.precioDolar) : undefined,
+                      referencia: pcForm.referencia?.trim() || undefined,
+                      fecha: new Date().toISOString(),
+                    };
+                    const list = [...form.preciosCompetencia];
+                    if (pcEditIdx !== null) {
+                      list[pcEditIdx] = entry;
+                    } else {
+                      list.push(entry);
+                    }
+                    setForm({ ...form, preciosCompetencia: list });
+                    setPcForm({ proveedor: "", precioCordoba: "", precioDolar: "", referencia: "" });
+                    setPcEditIdx(null);
+                  }}
+                >
+                  {pcEditIdx !== null ? "Actualizar" : "Agregar"}
+                </button>
+              </div>
+
+              <div className="pc-list">
+                {(!form.preciosCompetencia || form.preciosCompetencia.length === 0) && (
+                  <small>No hay precios de competencia añadidos</small>
+                )}
+                {form.preciosCompetencia?.map((pc: any, idx: number) => (
+                  <div key={idx} className="pc-item">
+                    <div className="pc-left">
+                      <strong>{pc.proveedor}</strong>
+                      <span>
+                        {pc.precioCordoba != null ? `${Number(pc.precioCordoba).toFixed(2)} C$` : "—"}
+                        {" / "}
+                        {pc.precioDolar != null ? `${Number(pc.precioDolar).toFixed(2)} US$` : "—"}
+                      </span>
+                      {pc.referencia && <em>{pc.referencia}</em>}
+                    </div>
+                    <div className="pc-actions">
+                      <button
+                        type="button"
+                        className="action-btn edit"
+                        onClick={() => {
+                          setPcForm({
+                            proveedor: pc.proveedor || "",
+                            precioCordoba: pc.precioCordoba ?? "",
+                            precioDolar: pc.precioDolar ?? "",
+                            referencia: pc.referencia || "",
+                          });
+                          setPcEditIdx(idx);
+                        }}
+                        title="Editar referencia"
+                      >
+                        <FaEdit />
+                      </button>
+                      <button
+                        type="button"
+                        className="action-btn delete"
+                        onClick={() => {
+                          const list = [...form.preciosCompetencia];
+                          list.splice(idx, 1);
+                          setForm({ ...form, preciosCompetencia: list });
+                          if (pcEditIdx === idx) {
+                            setPcForm({ proveedor: "", precioCordoba: "", precioDolar: "", referencia: "" });
+                            setPcEditIdx(null);
+                          }
+                        }}
+                        title="Eliminar referencia"
+                      >
+                        <FaTrash />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <button type="submit" className="inventario-save-btn" disabled={saving}>
             <FaPlus /> {editing ? "Actualizar" : "Agregar"}
           </button>
@@ -526,27 +855,161 @@ const InventarioView = () => {
           striped
           responsive
           persistTableHead
+          conditionalRowStyles={[
+            {
+              when: (r: any) => isLowStock(r),
+              style: {
+                backgroundColor: '#fdecea', // rojo claro
+                color: '#3a3a3a',
+              },
+            },
+            {
+              when: (r: any) => isNearStock(r),
+              style: {
+                backgroundColor: '#fff8e1', // amarillo claro
+                color: '#3a3a3a',
+              },
+            },
+            {
+              when: (r: any) => isComfortableStock(r),
+              style: {
+                backgroundColor: '#e8f5e9', // verde claro (suficiente stock)
+                color: '#2e7d32',
+              },
+            },
+          ]}
           noDataComponent="No hay productos registrados"
         />
 
-        <div className="inventario-totales">
-          <p>
-            💰 <strong>Total inventario:</strong>{" "}
-            {totales.valorTotalC.toFixed(2)} C$ / {totales.valorTotalD.toFixed(2)} US$
-          </p>
-          <p>
-            📈 <strong>Utilidad total:</strong>{" "}
-            <span
-              style={{
-                color: totales.utilidadTotalC >= 0 ? "green" : "red",
-                fontWeight: "bold",
-              }}
-            >
-              {totales.utilidadTotalC.toFixed(2)} C$ / {totales.utilidadTotalD.toFixed(2)} US$
-            </span>
-          </p>
-        </div>
+      <div className="inventario-totales">
+        <p>
+          💰 <strong>Total inventario:</strong>{" "}
+          {totales.valorTotalC.toFixed(2)} C$ / {totales.valorTotalD.toFixed(2)} US$
+        </p>
+        <p>
+          📈 <strong>Utilidad total:</strong>{" "}
+          <span
+            style={{
+              color: totales.utilidadTotalC >= 0 ? "green" : "red",
+              fontWeight: "bold",
+            }}
+          >
+            {totales.utilidadTotalC.toFixed(2)} C$ / {totales.utilidadTotalD.toFixed(2)} US$
+          </span>
+        </p>
       </div>
+    </div>
+
+      {/* ===== Modal Ver Detalles ===== */}
+      {view && (
+        <div className="inventario-modal-overlay" onClick={() => setView(null)}>
+          <div className="inventario-modal" onClick={(e) => e.stopPropagation()}>
+            <header className="modal-header">
+              <h3>Detalle del Producto</h3>
+              <button className="modal-close" onClick={() => setView(null)}>×</button>
+            </header>
+            <div className="modal-body">
+              <div className="modal-grid">
+                <div>
+                  <strong>N° Parte:</strong>
+                  <div>{view.numeroParte}</div>
+                </div>
+                <div>
+                  <strong>Nombre:</strong>
+                  <div>{view.nombre}</div>
+                </div>
+                <div>
+                  <strong>Marca:</strong>
+                  <div>{view.marca?.nombre || "—"}</div>
+                </div>
+                <div>
+                  <strong>Categoría:</strong>
+                  <div>{view.categoria?.nombre || "—"}</div>
+                </div>
+                <div>
+                  <strong>Stock:</strong>
+                  <div>{Number(view.stockActual ?? 0)}</div>
+                </div>
+                <div>
+                  <strong>Costo (C$/US$):</strong>
+                  <div>
+                    {Number(view.costoPromedioCordoba).toFixed(2)} / {Number(view.costoPromedioDolar).toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <strong>Venta Prom (C$/US$):</strong>
+                  <div>
+                    {Number(view.precioVentaPromedioCordoba).toFixed(2)} / {Number(view.precioVentaPromedioDolar).toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <strong>Venta Sug (C$/US$):</strong>
+                  <div>
+                    {Number(view.precioVentaSugeridoCordoba).toFixed(2)} / {Number(view.precioVentaSugeridoDolar).toFixed(2)}
+                  </div>
+                </div>
+                <div style={{ gridColumn: "1/-1" }}>
+                  <strong>Descripción:</strong>
+                  <div>{view.descripcion || "—"}</div>
+                </div>
+              </div>
+
+              <div className="modal-section">
+                <h4>Sustituto</h4>
+                <div className="modal-grid">
+                  <div>
+                    <strong>Código Sustituto:</strong>
+                    <div>{view.codigoSustituto || "—"}</div>
+                  </div>
+                  <div>
+                    <strong>Marca Sustituto:</strong>
+                    <div>{view.marcaSustituto?.nombre || "—"}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-section">
+                <h4>Compatibilidad con máquinas</h4>
+                <div className="compat-chips">
+                  {Array.isArray(view.compatibilidadMaquinas) && view.compatibilidadMaquinas.length > 0 ? (
+                    view.compatibilidadMaquinas.map((m: string, idx: number) => (
+                      <span key={idx} className="chip">{m}</span>
+                    ))
+                  ) : (
+                    <span>—</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="modal-section">
+                <h4>Precios de competencia</h4>
+                {Array.isArray(view.preciosCompetencia) && view.preciosCompetencia.length > 0 ? (
+                  <div className="pc-table">
+                    <div className="pc-thead">
+                      <div>Proveedor</div>
+                      <div>Precio C$</div>
+                      <div>Precio US$</div>
+                      <div>Fecha</div>
+                      <div>Referencia</div>
+                    </div>
+                    {view.preciosCompetencia.map((pc: any, idx: number) => (
+                      <div key={idx} className="pc-trow">
+                        <div>{pc.proveedor}</div>
+                        <div>{pc.precioCordoba != null ? Number(pc.precioCordoba).toFixed(2) : "—"}</div>
+                        <div>{pc.precioDolar != null ? Number(pc.precioDolar).toFixed(2) : "—"}</div>
+                        <div>{pc.fecha ? fmtDateTime(pc.fecha) : "—"}</div>
+                        <div>{pc.referencia || "—"}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span>—</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="inventario-footer">© 2025 AYHER — Todos los derechos reservados</footer>
     </div>

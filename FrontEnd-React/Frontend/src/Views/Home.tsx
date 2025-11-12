@@ -58,6 +58,26 @@ const Home = () => {
           <button onClick={() => navigate("/clientes")}>Entrar</button>
         </Card>
 
+        {/* ✅ Facturas de crédito pendientes */}
+        <Card color1="#7b1fa2" color2="#512da8">
+          <div className="icon-circle">
+            <FaCashRegister />
+          </div>
+          <h2>Facturas pendientes</h2>
+          <p>Ver facturas de crédito sin cancelar y sus fechas.</p>
+          <button onClick={() => navigate("/facturas-pendientes")}>Ver pendientes</button>
+        </Card>
+
+        {/* ✅ Nueva Card Cartera de clientes */}
+        <Card color1="#6a1b9a" color2="#9c27b0">
+          <div className="icon-circle">
+            <FaChartLine />
+          </div>
+          <h2>Cartera de clientes</h2>
+          <p>Totales de ventas por cliente (Crédito vs Contado).</p>
+          <button onClick={() => navigate("/cartera-clientes")}>Entrar</button>
+        </Card>
+
         <Card color1="#cc0000" color2="#ff3333">
           <div className="icon-circle">
             <FaTags />
@@ -141,7 +161,8 @@ const pulse = keyframes`
 
 const HomeContainer = styled.div`
   width: 100vw;
-  height: 100vh;
+  min-height: 100vh;
+  height: auto;
   overflow-x: hidden;
   background: linear-gradient(180deg, #ffffff 0%, #f0f4ff 100%);
   display: flex;
