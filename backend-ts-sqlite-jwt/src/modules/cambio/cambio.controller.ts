@@ -43,6 +43,7 @@ export async function create(req: Request, res: Response) {
   const data = parsed.data;
 
   const result = await prisma.$transaction(async (tx) => {
+    const tipoCambio = 36.5; // fallback simple; si necesitas, trae desde API de tipo cambio
     const cambio = await tx.cambio.create({
       data: {
         cliente: data.cliente,
@@ -60,12 +61,14 @@ export async function create(req: Request, res: Response) {
           inventarioEntradaId: d.inventarioEntradaId,
           cantidadSalida: d.cantidadSalida,
           cantidadEntrada: d.cantidadEntrada,
-          precioUnitarioCordoba: d.precioUnitarioCordoba as any
+          precioUnitarioCordoba: d.precioUnitarioCordoba as any,
+          precioUnitarioDolar: (Number(d.precioUnitarioCordoba) / tipoCambio) as any,
         }
       });
 
       // Salida
       await crearMovimientoYAjustarStock({
+        tx,
         inventarioId: d.inventarioSalidaId,
         tipoMovimientoNombre: 'Cambio Salida',
         cantidad: d.cantidadSalida,
@@ -76,6 +79,7 @@ export async function create(req: Request, res: Response) {
 
       // Entrada
       await crearMovimientoYAjustarStock({
+        tx,
         inventarioId: d.inventarioEntradaId,
         tipoMovimientoNombre: 'Cambio Entrada',
         cantidad: d.cantidadEntrada,

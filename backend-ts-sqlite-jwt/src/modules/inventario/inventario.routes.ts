@@ -6,6 +6,10 @@ export const inventarioRouter = Router();
 
 inventarioRouter.get('/',  ctrl.list);
 inventarioRouter.post('/',  ctrl.create);
+
+// Bajo stock (stockActual <= stockMinimo)
+inventarioRouter.get('/low-stock', ctrl.listLowStock);
+
 inventarioRouter.get('/:id',  ctrl.getById);
 inventarioRouter.put('/:id',  ctrl.update);
 inventarioRouter.delete('/:id',  ctrl.remove);
@@ -20,4 +24,3 @@ inventarioRouter.get('/buscar-disponible',  ctrl.buscarProductoDisponible);
 inventarioRouter.post('/asignar-ubicaciones', ctrl.asignarUbicaciones);
 
 // Bajo stock (stockActual <= stockMinimo)
-inventarioRouter.get('/low-stock', ctrl.listLowStock);

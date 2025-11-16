@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import styled, { keyframes } from 'styled-components';
+import { buildApiUrl } from '../api/constants';
 
-const API_URL = 'http://localhost:4000/api/reportes/cartera-clientes';
+const API_URL = buildApiUrl('/reportes/cartera-clientes');
 
 function getCookie(name: string) {
   const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
@@ -15,14 +16,12 @@ type CarteraItem = {
   totalCreditoCordoba: number;
   totalContadoDolar: number;
   totalCreditoDolar: number;
+  creditoHabilitado?: boolean;
+  creditoMaximoCordoba?: number;
+  creditoMaximoDolar?: number;
 };
 
-const COLORS = {
-  contado: 'rgba(75, 192, 192, 0.7)',
-  credito: 'rgba(255, 99, 132, 0.7)',
-  contadoBorder: 'rgba(75, 192, 192, 1)',
-  creditoBorder: 'rgba(255, 99, 132, 1)',
-};
+// Removed unused COLORS
 
 const CarteraClientes: React.FC = () => {
   const [data, setData] = useState<CarteraItem[]>([]);
@@ -88,7 +87,7 @@ const CarteraClientes: React.FC = () => {
   }, [filtered, moneda]);
 
   const exportCSV = () => {
-    const rows = [['Cliente', `Contado ${moneda}`, `Crédito ${moneda}`, `Total ${moneda}`],
+    const rows = [['Cliente', `Contado ${moneda}`, `Credito ${moneda}`, `Total ${moneda}`],
       ...sorted.map((r) => {
         const contado = moneda === 'C$' ? r.totalContadoCordoba : r.totalContadoDolar;
         const credito = moneda === 'C$' ? r.totalCreditoCordoba : r.totalCreditoDolar;
@@ -109,12 +108,15 @@ const CarteraClientes: React.FC = () => {
       const contado = moneda === 'C$' ? row.totalContadoCordoba : row.totalContadoDolar;
       const credito = moneda === 'C$' ? row.totalCreditoCordoba : row.totalCreditoDolar;
       const total = (contado || 0) + (credito || 0);
+      const limite = moneda === 'C$' ? row.creditoMaximoCordoba : row.creditoMaximoDolar;
       return {
         key: row.clienteId,
         cliente: row.clienteNombre,
         contado: Number(contado || 0),
         credito: Number(credito || 0),
         total: Number(total || 0),
+        limite: Number(limite ?? 0),
+        habilitado: Boolean(row.creditoHabilitado),
       };
     });
   }, [limited, moneda]);
@@ -128,7 +130,7 @@ const CarteraClientes: React.FC = () => {
             <span className="logo-icon">📊</span>
             <h1>Cartera de clientes</h1>
           </div>
-          <p>Totales de ventas por cliente (Crédito vs Contado)</p>
+          <p>Totales de ventas por cliente (Credito vs Contado)</p>
         </div>
       </Header>
 
@@ -149,7 +151,7 @@ const CarteraClientes: React.FC = () => {
             <label>Orden:</label>
             <select value={sortKey} onChange={(e) => setSortKey(e.target.value as any)}>
               <option value="total">Total</option>
-              <option value="credito">Crédito</option>
+              <option value="credito">Credito</option>
               <option value="contado">Contado</option>
             </select>
             <select value={sortDir} onChange={(e) => setSortDir(e.target.value as any)}>
@@ -186,7 +188,7 @@ const CarteraClientes: React.FC = () => {
                   <span className="value contado">{summary.contado.toFixed(2)} {moneda}</span>
                 </div>
                 <div>
-                  <span className="label">Crédito:</span>
+                  <span className="label">Credito:</span>
                   <span className="value credito">{summary.credito.toFixed(2)} {moneda}</span>
                 </div>
                 <div>
@@ -202,7 +204,9 @@ const CarteraClientes: React.FC = () => {
                 <ClientCard key={r.key}>
                   <div className="name">{r.cliente}</div>
                   <div className="row"><span>Contado:</span><b className="contado">{r.contado.toFixed(2)} {moneda}</b></div>
-                  <div className="row"><span>Crédito:</span><b className="credito">{r.credito.toFixed(2)} {moneda}</b></div>
+                  <div className="row"><span>Cr�dito:</span><b className="credito">{r.credito.toFixed(2)} {moneda}</b></div>
+                  <div className="row"><span>L�mite cr�dito:</span><b className="total">{r.limite.toFixed(2)} {moneda}</b></div>
+                  <div className="row"><span>Cr�dito habilitado:</span><b className={r.habilitado ? "contado" : "credito"}>{r.habilitado ? "S�" : "No"}</b></div>
                   <div className="row sep"><span>Total:</span><b className="total">{r.total.toFixed(2)} {moneda}</b></div>
                 </ClientCard>
               ))}

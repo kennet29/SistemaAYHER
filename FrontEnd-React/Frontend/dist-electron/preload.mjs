@@ -1,0 +1,1 @@
+"use strict";const t=require("electron");t.contextBridge.exposeInMainWorld("ayher",{getApiBase:async()=>{try{const e=await t.ipcRenderer.invoke("ayher:get-api-base");return typeof e=="string"?e:"http://127.0.0.1:4000"}catch{return"http://127.0.0.1:4000"}}});

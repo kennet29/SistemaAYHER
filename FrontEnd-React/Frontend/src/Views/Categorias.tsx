@@ -4,8 +4,9 @@ import { FaPlus, FaEdit, FaTrash, FaArrowLeft, FaThLarge } from "react-icons/fa"
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import DataTable from "react-data-table-component";
+import { buildApiUrl } from "../api/constants";
 
-const API_URL = "http://localhost:4000/api/categorias";
+const API_URL = buildApiUrl("/categorias");
 
 // 🔹 Leer cookies manualmente
 function getCookie(name: string) {

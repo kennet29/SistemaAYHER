@@ -5,10 +5,11 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./Movimientos.css";
 import { fmtDateTime } from "../utils/dates";
+import { buildApiUrl } from "../api/constants";
 
-const API_MOVIMIENTOS = "http://localhost:4000/api/MovimientoInventario";
-const API_TIPOS = "http://localhost:4000/api/tipos-movimiento";
-const API_PRODUCTOS = "http://localhost:4000/api/inventario";
+const API_MOVIMIENTOS = buildApiUrl("/MovimientoInventario");
+const API_TIPOS = buildApiUrl("/tipos-movimiento");
+const API_PRODUCTOS = buildApiUrl("/inventario");
 
 function getCookie(name: string) {
   const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));

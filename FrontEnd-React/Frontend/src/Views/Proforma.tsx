@@ -11,6 +11,7 @@ import "./Facturacion.css";
 import "./Proforma.css";
 import logo from "../img/logo.png";
 import { useNavigate } from "react-router-dom";
+import { buildApiUrl } from "../api/constants";
 
 // ================= Utils =================
 function getCookie(name: string) {
@@ -64,11 +65,11 @@ type RemisionDetalle = {
 type Remision = { id: number; clienteId: number; fecha: string; detalles: RemisionDetalle[] };
 
 // ================= API =================
-const API_PRODUCTOS = "http://localhost:4000/api/inventario";
-const API_TIPO_CAMBIO = "http://localhost:4000/api/tipo-cambio/latest";
-const API_REMISIONES = "http://localhost:4000/api/remision/pendientes";
-const API_CLIENTES = "http://localhost:4000/api/clientes";
-const API_VENTAS = "http://localhost:4000/api/ventas";
+const API_PRODUCTOS = buildApiUrl("/inventario");
+const API_TIPO_CAMBIO = buildApiUrl("/tipo-cambio/latest");
+const API_REMISIONES = buildApiUrl("/remision/pendientes");
+const API_CLIENTES = buildApiUrl("/clientes");
+const API_VENTAS = buildApiUrl("/ventas");
 
 // ================= Alerts =================
 const notify = {
@@ -581,12 +582,12 @@ const Proforma: React.FC = () => {
               </div>
               <DataTable
                 columns={[
-                  { name:"Parte", selector:(r:Product)=>r.numeroParte, sortable:true },
-                  { name:"Nombre", selector:(r:Product)=>r.nombre, grow:2, sortable:true },
+                  { name:"Parte", selector:(r:Product)=> (r.numeroParte ?? ''), sortable:true },
+                  { name:"Nombre", selector:(r:Product)=> (r.nombre ?? ''), grow:2, sortable:true },
                   { name:"Precio", selector:(r:Product)=>getPrecioProducto(r,moneda), sortable:true,
                     cell:r=>formatMoney(getPrecioProducto(r,moneda),moneda)
                   },
-                  { name:"Stock", selector:(r:Product)=>r.stockActual, sortable:true }
+                  { name:"Stock", selector:(r:Product)=> Number(r.stockActual ?? 0), sortable:true }
                 ]}
                 data={productosFiltrados}
                 pagination

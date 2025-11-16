@@ -44,6 +44,7 @@ export async function create(req: Request, res: Response) {
   const data = parsed.data;
 
   const result = await prisma.$transaction(async (tx) => {
+    const tc = Number(data.tipoCambioValor ?? 36.5);
     const compra = await tx.compra.create({
       data: {
         proveedor: data.proveedor,
@@ -62,7 +63,8 @@ export async function create(req: Request, res: Response) {
           compraId: compra.id,
           inventarioId: d.inventarioId,
           cantidad: d.cantidad,
-          costoUnitarioCordoba: d.costoUnitarioCordoba as any
+          costoUnitarioCordoba: d.costoUnitarioCordoba as any,
+          costoUnitarioDolar: (Number(d.costoUnitarioCordoba) / tc) as any,
         }
       });
 
@@ -70,11 +72,12 @@ export async function create(req: Request, res: Response) {
 
       // Movimiento: ENTRADA
       await crearMovimientoYAjustarStock({
+        tx,
         inventarioId: d.inventarioId,
         tipoMovimientoNombre: 'Entrada',
         cantidad: d.cantidad,
-        costoUnitarioCordoba: d.costoUnitarioCordoba,
-        tipoCambioValor: data.tipoCambioValor,
+        precioVentaUnitarioCordoba: d.costoUnitarioCordoba,
+        tipoCambioValor: tc,
         usuario: data.usuario,
         observacion: `Compra N° ${data.numeroFactura ?? ''}`
       });

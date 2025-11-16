@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { FaDollarSign, FaSave, FaSync, FaHome } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
+import { buildApiUrl } from "../api/constants";
 
-const API_URL = "http://localhost:4000/api/tipo-cambio";
+const API_URL = buildApiUrl("/tipo-cambio");
 
 // 🔹 Leer token desde cookie
 function getCookie(name: string) {

@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
+import { buildApiUrl } from "../api/constants";
 
-const API_URL = "http://localhost:4000/api/auth";
+const API_URL = buildApiUrl("/auth");
 
 // 🔹 Función para decodificar el token sin librerías externas
 function decodeToken(token: string) {

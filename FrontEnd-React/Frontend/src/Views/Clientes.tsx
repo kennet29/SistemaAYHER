@@ -1,20 +1,39 @@
-import React, { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import DataTable from "react-data-table-component";
-import { FaPlus, FaEdit, FaTrash, FaUser, FaArrowLeft } from "react-icons/fa";
+import { FaPlus, FaUser, FaArrowLeft } from "react-icons/fa";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useNavigate } from "react-router-dom";
 import "./Clientes.css";
+import { buildApiUrl } from "../api/constants";
 
-const API_CLIENTES = "http://localhost:4000/api/clientes";
+const API_CLIENTES = buildApiUrl("/clientes");
 
-function getCookie(name) {
+function getCookie(name: string) {
   const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
   return match ? decodeURIComponent(match[2]) : null;
 }
 
-// ✅ Form inicial sin ID
-const defaultForm = {
+type ClienteForm = {
+  id?: number;
+  tipoCliente: string;
+  nombre: string;
+  empresa: string;
+  nombreContacto: string;
+  ruc: string;
+  razonSocial: string;
+  telefono1: string;
+  telefono2: string;
+  correo1: string;
+  correo2: string;
+  direccion: string;
+  observacion: string;
+  creditoHabilitado: boolean;
+  creditoMaximoCordoba: number;
+  creditoMaximoDolar: number;
+};
+
+const defaultForm: ClienteForm = {
   tipoCliente: "PERSONA",
   nombre: "",
   empresa: "",
@@ -27,12 +46,15 @@ const defaultForm = {
   correo2: "",
   direccion: "",
   observacion: "",
+  creditoHabilitado: false,
+  creditoMaximoCordoba: 0,
+  creditoMaximoDolar: 0,
 };
 
 export default function Clientes() {
   const navigate = useNavigate();
-  const [clientes, setClientes] = useState([]);
-  const [form, setForm] = useState(defaultForm);
+  const [clientes, setClientes] = useState<any[]>([]);
+  const [form, setForm] = useState<ClienteForm>(defaultForm);
   const [editing, setEditing] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [loading, setLoading] = useState(false);
@@ -60,10 +82,13 @@ export default function Clientes() {
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (cleaned.correo1 && !emailRegex.test(cleaned.correo1)) {
-      toast.error("📧 Correo inválido");
+      toast.error("Correo inv�lido");
       return null;
     }
 
+    cleaned.creditoHabilitado = Boolean(cleaned.creditoHabilitado);
+    cleaned.creditoMaximoCordoba = Number(cleaned.creditoMaximoCordoba || 0);
+    cleaned.creditoMaximoDolar = Number(cleaned.creditoMaximoDolar || 0);
     return cleaned;
   }
 
@@ -84,55 +109,62 @@ export default function Clientes() {
     });
 
     if (res.ok) {
-      toast.success(`✅ Cliente ${editing ? "actualizado" : "creado"} correctamente`);
+      toast.success(`Cliente ${editing ? "actualizado" : "creado"} correctamente`);
       setForm(defaultForm);
       setEditing(false);
       loadClientes();
     } else {
-      toast.error("❌ Error guardando cliente");
+      toast.error("No se pudo guardar el cliente");
     }
   }
 
-  async function deleteCliente(id) {
-    if (!window.confirm("¿Seguro que deseas eliminar este cliente?")) return;
+  async function deleteCliente(id: number) {
+    if (!window.confirm("�Seguro que deseas eliminar este cliente?")) return;
 
     const res = await fetch(`${API_CLIENTES}/${id}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${getCookie("token")}` },
     });
-
     if (res.ok) {
-      toast.success("🗑️ Cliente eliminado");
+      toast.info("Cliente eliminado");
       loadClientes();
     } else {
-      toast.error("❌ Error al eliminar cliente");
+      toast.error("No se pudo eliminar");
     }
   }
 
-  function editRow(row) {
-    setForm(row);
+  function editRow(row: any) {
+    setForm({
+      ...defaultForm,
+      ...row,
+    });
     setEditing(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   const filtered = useMemo(() => {
     const q = busqueda.toLowerCase();
     return clientes.filter(
-      (c) =>
+      (c: any) =>
         c.nombre?.toLowerCase().includes(q) ||
         c.empresa?.toLowerCase().includes(q) ||
         c.ruc?.toLowerCase().includes(q)
     );
   }, [busqueda, clientes]);
 
+  const creditSummary = useMemo(() => {
+    const enabled = clientes.filter((c) => c.creditoHabilitado).length;
+    const limiteCordoba = clientes.reduce((sum, c) => sum + Number(c.creditoMaximoCordoba || 0), 0);
+    return { enabled, limiteCordoba };
+  }, [clientes]);
+
   const columns = [
-    { name: "CLIENTE", selector: (r) => r.nombre, sortable: true },
-    { name: "EMPRESA", selector: (r) => r.empresa || "—" },
-    { name: "RUC", selector: (r) => r.ruc || "—" },
-    { name: "TELÉFONO", selector: (r) => r.telefono1 || "—" },
+    { name: "CLIENTE", selector: (r: any) => r.nombre ?? "�", sortable: true },
+    { name: "EMPRESA", selector: (r: any) => r.empresa ?? "�" },
+    { name: "RUC", selector: (r: any) => r.ruc ?? "�" },
+    { name: "TELOFONO", selector: (r: any) => r.telefono1 ?? "�" },
     {
       name: "ACCIONES",
-      cell: (r) => (
+      cell: (r: any) => (
         <div className="actions">
           <button className="btn-edit" onClick={() => editRow(r)}>
             Editar
@@ -147,55 +179,76 @@ export default function Clientes() {
 
   return (
     <div className="clientes-container">
-
-      {/* 🔙 Botón volver */}
       <button className="btn-back" onClick={() => navigate("/home")}>
-        <FaArrowLeft /> Menú
+        <FaArrowLeft /> Menu
       </button>
 
-      <h1><FaUser /> Clientes</h1>
+      <header className="page-header">
+        <h1><FaUser /> Clientes</h1>
+        <div className="overview">
+          <span>{clientes.length} clientes registrados</span>
+          <span>{creditSummary.enabled} con credito habilitado</span>
+          <span>Limite total: {creditSummary.limiteCordoba.toFixed(2)} C$</span>
+        </div>
+      </header>
 
       <div className="form-card">
         <h2>{editing ? "Editar Cliente" : "Nuevo Cliente"}</h2>
-
         <div className="form-grid">
-          <div>
+          <section className="form-section">
+            <h3>Datos basicos</h3>
             <label>Tipo</label>
             <select value={form.tipoCliente} onChange={(e) => setForm({ ...form, tipoCliente: e.target.value })}>
               <option value="PERSONA">Persona</option>
               <option value="EMPRESA">Empresa</option>
             </select>
-          </div>
-
-          <div>
             <label>Nombre</label>
             <input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
-          </div>
-
-          <div>
             <label>Empresa</label>
             <input value={form.empresa} onChange={(e) => setForm({ ...form, empresa: e.target.value })} />
-          </div>
-
-          <div>
             <label>RUC</label>
             <input value={form.ruc} onChange={(e) => setForm({ ...form, ruc: e.target.value })} />
-          </div>
+          </section>
 
-          <div>
-            <label>Teléfono</label>
+          <section className="form-section">
+            <h3>Contacto</h3>
+            <label>Telefono</label>
             <input value={form.telefono1} onChange={(e) => setForm({ ...form, telefono1: e.target.value })} />
-          </div>
-
-          <div>
             <label>Correo</label>
             <input value={form.correo1} onChange={(e) => setForm({ ...form, correo1: e.target.value })} />
-          </div>
-
-          <div className="full">
-            <label>Dirección</label>
+            <label>Direccion</label>
             <input value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value })} />
-          </div>
+            <label>Observacion</label>
+            <input value={form.observacion} onChange={(e) => setForm({ ...form, observacion: e.target.value })} />
+          </section>
+
+          <section className="form-section credit-section">
+            <h3>Credito</h3>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={form.creditoHabilitado}
+                onChange={(e) => setForm({ ...form, creditoHabilitado: e.target.checked })}
+              />
+              Habilitar credito
+            </label>
+            <label>Credito maximo (C$)</label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.creditoMaximoCordoba}
+              onChange={(e) => setForm({ ...form, creditoMaximoCordoba: Number(e.target.value) })}
+            />
+            <label>Credito maximo (US$)</label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.creditoMaximoDolar}
+              onChange={(e) => setForm({ ...form, creditoMaximoDolar: Number(e.target.value) })}
+            />
+          </section>
         </div>
 
         <button className="btn-save" onClick={saveCliente}>
@@ -203,12 +256,17 @@ export default function Clientes() {
         </button>
       </div>
 
-      <input
-        className="search"
-        placeholder="Buscar por nombre, empresa o RUC..."
-        value={busqueda}
-        onChange={(e) => setBusqueda(e.target.value)}
-      />
+      <div className="search-wrapper">
+        <input
+          className="search"
+          placeholder="Buscar por nombre, empresa o RUC..."
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+        />
+        <div className="search-meta">
+          <span>Resultados: {filtered.length}</span>
+        </div>
+      </div>
 
       <DataTable
         columns={columns}

@@ -9,6 +9,7 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./Facturacion.css";
 import { useNavigate } from "react-router-dom";
+import { buildApiUrl } from "../api/constants";
 
 /* ===== Utils ===== */
 function getCookie(name: string) {
@@ -63,11 +64,12 @@ type RemisionDetalle = {
 type Remision = { id: number; clienteId: number; fecha: string; detalles: RemisionDetalle[] };
 
 /* ===== API URLs ===== */
-const API_PRODUCTOS = "http://localhost:4000/api/inventario";
-const API_TIPO_CAMBIO = "http://localhost:4000/api/tipo-cambio/latest";
-const API_REMISIONES = "http://localhost:4000/api/remision/pendientes";
-const API_VENTAS = "http://localhost:4000/api/ventas";
-const API_CLIENTES = "http://localhost:4000/api/clientes";
+
+const API_PRODUCTOS = buildApiUrl("/inventario");
+const API_TIPO_CAMBIO = buildApiUrl("/tipo-cambio/latest");
+const API_REMISIONES = buildApiUrl("/remision/pendientes");
+const API_VENTAS = buildApiUrl("/ventas");
+const API_CLIENTES = buildApiUrl("/clientes");
 
 /* ===== Toast helper ===== */
 const notify = {

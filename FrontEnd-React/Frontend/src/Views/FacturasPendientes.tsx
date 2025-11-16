@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { buildApiUrl } from '../api/constants';
 
-const API_URL = 'http://localhost:4000/api/ventas/pendientes';
+const API_URL = buildApiUrl('/ventas/pendientes');
 
 function getCookie(name: string) {
   const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
@@ -69,7 +70,7 @@ const FacturasPendientes: React.FC = () => {
     try {
       setUpdatingId(id);
       const token = getCookie('token') || localStorage.getItem('token');
-      const res = await fetch(`http://localhost:4000/api/ventas/${id}/cancelada`, {
+      const res = await fetch(buildApiUrl(`/ventas/${id}/cancelada`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

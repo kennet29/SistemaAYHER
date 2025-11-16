@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../db/prisma';
 
 export async function kardex(req: Request, res: Response) {
@@ -61,11 +62,27 @@ export async function carteraClientes(_req: Request, res: Response) {
     });
 
     const clienteIds = Array.from(new Set(rows.map((r) => r.clienteId as number))).filter(Boolean) as number[];
+    type ClienteCredito = {
+      id: number;
+      nombre: string | null;
+      empresa: string | null;
+      creditoHabilitado: boolean;
+      creditoMaximoCordoba: Prisma.Decimal | number | null;
+      creditoMaximoDolar: Prisma.Decimal | number | null;
+    };
+
     const clientes = await prisma.cliente.findMany({
       where: { id: { in: clienteIds } },
-      select: { id: true, nombre: true, empresa: true },
+      select: {
+        id: true,
+        nombre: true,
+        empresa: true,
+        creditoHabilitado: true,
+        creditoMaximoCordoba: true,
+        creditoMaximoDolar: true,
+      },
     });
-    const mapCliente = new Map<number, { id: number; nombre: string | null; empresa: string | null }>();
+    const mapCliente = new Map<number, ClienteCredito>();
     for (const c of clientes) mapCliente.set(c.id, c as any);
 
     const acc = new Map<number, any>();
@@ -80,6 +97,9 @@ export async function carteraClientes(_req: Request, res: Response) {
           totalCreditoCordoba: 0,
           totalContadoDolar: 0,
           totalCreditoDolar: 0,
+          creditoHabilitado: c?.creditoHabilitado ?? false,
+          creditoMaximoCordoba: Number(c?.creditoMaximoCordoba ?? 0),
+          creditoMaximoDolar: Number(c?.creditoMaximoDolar ?? 0),
         });
       }
       const item = acc.get(id);

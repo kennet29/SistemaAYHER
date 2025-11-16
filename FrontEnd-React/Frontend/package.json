@@ -3,13 +3,16 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "electron:dev": "vite",
-    "electron:build": "electron-builder"
+    "electron:dev": "vite --mode electron",
+    "preelectron:build": "npm --prefix ../../backend-ts-sqlite-jwt run prisma:generate && npm --prefix ../../backend-ts-sqlite-jwt run build",
+    "build:electron": "tsc --project electron/tsconfig.json",
+    "electron:build": "npm run preelectron:build && npm run build:electron && npm run build -- --mode electron && electron-builder"
   },
   "dependencies": {
     "react": "^19.1.1",
@@ -38,5 +41,30 @@
     "electron": "^33.0.0",
     "vite-plugin-electron": "^0.28.8",
     "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.ayher.app",
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "electron/**",
+      "node_modules/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../backend-ts-sqlite-jwt/dist",
+        "to": "backend",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../../backend-ts-sqlite-jwt/node_modules",
+        "to": "backend/node_modules"
+      }
+    ],
+    "win": {
+      "target": ["nsis"],
+      "icon": "public/icon.ico"
+    }
   }
 }

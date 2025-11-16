@@ -12,18 +12,17 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import DataTable from "react-data-table-component";
 import "./Inventario.css";
-import { getApiBaseSync } from "../api/base";
 import { fmtDateTime } from "../utils/dates";
+import { buildApiUrl } from "../api/constants";
 
 // Ubicaciones físicas válidas: A1..A12, B1..B12, ... Z1..Z12
 const UBICACIONES = Array.from({ length: 26 }, (_, i) =>
   String.fromCharCode(65 + i)
 ).flatMap((l) => Array.from({ length: 12 }, (_, j) => `${l}${j + 1}`));
 
-const API_BASE = getApiBaseSync();
-const API_URL = `${API_BASE}/api/inventario`;
-const API_MARCA = `${API_BASE}/api/marcas`;
-const API_CATEGORIA = `${API_BASE}/api/categorias`;
+const API_URL = buildApiUrl("/inventario");
+const API_MARCA = buildApiUrl("/marcas");
+const API_CATEGORIA = buildApiUrl("/categorias");
 
 function getCookie(name: string) {
   const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
@@ -158,10 +157,10 @@ const InventarioView = () => {
         };
       });
 
-      const totalC = lista.reduce((sum, i) => sum + i.ventaTotalCordoba, 0);
-      const totalD = lista.reduce((sum, i) => sum + i.ventaTotalDolar, 0);
-      const utilidadC = lista.reduce((sum, i) => sum + i.utilidadTotalCordoba, 0);
-      const utilidadD = lista.reduce((sum, i) => sum + i.utilidadTotalDolar, 0);
+      const totalC = (lista as any[]).reduce((sum: number, i: any) => sum + Number(i.ventaTotalCordoba || 0), 0 as number);
+      const totalD = (lista as any[]).reduce((sum: number, i: any) => sum + Number(i.ventaTotalDolar || 0), 0 as number);
+      const utilidadC = (lista as any[]).reduce((sum: number, i: any) => sum + Number(i.utilidadTotalCordoba || 0), 0 as number);
+      const utilidadD = (lista as any[]).reduce((sum: number, i: any) => sum + Number(i.utilidadTotalDolar || 0), 0 as number);
 
       setItems(lista);
       setMarcas(dataMar.marcas || []);

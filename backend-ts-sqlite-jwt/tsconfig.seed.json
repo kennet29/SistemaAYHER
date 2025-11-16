@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./prisma",
+    "module": "commonjs",
+    "target": "es2020",
+    "noEmitOnError": true,
+    "esModuleInterop": true
+  },
+  "include": ["prisma/seed.ts"]
+}

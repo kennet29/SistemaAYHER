@@ -1,0 +1,43 @@
+version: '3.9'
+services:
+  backend:
+    build:
+      context: ./backend-ts-sqlite-jwt
+      dockerfile: Dockerfile
+    image: ayher-backend
+    env_file:
+      - ./backend-ts-sqlite-jwt/.env
+    environment:
+      - DATABASE_URL=file:/app/data/ayher.db
+    ports:
+      - '4000:4000'
+    volumes:
+      - backend-data:/app/data
+      - ./respaldo:/app/respaldo
+      - ${DESKTOP_BACKUP_MOUNT:-C:/respaldo}:/app/respaldo-desktop
+    restart: unless-stopped
+
+  dbbrowser:
+    image: alpine
+    command: sleep infinity
+    depends_on:
+      - backend
+    volumes:
+      - backend-data:/app/data
+    working_dir: /app/data
+    tty: true
+  frontend:
+    build:
+      context: ./FrontEnd-React/Frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    image: ayher-frontend
+    ports:
+      - '80:80'
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend-data:

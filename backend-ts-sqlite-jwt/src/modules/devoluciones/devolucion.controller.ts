@@ -34,6 +34,7 @@ export async function createDevolucionVenta(req: Request, res: Response) {
   const data = parsed.data;
 
   const result = await prisma.$transaction(async (tx) => {
+    const tc = 36.5;
     const dev = await tx.devolucionVenta.create({
       data: {
         ventaId: data.ventaId,
@@ -49,11 +50,13 @@ export async function createDevolucionVenta(req: Request, res: Response) {
           devolucionVentaId: dev.id,
           inventarioId: d.inventarioId,
           cantidad: d.cantidad,
-          precioUnitarioCordoba: d.precioUnitarioCordoba as any
+          precioUnitarioCordoba: d.precioUnitarioCordoba as any,
+          precioUnitarioDolar: (Number(d.precioUnitarioCordoba) / tc) as any,
         }
       });
 
       await crearMovimientoYAjustarStock({
+        tx,
         inventarioId: d.inventarioId,
         tipoMovimientoNombre: 'Devolución de Cliente',
         cantidad: d.cantidad,
@@ -76,6 +79,7 @@ export async function createDevolucionCompra(req: Request, res: Response) {
   const data = parsed.data;
 
   const result = await prisma.$transaction(async (tx) => {
+    const tc = 36.5;
     const dev = await tx.devolucionCompra.create({
       data: {
         compraId: data.compraId,
@@ -91,15 +95,17 @@ export async function createDevolucionCompra(req: Request, res: Response) {
           devolucionCompraId: dev.id,
           inventarioId: d.inventarioId,
           cantidad: d.cantidad,
-          costoUnitarioCordoba: d.costoUnitarioCordoba as any
+          costoUnitarioCordoba: d.costoUnitarioCordoba as any,
+          costoUnitarioDolar: (Number(d.costoUnitarioCordoba) / tc) as any,
         }
       });
 
       await crearMovimientoYAjustarStock({
+        tx,
         inventarioId: d.inventarioId,
         tipoMovimientoNombre: 'Devolución a Proveedor',
         cantidad: d.cantidad,
-        costoUnitarioCordoba: d.costoUnitarioCordoba,
+        precioVentaUnitarioCordoba: d.costoUnitarioCordoba,
         usuario: data.usuario,
         observacion: 'Devolución proveedor'
       });

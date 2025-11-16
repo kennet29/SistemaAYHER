@@ -3,8 +3,9 @@ import styled, { keyframes } from "styled-components";
 import { FaCog, FaSave, FaArrowLeft } from "react-icons/fa";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { buildApiUrl } from "../api/constants";
 
-const API_URL = "http://localhost:4000/api/configuracion";
+const API_URL = buildApiUrl("/configuracion");
 
 // 🔹 Leer cookies manualmente
 function getCookie(name: string) {

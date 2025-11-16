@@ -28,7 +28,8 @@ export async function register(req: Request, res: Response) {
     data: { name, email, passwordHash }
   });
 
-  const token = signToken({ sub: user.id, role: user.role });
+  const role = (user as any).role === 'ADMIN' ? 'ADMIN' : 'USER';
+  const token = signToken({ sub: user.id, role });
   return res.status(201).json({ token, user: { id: user.id, name, email, role: user.role } });
 }
 
@@ -43,7 +44,8 @@ export async function login(req: Request, res: Response) {
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return res.status(401).json({ message: 'Credenciales inválidas' });
 
-  const token = signToken({ sub: user.id, role: user.role });
+  const role = (user as any).role === 'ADMIN' ? 'ADMIN' : 'USER';
+  const token = signToken({ sub: user.id, role });
   return res.json({
     token,
     user: { id: user.id, name: user.name, email: user.email, role: user.role }

@@ -1,11 +1,11 @@
 // src/Views/Ventas.tsx - Historial de Ventas
 import React, { useEffect, useMemo, useState } from "react";
 import DataTable from "react-data-table-component";
-import { FaArrowLeft, FaEye, FaTimes } from "react-icons/fa";
+import { FaEye, FaTimes } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import "./Ventas.css";
-import { getApiBaseSync } from "../api/base";
 import { fmtDate } from "../utils/dates";
+import { buildApiUrl } from "../api/constants";
 
 function getCookie(name: string) {
   if (typeof document === "undefined") return null;
@@ -13,7 +13,7 @@ function getCookie(name: string) {
   return match ? decodeURIComponent(match[2]) : null;
 }
 
-const API_VENTAS = `${getApiBaseSync()}/api/ventas`;
+const API_VENTAS = buildApiUrl("/ventas");
 
 type Venta = {
   id: number;
@@ -34,6 +34,13 @@ const Ventas: React.FC = () => {
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [q, setQ] = useState("");
   const [ventaSel, setVentaSel] = useState<Venta | null>(null);
+  const ventaTitle = useMemo(() => {
+    if (!ventaSel) return '';
+    return ventaSel.numeroFactura ? `#${ventaSel.numeroFactura}` : `ID ${ventaSel.id}`;
+  }, [ventaSel]);
+  const detallesJson = useMemo(() => (
+    ventaSel?.detalles ? JSON.stringify(ventaSel.detalles, null, 2) : ''
+  ), [ventaSel]);
 
   // usando util fmtDate
 
@@ -66,7 +73,7 @@ const Ventas: React.FC = () => {
   }, [rows]);
 
   const columns: any = [
-    { name: "ID", selector: (r: Venta) => r.id, width: "90px" },
+    { name: "ID", selector: (r: Venta) => Number(r.id), width: "90px" },
     { name: "Factura", selector: (r: Venta) => r.numeroFactura ?? "-", sortable: true, width: "140px" },
     { name: "Cliente", selector: (r: Venta) => r.cliente?.nombre ?? "-", sortable: true, grow: 2 },
     { name: "Tipo pago", selector: (r: Venta) => r.tipoPago ?? "-", width: "140px" },
@@ -170,7 +177,7 @@ const Ventas: React.FC = () => {
               <div className="picker-card" onClick={(e) => e.stopPropagation()} style={{ width: "min(600px, 90%)" }}>
                 <div className="picker-top">
                   <div className="picker-title">
-                    <FaEye /> Detalles de la Venta {ventaSel.numeroFactura ? `#${ventaSel.numeroFactura}` : `ID ${ventaSel.id}`}
+            <FaEye /> Detalles de la Venta {ventaTitle}
                   </div>
                   <button className="picker-close" onClick={() => setVentaSel(null)} title="Cerrar">
                     <FaTimes />
@@ -178,11 +185,11 @@ const Ventas: React.FC = () => {
                 </div>
 
                 <div className="rem-modal">
-                  {(ventaSel.detalles?.length ?? 0) === 0 && (
+                  {(ventaSel?.detalles?.length ?? 0) === 0 && (
                     <div style={{ padding: "0.5rem 1rem" }}>Sin detalles para mostrar.</div>
                   )}
 
-                  {(ventaSel.detalles?.length ?? 0) > 0 && (
+                  {(ventaSel?.detalles?.length ?? 0) > 0 && (
                     <div className="rem-table">
                       <div className="rem-head">
                         <div>Producto</div>
@@ -191,7 +198,7 @@ const Ventas: React.FC = () => {
                         <div>Subtotal</div>
                       </div>
                       <div className="rem-body">
-                        {ventaSel.detalles!.map((d, idx) => {
+                        {ventaSel?.detalles?.map((d, idx) => {
                           const nombre =
                             d?.inventario?.nombre ?? d?.producto?.nombre ?? d?.producto ?? d?.nombre ?? d?.descripcion ?? "-";
                           const cantidad = Number(d?.cantidad ?? d?.cant ?? d?.unidades ?? 0);
@@ -221,11 +228,11 @@ const Ventas: React.FC = () => {
                     </div>
                   )}
 
-                  {(ventaSel.detalles?.length ?? 0) > 0 && (
+                  {(ventaSel?.detalles?.length ?? 0) > 0 && (
                     <details style={{ marginTop: ".75rem" }}>
                       <summary>Ver datos crudos</summary>
                       <pre style={{ whiteSpace: "pre-wrap", fontSize: ".85rem", background: "#f8fafc", padding: ".5rem", borderRadius: 8 }}>
-                        {JSON.stringify(ventaSel.detalles, null, 2)}
+                        {detallesJson}
                       </pre>
                     </details>
                   )}

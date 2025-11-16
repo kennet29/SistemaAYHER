@@ -4,14 +4,14 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useNavigate } from "react-router-dom";
 import "./Remisiones.css";
-import { getApiBaseSync } from "../api/base";
 import { fmtDate } from "../utils/dates";
 import ConfirmModal from "./ConfirmModal";
+import { ensureArray } from "../utils/ensureArray";
+import { buildApiUrl } from "../api/constants";
 
-const API_BASE = getApiBaseSync();
-const API_REMISION = `${API_BASE}/api/remision`;
-const API_CLIENTES = `${API_BASE}/api/clientes`;
-const API_TIPO_CAMBIO = `${API_BASE}/api/tipo-cambio/latest`;
+const API_REMISION = buildApiUrl("/remision");
+const API_CLIENTES = buildApiUrl("/clientes");
+const API_TIPO_CAMBIO = buildApiUrl("/tipo-cambio/latest");
 
 function getCookie(name: string) {
   const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
@@ -33,7 +33,8 @@ export default function RemisionesPendientes() {
   } | null>(null);
 
   const getClienteNombre = (id: number) => {
-    const c = clientes.find((x) => (x._id || x.id) === id);
+    const list = Array.isArray(clientes) ? clientes : [];
+    const c = list.find((x) => (x._id || x.id) === id);
     return c ? c.nombre || c.razonSocial || c.empresa : "Cliente no encontrado";
   };
   const imprimirExcel = (id: number) => window.open(`${API_REMISION}/print/excel/${id}`, "_blank");
@@ -47,11 +48,27 @@ export default function RemisionesPendientes() {
   };
 
   useEffect(() => {
-    fetch(API_CLIENTES, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json())
-      .then(setClientes)
-      .catch(() => toast.error("Error cargando clientes"));
-  }, []);
+    let cancelled = false;
+    const loadClientes = async () => {
+      try {
+        const res = await fetch(API_CLIENTES, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          cache: "no-store" as RequestCache,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = await res.json();
+        if (!cancelled) setClientes(ensureArray(payload));
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) setClientes([]);
+        toast.error("Error cargando clientes");
+      }
+    };
+    loadClientes();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   useEffect(() => {
     fetch(API_TIPO_CAMBIO, { headers: { Authorization: `Bearer ${token}` } })
@@ -60,21 +77,29 @@ export default function RemisionesPendientes() {
       .catch(() => setTipoCambio(null));
   }, []);
 
-  const loadPendientes = async () => {
-    try {
-      const r = await fetch(`${API_REMISION}/pendientes?ts=${Date.now()}`,
-        { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' as RequestCache }
-      );
-      if (r.status === 304) return;
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
-      setPendientes(Array.isArray(data) ? data : (data?.items || []));
-    } catch (e) {
-      console.error(e);
-      toast.error("Error cargando pendientes");
-    }
-  };
-  useEffect(() => { loadPendientes(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const loadPendientes = async () => {
+      try {
+        const r = await fetch(`${API_REMISION}/pendientes?ts=${Date.now()}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          cache: "no-store" as RequestCache,
+        });
+        if (r.status === 304) return;
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        if (!cancelled) setPendientes(ensureArray(data));
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) setPendientes([]);
+        toast.error("Error cargando pendientes");
+      }
+    };
+    loadPendientes();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
 
   function renderDetalleRemision() {

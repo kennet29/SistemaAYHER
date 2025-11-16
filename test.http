@@ -1,1 +1,1 @@
-curl -Method POST -Uri http://localhost:4000/api/ventas/proforma/pdf -Headers @{ "Content-Type"="application/json"; Authorization="Bearer TOKEN" } -Body '{"cliente":{"nombre":"Cliente Demo"},"detalles":[{"numeroParte":"P-1","nombre":"Prod 1","cantidad":1,"precio":100}],"tipoCambioValor":36.5}' -OutFile proforma.pdf
+curl -X POST http://localhost:4000/api/auth/login -H "Content-Type: application/json" -d '{"email":"admin@local.test","password":"admin123"}'

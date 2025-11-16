@@ -4,14 +4,13 @@ import { Link } from "react-router-dom";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./Remisiones.css";
-import { getApiBaseSync } from "../api/base";
 import ConfirmModal from "./ConfirmModal";
+import { buildApiUrl } from "../api/constants";
 
-const API_BASE = getApiBaseSync();
-const API_REMISION = `${API_BASE}/api/remision`;
-const API_PRODUCTOS = `${API_BASE}/api/inventario`;
-const API_CLIENTES = `${API_BASE}/api/clientes`;
-const API_TIPO_CAMBIO = `${API_BASE}/api/tipo-cambio/latest`;
+const API_REMISION = buildApiUrl("/remision");
+const API_PRODUCTOS = buildApiUrl("/inventario");
+const API_CLIENTES = buildApiUrl("/clientes");
+const API_TIPO_CAMBIO = buildApiUrl("/tipo-cambio/latest");
 const LOW_STOCK_THRESHOLD = 3;
 
 function getCookie(name: string) {
@@ -131,7 +130,7 @@ export default function Remisiones() {
       document.body.appendChild(s);
     });
 
-    let dt: any;
+    let dt: any; // retained for potential future use
     let cancelled = false;
     const init = async () => {
       await ensureCss("https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css");

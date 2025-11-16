@@ -1,4 +1,5 @@
-import React from "react";
+// React import not required with JSX runtime
+import { useEffect, useState } from "react";
 import styled, { keyframes } from "styled-components";
 import {
   FaBoxOpen,
@@ -10,11 +11,79 @@ import {
   FaCog,
   FaDollarSign,
   FaUserFriends,
+  FaExclamationTriangle,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
+import { buildApiUrl } from "../api/constants";
+
+const LOW_STOCK_THRESHOLD = 8;
+
+type InventoryItem = {
+  id: number;
+  nombre?: string;
+  stockActual?: number | string;
+};
+
+function getCookie(name: string) {
+  const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+  return match ? decodeURIComponent(match[2]) : null;
+}
 
 const Home = () => {
+  const [lowStockItems, setLowStockItems] = useState<InventoryItem[]>([]);
+  const [lowStockLoading, setLowStockLoading] = useState(true);
+  const [lowStockError, setLowStockError] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let aborted = false;
+    const controller = new AbortController();
+    const token = getCookie("token") || localStorage.getItem("token") || "";
+
+    const loadLowStock = async () => {
+      setLowStockLoading(true);
+      setLowStockError(null);
+      try {
+        const response = await fetch(buildApiUrl("/inventario/low-stock"), {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          signal: controller.signal,
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("No se pudo cargar el inventario");
+        }
+
+        const payload = await response.json();
+        const items: InventoryItem[] = Array.isArray(payload)
+          ? payload
+          : payload.items ?? payload.data ?? payload.productos ?? [];
+
+        if (aborted) return;
+        const filtered = items.filter((item) => {
+          const value = Number(item.stockActual ?? 0);
+          return !Number.isNaN(value) && value <= LOW_STOCK_THRESHOLD;
+        });
+        setLowStockItems(filtered);
+      } catch (error) {
+        if (!aborted) {
+          setLowStockError(
+            error instanceof Error ? error.message : "Error cargando inventario"
+          );
+        }
+      } finally {
+        if (!aborted) {
+          setLowStockLoading(false);
+        }
+      }
+    };
+
+    loadLowStock();
+    return () => {
+      aborted = true;
+      controller.abort();
+    };
+  }, []);
 
   return (
     <HomeContainer>
@@ -37,6 +106,17 @@ const Home = () => {
           <h2>Inventario</h2>
           <p>Control total sobre tus productos, existencias y repuestos.</p>
           <button onClick={() => navigate("/inventario")}>Entrar</button>
+        </Card>
+
+        <Card color1="#ff8f00" color2="#ffc107">
+          <div className="icon-circle">
+            <FaExclamationTriangle />
+          </div>
+          <h2>Stock crítico</h2>
+         <p>Listado de Productos Bajos de Stock </p>
+          <button onClick={() => navigate("/stock-critico")}>
+            Ver productos críticos
+          </button>
         </Card>
 
         <Card color1="#0052cc" color2="#0080ff">
@@ -295,6 +375,23 @@ const Card = styled.div<{ color1: string; color2: string }>`
     color: #cc0000;
     transform: scale(1.07);
     box-shadow: 0 0.6vh 1.5vh rgba(255, 255, 255, 0.4);
+  }
+`;
+
+const StockList = styled.ul`
+  text-align: left;
+  margin: 0 auto 1rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+
+  li {
+    margin-bottom: 4px;
+    letter-spacing: 0.02em;
+  }
+
+  li:last-child {
+    margin-bottom: 0;
   }
 `;
 

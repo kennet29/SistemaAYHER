@@ -1,4 +1,4 @@
-import React from 'react';
+// React import not necessary with new JSX transform
 import styled from 'styled-components';
 
 const Card = () => {

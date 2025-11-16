@@ -52,7 +52,7 @@ async function getTipoCambioDesdeAPI(): Promise<number> {
   try {
     const res = await fetch("http://localhost:4000/api/tipo-cambio/latest");
     if (!res.ok) throw new Error("No se pudo obtener tipo de cambio");
-    const data = await res.json();
+    const data: any = await res.json();
     return Number(data.tipoCambio?.valor ?? 36.5);
   } catch (error) {
     console.error("⚠️ Error al consultar tipo de cambio:", error);

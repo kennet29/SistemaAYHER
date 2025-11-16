@@ -1,3 +1,5 @@
+@import url('../assets/fonts/fonts.css');
+
 /* Proforma-specific tweaks */
 .proforma-page{ --col-actions: 140px; }
 .proforma-page{
@@ -12,5 +14,3 @@
   gap:6px;
 }
 .proforma-page .delete-btn svg{ margin-right: 6px; }
-/* Local fonts (no external requests) */
-@import url('../assets/fonts/fonts.css');

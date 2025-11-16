@@ -34,9 +34,9 @@ export const crearRemision = async (req: Request, res: Response) => {
     const numero = await generarNumeroRemision();
 
     const remision = await prisma.$transaction(async (tx) => {
-      const nuevaRemision = await tx.remision.create({
-        data: { numero, clienteId, usuario, observacion, facturada: false },
-      });
+      const dataCreate: any = { numero, usuario, observacion, facturada: false };
+      if (typeof clienteId === 'number') dataCreate.clienteId = clienteId;
+      const nuevaRemision = await tx.remision.create({ data: dataCreate });
 
       console.log("✅ Transacción iniciada para remisión:", nuevaRemision.id);
 
@@ -224,6 +224,7 @@ export const imprimirRemisionExcel = async (req: Request, res: Response) => {
     });
 
     if (!remision) return res.status(404).json({ message: "Remisión no encontrada" });
+    const rem = remision; // non-null from here
 
     // ✅ Obtener configuración de empresa
     const config = await prisma.configuracion.findFirst();
@@ -233,7 +234,7 @@ export const imprimirRemisionExcel = async (req: Request, res: Response) => {
       pageSetup: {
         paperSize: 9, // A4
         orientation: "portrait",
-        margins: { top: 0.4, right: 0.4, bottom: 0.4, left: 0.4 },
+        margins: { top: 0.4, right: 0.4, bottom: 0.4, left: 0.4, header: 0.3, footer: 0.3 } as any,
       }
     });
 
@@ -417,6 +418,7 @@ export const imprimirRemisionPDF = async (req: Request, res: Response) => {
     if (!remision) return res.status(404).json({ message: "Remisión no encontrada" });
 
     const empresa = await prisma.configuracion.findFirst();
+    const rem = remision; // alias no nulo para tipado posterior
     // ultimo tipo de cambio (si existe)
     let tipoCambioValor: number | null = null;
     try {
@@ -439,7 +441,7 @@ export const imprimirRemisionPDF = async (req: Request, res: Response) => {
     return;
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="remision_${remision.numero || remision.id}.pdf"`);
+    res.setHeader("Content-Disposition", `attachment; filename="remision_${rem.numero || rem.id}.pdf"`);
 
     const doc = new PDFDocument({ size: "A4", margin: 40 });
     doc.pipe(res);
@@ -475,10 +477,10 @@ export const imprimirRemisionPDF = async (req: Request, res: Response) => {
     doc
       .fontSize(12)
       .font("Helvetica")
-      .text(`No.: ${remision.numero || remision.id}`)
-      .text(`Cliente: ${remision.cliente?.nombre || remision.cliente?.empresa || "N/A"}`)
-      .text(`Fecha: ${new Date(remision.fecha).toLocaleDateString()}`)
-      .text(`Observación: ${remision.observacion || "N/A"}`)
+      .text(`No.: ${rem.numero || rem.id}`)
+      .text(`Cliente: ${rem.cliente?.nombre || rem.cliente?.empresa || "N/A"}`)
+      .text(`Fecha: ${new Date(rem.fecha).toLocaleDateString()}`)
+      .text(`Observación: ${rem.observacion || "N/A"}`)
       .moveDown(0.8);
 
     // Tabla de ítems (Parte | Producto | Cantidad)
@@ -501,7 +503,7 @@ export const imprimirRemisionPDF = async (req: Request, res: Response) => {
 
     let y = headerY + 22;
     const rowHeight = 18;
-    for (const d of remision.detalles) {
+    for (const d of rem.detalles) {
       const inv: any = d.inventario || {};
       const parteTxt = String(inv.numeroParte ?? "");
       const nombreTxt = String(inv.nombre ?? inv.descripcion ?? "");
@@ -530,9 +532,10 @@ export const imprimirRemisionPDF = async (req: Request, res: Response) => {
       y += rowHeight;
     }
 
-    if (empresa?.mensajeFactura) {
+    const mensaje = empresa?.mensajeFactura ?? '';
+    if (mensaje) {
       doc.moveDown(2);
-      doc.fontSize(10).font("Helvetica-Oblique").text(empresa.mensajeFactura, { align: "center" });
+      doc.fontSize(10).font("Helvetica-Oblique").text(mensaje, { align: "center" });
     }
 
     doc.end();
