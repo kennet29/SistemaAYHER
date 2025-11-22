@@ -3,7 +3,7 @@ import { Request, Response } from "express";
 import { prisma } from "../../db/prisma";
 import { z } from "zod";
 import { crearMovimientosYAjustarStockBatch } from "../services/stock.service";
-import { generarProformaPDF, generarProformaPDFStreamV2 as generarProformaPDFStream } from "./services/proforma.services";
+import { generarProformaPDF, generarProformaPDFStreamV3 as generarProformaPDFStream } from "./services/proforma.services";
 import fs from "fs";
 
 const round4 = (n: number) => Number((n ?? 0).toFixed(4));
@@ -23,6 +23,7 @@ const VentaSchema = z.object({
   plazoDias: z.number().nullable().optional(),
   usuario: z.string().nullable().optional(),
   observacion: z.string().nullable().optional(),
+  pio: z.string().nullable().optional(),
   tipoCambioValor: z.number().nullable().optional(),
   detalles: z.array(DetalleSchema).min(1),
 });
@@ -53,6 +54,7 @@ export async function create(req: Request, res: Response) {
   const parsed = VentaSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.format());
   const data = parsed.data;
+  const pioValue = data.pio && typeof data.pio === "string" && data.pio.trim().length > 0 ? data.pio.trim() : null;
 
   const tipoCambio = Number(data.tipoCambioValor ?? 36.5);
   const baseFecha: Date = data.fecha ? new Date(data.fecha) : new Date();
@@ -93,6 +95,7 @@ export async function create(req: Request, res: Response) {
           const nota = `Consecutivo: ${numeroFacturaFinal}`;
           return base ? `${base} | ${nota}` : nota;
         })(),
+        pio: pioValue,
       };
 
       let venta = null as any;
@@ -289,11 +292,28 @@ export async function proforma(req: Request, res: Response) {
       ua: req.headers['user-agent'],
       ip: (req.headers['x-forwarded-for'] as string) || req.ip,
     });
-    const { cliente, clienteId, detalles, tipoCambioValor } = req.body;
+    const {
+      cliente,
+      clienteId,
+      detalles,
+      tipoCambioValor,
+      pio,
+      incoterm,
+      plazoEntrega,
+      condicionPago,
+      guardarHistorial,
+      soloGuardar
+    } = req.body;
     console.info('[ventas] proforma body', {
       cliente: cliente?.nombre ?? null,
       detallesCount: Array.isArray(detalles) ? detalles.length : 0,
       tipoCambioValor,
+      pio: typeof pio === "string" ? pio : null,
+      incoterm,
+      plazoEntrega,
+      condicionPago,
+      guardarHistorial,
+      soloGuardar,
     });
 
     if (!cliente || !detalles?.length) {
@@ -312,6 +332,8 @@ export async function proforma(req: Request, res: Response) {
 
     // Obtener datos completos del cliente
     let clienteData: any = cliente || null;
+    const clienteIdParsed = Number.isFinite(Number(clienteId)) ? Number(clienteId) : null;
+    const clienteIdFromObject = cliente && Number.isFinite(Number(cliente.id)) ? Number(cliente.id) : null;
     const resolveClienteById = async (id: number) => {
       const r = await fetch(`http://localhost:4000/api/clientes/${id}`, { headers: { Authorization: req.headers.authorization || "" } });
       if (!r.ok) return null;
@@ -347,21 +369,118 @@ export async function proforma(req: Request, res: Response) {
       return null;
     };
 
-    if (Number.isFinite(Number(clienteId))) {
-      clienteData = await resolveClienteById(Number(clienteId));
-    } else if (cliente?.id && Number.isFinite(Number(cliente.id))) {
-      clienteData = await resolveClienteById(Number(cliente.id));
+    if (clienteIdParsed !== null) {
+      clienteData = await resolveClienteById(clienteIdParsed);
+    } else if (clienteIdFromObject !== null) {
+      clienteData = await resolveClienteById(clienteIdFromObject);
     } else if (cliente?.nombre) {
       clienteData = (await resolveClienteByNombre(String(cliente.nombre))) || cliente;
     }
 
+    const clienteIdParaRegistro = clienteIdParsed ?? clienteIdFromObject;
+
+    // Marcar si se desea guardar en historial (por defecto true)
+    const shouldGuardarHistorial = guardarHistorial !== false;
+
+    const detallesNorm = Array.isArray(detalles) ? detalles : [];
     const tipoCambio = Number(tipoCambioValor ?? 36.5);
 
-    const totalCordoba = (detalles as any[]).reduce(
+    const totalCordoba = detallesNorm.reduce(
       (acc: number, d: any) => acc + Number(d.cantidad || 0) * Number(d.precio || 0),
       0
     );
     const totalDolar = tipoCambio > 0 ? totalCordoba / tipoCambio : 0;
+
+    // Buscar si los productos fueron cotizados en los ultimos 14 dias
+    const inventarioIds = detallesNorm
+      .map((item: any) => Number(item?.inventarioId))
+      .filter((id: number) => Number.isFinite(id));
+    let recientesResumen: { inventarioId: number; ultimaFecha: string; precioCordoba: number; conteo14d: number; clienteCoincide: boolean }[] = [];
+    const recientesMap = new Map<number, { ultimaFecha: Date; precioCordoba: number; conteo: number; clienteCoincide: boolean }>();
+    if (inventarioIds.length) {
+      const desde = new Date();
+      desde.setDate(desde.getDate() - 14);
+      const recientes = await prisma.productoCotizado.findMany({
+        where: {
+          inventarioId: { in: inventarioIds },
+          fecha: { gte: desde },
+        },
+        orderBy: { fecha: "desc" },
+        select: { inventarioId: true, fecha: true, precioCordoba: true, clienteId: true },
+      });
+      recientes.forEach((r) => {
+        const prev = recientesMap.get(r.inventarioId);
+        const coincide = Boolean(clienteIdParaRegistro && r.clienteId === clienteIdParaRegistro);
+        if (prev) {
+          prev.conteo += 1;
+          prev.clienteCoincide = prev.clienteCoincide || coincide;
+          if (r.fecha > prev.ultimaFecha) {
+            prev.ultimaFecha = r.fecha;
+            prev.precioCordoba = Number(r.precioCordoba || prev.precioCordoba || 0);
+          }
+        } else {
+          recientesMap.set(r.inventarioId, {
+            ultimaFecha: r.fecha,
+            precioCordoba: Number(r.precioCordoba || 0),
+            conteo: 1,
+            clienteCoincide: coincide,
+          });
+        }
+      });
+      recientesResumen = Array.from(recientesMap.entries()).map(([inventarioId, info]) => ({
+        inventarioId,
+        ultimaFecha: info.ultimaFecha.toISOString(),
+        precioCordoba: info.precioCordoba,
+        conteo14d: info.conteo,
+        clienteCoincide: info.clienteCoincide,
+      }));
+      if (recientesResumen.length) {
+        // Hasta 10 entradas para no inflar encabezados
+        res.setHeader("X-Proforma-Recientes", JSON.stringify(recientesResumen.slice(0, 10)));
+      }
+    }
+
+    // Propagar bandera de cotizacion reciente a detalles para el PDF
+    const detallesMarcados = detallesNorm.map((item: any) => ({
+      ...item,
+      cotizadoReciente: recientesMap.has(Number(item?.inventarioId)),
+    }));
+
+    type QuoteEntry = {
+      inventarioId: number;
+      clienteId: number | null;
+      cantidad: number;
+      precioCordoba: number;
+      precioDolar: number;
+      moneda: string;
+    };
+
+    const quoteEntries = detallesNorm
+      .map((item: any) => {
+        const inventarioId = Number(item?.inventarioId);
+        if (!Number.isFinite(inventarioId)) return null;
+        const cantidad = Math.max(0, Number(item.cantidad) || 0);
+        if (cantidad <= 0) return null;
+        const precioCordoba = Number(item.precio ?? 0);
+        const precioDolar = tipoCambio > 0 ? Number((precioCordoba / tipoCambio).toFixed(4)) : 0;
+        return {
+          inventarioId,
+          clienteId: clienteIdParaRegistro,
+          cantidad,
+          precioCordoba,
+          precioDolar,
+          moneda: "NIO",
+        };
+      })
+      .filter((entry): entry is QuoteEntry => Boolean(entry));
+
+    if (shouldGuardarHistorial && quoteEntries.length) {
+      try {
+        await prisma.productoCotizado.createMany({ data: quoteEntries });
+      } catch (logError) {
+        console.warn("[ventas] No se pudo registrar cotizaciones recientes:", logError);
+      }
+    }
 
     console.info('[ventas] proforma totals', {
       totalCordoba: Number(totalCordoba || 0).toFixed(2),
@@ -369,13 +488,26 @@ export async function proforma(req: Request, res: Response) {
       tipoCambio: Number(tipoCambio || 0).toFixed(4),
     });
 
+    // Si solo se desea guardar en historial (sin PDF) responder JSON
+    if (soloGuardar) {
+      return res.status(201).json({
+        message: "Proforma guardada en historial",
+        guardada: true,
+        recientes: recientesResumen,
+      });
+    }
+
     await generarProformaPDFStream({
       empresa: empresaData,
       cliente: clienteData || cliente,
-      detalles,
+      detalles: detallesMarcados,
       totalCordoba,
       totalDolar,
       tipoCambio,
+      pio: typeof pio === "string" && pio.trim().length > 0 ? pio.trim() : null,
+      incoterm: typeof incoterm === "string" && incoterm.trim().length > 0 ? incoterm.trim() : null,
+      plazoEntrega: typeof plazoEntrega === "string" && plazoEntrega.trim().length > 0 ? plazoEntrega.trim() : null,
+      condicionPago: typeof condicionPago === "string" && condicionPago.trim().length > 0 ? condicionPago.trim() : null,
     }, res);
 
   } catch (error) {

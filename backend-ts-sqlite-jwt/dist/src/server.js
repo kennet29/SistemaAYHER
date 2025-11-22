@@ -21,6 +21,7 @@ const devolucion_routes_1 = require("./modules/devoluciones/devolucion.routes");
 const cambio_routes_1 = require("./modules/cambio/cambio.routes");
 const configuracion_routes_1 = require("./modules/configuracion/configuracion.routes");
 const remision_routes_1 = require("./modules/remision/remision.routes");
+const cotizacion_routes_1 = require("./modules/cotizacion/cotizacion.routes");
 const app = (0, express_1.default)();
 app.use((0, helmet_1.default)());
 app.use((0, cors_1.default)());
@@ -40,6 +41,7 @@ app.use('/api/remision', remision_routes_1.remisionRouter);
 app.use('/api/clientes', cliente_routes_1.clienteRouter);
 app.use('/api/configuracion', configuracion_routes_1.configuracionRouter);
 app.use('/api/remision', remision_routes_1.remisionRouter);
+app.use('/api/cotizaciones', cotizacion_routes_1.cotizacionRouter);
 // NUEVOS
 app.use('/api/marcas', marca_routes_1.marcaRouter);
 app.use('/api/inventario', inventario_routes_1.inventarioRouter);

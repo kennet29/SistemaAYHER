@@ -48,6 +48,15 @@ export default function RemisionesHistorico() {
     setConfirmOpen(true);
   };
 
+  const imprimirExcel = (id: number) => {
+    setConfirmCfg({
+      title: "Confirmación",
+      message: `¿Generar Excel de la remisión #${id}?`,
+      onConfirm: () => { setConfirmOpen(false); toast.info("Generando Excel..."); window.open(`${API_REMISION}/print/excel/${id}`, "_blank"); },
+    });
+    setConfirmOpen(true);
+  };
+
   useEffect(() => {
     fetch(API_CLIENTES, { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => res.json())
@@ -144,7 +153,7 @@ export default function RemisionesHistorico() {
             });
             $(el).on('click', '.btn-excel', (ev: any) => {
               const id = Number(ev.currentTarget.getAttribute('data-id'));
-              imprimirPDF(id);
+              imprimirExcel(id);
             });
           }
           const rows = (remisiones || []).map((row: any) => ({
@@ -192,6 +201,7 @@ export default function RemisionesHistorico() {
         <p><strong>Cliente:</strong> {getClienteNombre(remisionSeleccionada.clienteId)}</p>
         <p><strong>Fecha:</strong> {String(remisionSeleccionada.fecha).split("T")[0]}</p>
         <p><strong>Obs:</strong> {remisionSeleccionada.observacion || "N/A"}</p>
+        <p><strong>PIO:</strong> {remisionSeleccionada.pio || "N/A"}</p>
 
         <h4>Productos</h4>
         <div style={{ overflowX: "auto" }}>

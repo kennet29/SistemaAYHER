@@ -61,7 +61,14 @@ async function carteraClientes(_req, res) {
         const clienteIds = Array.from(new Set(rows.map((r) => r.clienteId))).filter(Boolean);
         const clientes = await prisma_1.prisma.cliente.findMany({
             where: { id: { in: clienteIds } },
-            select: { id: true, nombre: true, empresa: true },
+            select: {
+                id: true,
+                nombre: true,
+                empresa: true,
+                creditoHabilitado: true,
+                creditoMaximoCordoba: true,
+                creditoMaximoDolar: true,
+            },
         });
         const mapCliente = new Map();
         for (const c of clientes)
@@ -78,6 +85,9 @@ async function carteraClientes(_req, res) {
                     totalCreditoCordoba: 0,
                     totalContadoDolar: 0,
                     totalCreditoDolar: 0,
+                    creditoHabilitado: c?.creditoHabilitado ?? false,
+                    creditoMaximoCordoba: Number(c?.creditoMaximoCordoba ?? 0),
+                    creditoMaximoDolar: Number(c?.creditoMaximoDolar ?? 0),
                 });
             }
             const item = acc.get(id);

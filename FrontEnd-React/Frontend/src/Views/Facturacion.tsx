@@ -70,6 +70,7 @@ const API_TIPO_CAMBIO = buildApiUrl("/tipo-cambio/latest");
 const API_REMISIONES = buildApiUrl("/remision/pendientes");
 const API_VENTAS = buildApiUrl("/ventas");
 const API_CLIENTES = buildApiUrl("/clientes");
+const API_COTIZACIONES = buildApiUrl("/cotizaciones/recientes");
 
 /* ===== Toast helper ===== */
 const notify = {
@@ -106,6 +107,7 @@ const Facturacion: React.FC = () => {
 
   const [tipoPago, setTipoPago] = useState<"CONTADO" | "CREDITO">("CONTADO");
   const [plazoDias, setPlazoDias] = useState<number>(0);
+  const [pio, setPio] = useState("");
 
   /* ===== Fetch ===== */
   useEffect(() => {
@@ -242,6 +244,7 @@ const Facturacion: React.FC = () => {
   async function guardar() {
     if (cliente === "") return void notify.warn("Seleccione un cliente.");
     const validLines = items.filter((i) => (i.inventarioId ?? null) !== null && (i.cantidad || 0) > 0);
+    const token = getCookie("token");
     if (!validLines.length) return void notify.warn("Agregue al menos una línea válida.");
     if (!tipoCambio && moneda === "USD") return void notify.warn("No hay tipo de cambio para convertir a C$.");
 
@@ -266,6 +269,55 @@ const Facturacion: React.FC = () => {
       return;
     }
 
+    const inventarioIds = Array.from(
+      new Set(
+        validLines
+          .map((line) => Number(line.inventarioId))
+          .filter((id) => Number.isFinite(id))
+      )
+    );
+    if (inventarioIds.length) {
+      try {
+        const params = new URLSearchParams();
+        params.set("inventarioIds", inventarioIds.join(","));
+        params.set("clienteId", String(cliente));
+        const resp = await fetch(`${API_COTIZACIONES}?${params.toString()}`, {
+          headers: { Authorization: token ? `Bearer ${token}` : "" },
+        });
+        if (resp.ok) {
+          const body = await resp.json();
+          const recientes = Array.isArray(body?.recientes) ? body.recientes : [];
+          if (recientes.length) {
+            const newestByInventario = new Map<number, typeof recientes[number]>();
+            for (const entry of recientes) {
+              if (!newestByInventario.has(entry.inventarioId)) {
+                newestByInventario.set(entry.inventarioId, entry);
+              }
+            }
+            if (newestByInventario.size) {
+              const listado = Array.from(newestByInventario.values())
+                .slice(0, 5)
+                .map((entry) => {
+                  const etiqueta = entry.inventario?.numeroParte
+                    ? `${entry.inventario.numeroParte} — ${entry.inventario?.nombre ?? ""}`.trim()
+                    : entry.inventario?.nombre ?? `#${entry.inventarioId}`;
+                  const fecha = new Date(entry.fecha);
+                  const dias = Math.max(
+                    0,
+                    Math.floor((Date.now() - fecha.getTime()) / (1000 * 60 * 60 * 24))
+                  );
+                  const sufijo = Number.isNaN(dias) ? "" : ` (${dias} ${dias === 1 ? "día" : "días"})`;
+                  return `${etiqueta}${sufijo}`;
+                });
+              notify.warn(`Producto(s) cotizado(s) en las últimas 2 semanas:\n• ${listado.join("\n• ")}`);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("No se pudo validar cotizaciones recientes", error);
+      }
+    }
+
     const precioCordoba = (precioActual: number, base?: number) => {
       if (typeof base === "number") return Number(base.toFixed(4));
       if (moneda === "NIO") return Number((precioActual).toFixed(4));
@@ -273,6 +325,7 @@ const Facturacion: React.FC = () => {
       return Number((precioActual * tipoCambio).toFixed(4));
     };
 
+    const sanitizedPio = (pio || "").trim();
     const payload = {
       clienteId: Number(cliente),
       fecha,
@@ -286,12 +339,16 @@ const Facturacion: React.FC = () => {
         precioUnitarioCordoba: precioCordoba(i.precio, i.precioBaseNIO),
         remisionDetalleId: i.remisionDetalleId ?? null,
       })),
+      pio: sanitizedPio ? sanitizedPio : null,
     };
 
     try {
       const res = await fetch(API_VENTAS, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getCookie("token")}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
         body: JSON.stringify(payload),
       });
 
@@ -482,6 +539,17 @@ const Facturacion: React.FC = () => {
             <label>
               Tipo de cambio
               <input type="number" value={tipoCambio ?? 0} readOnly />
+            </label>
+          </div>
+          <div className="grid-3">
+            <label>
+              PIO
+              <input
+                type="text"
+                value={pio}
+                onChange={(e) => setPio(e.target.value)}
+                placeholder="PIO"
+              />
             </label>
           </div>
 

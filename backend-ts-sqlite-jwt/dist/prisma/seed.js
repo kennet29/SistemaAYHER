@@ -1,19 +1,15 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-require("dotenv/config");
-const client_1 = require("@prisma/client");
-const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const prisma = new client_1.PrismaClient();
+require('dotenv/config');
+const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
+const prisma = new PrismaClient();
 async function seedAdmin() {
     const name = process.env.ADMIN_NAME || 'Admin';
     const email = process.env.ADMIN_EMAIL || 'admin@local.test';
     const password = process.env.ADMIN_PASSWORD || 'admin123';
     const existing = await prisma.user.findUnique({ where: { email } });
     if (!existing) {
-        const passwordHash = await bcryptjs_1.default.hash(password, 10);
+        const passwordHash = await bcrypt.hash(password, 10);
         await prisma.user.create({
             data: { name, email, passwordHash, role: 'ADMIN' }
         });

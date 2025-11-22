@@ -1,103 +1,106 @@
-import { app as c, ipcMain as E, BrowserWindow as f } from "electron";
-import t from "node:path";
-import { spawn as h } from "node:child_process";
+import { app as i, ipcMain as E, BrowserWindow as f } from "electron";
+import o from "node:path";
+import { spawn as u } from "node:child_process";
 import k from "node:http";
-import s from "node:fs";
+import n from "node:fs";
 let a = null, r = null, d = process.env.API_BASE_URL || "http://127.0.0.1:4000";
-const u = !!process.env.VITE_DEV_SERVER_URL;
-function D(o, n = 2e4) {
+const l = !!process.env.VITE_DEV_SERVER_URL;
+function P(s, t = 2e4) {
   const e = Date.now();
   return new Promise((b, y) => {
-    const m = () => {
-      const p = k.get(`${o}/health`, (i) => {
-        i.statusCode && i.statusCode >= 200 && i.statusCode < 300 ? (i.resume(), b()) : (i.resume(), setTimeout(l, 500));
+    const w = () => {
+      const h = k.get(`${s}/health`, (c) => {
+        c.statusCode && c.statusCode >= 200 && c.statusCode < 300 ? (c.resume(), b()) : (c.resume(), setTimeout(p, 500));
       });
-      p.on("error", () => setTimeout(l, 500)), p.setTimeout(2e3, () => {
-        p.destroy(), setTimeout(l, 500);
+      h.on("error", () => setTimeout(p, 500)), h.setTimeout(2e3, () => {
+        h.destroy(), setTimeout(p, 500);
       });
-    }, l = () => {
-      if (Date.now() - e > n) {
+    }, p = () => {
+      if (Date.now() - e > t) {
         y(new Error("Backend did not become healthy in time"));
         return;
       }
-      m();
+      w();
     };
-    m();
+    w();
   });
 }
-function R() {
+function D() {
   if (process.platform === "win32") {
-    const n = process.env.PUBLIC || "C:\\Users\\Public", e = t.join(n, "Desktop", "AYHERDB");
+    const t = process.env.PUBLIC || "C:\\Users\\Public", e = o.join(t, "Desktop", "AYHERDB");
     try {
-      s.mkdirSync(e, { recursive: !0 });
+      n.mkdirSync(e, { recursive: !0 });
     } catch {
     }
-    return t.join(e, "AYHERDB.db");
+    return o.join(e, "AYHERDB.db");
   }
-  const o = t.join("/", "Users", "Shared", "AYHERDB");
+  const s = o.join("/", "Users", "Shared", "AYHERDB");
   try {
-    s.mkdirSync(o, { recursive: !0 });
+    n.mkdirSync(s, { recursive: !0 });
   } catch {
   }
-  return t.join(o, "AYHERDB.db");
+  return o.join(s, "AYHERDB.db");
 }
-async function v() {
-  const o = t.resolve(process.cwd(), "../backend-ts-sqlite-jwt"), n = R();
+async function R() {
+  const s = o.resolve(process.cwd(), "../backend-ts-sqlite-jwt"), t = D();
   try {
-    if (!s.existsSync(n)) {
-      const e = u ? t.join(o, "dist", "ayher.db") : t.join(process.resourcesPath, "backend", "ayher.db");
-      s.existsSync(e) ? s.copyFileSync(e, n) : s.writeFileSync(n, "");
+    if (!n.existsSync(t)) {
+      const e = l ? o.join(s, "dist", "ayher.db") : o.join(process.resourcesPath, "backend", "ayher.db");
+      n.existsSync(e) ? n.copyFileSync(e, t) : n.writeFileSync(t, "");
     }
   } catch (e) {
     console.warn("[electron] could not prepare DB file:", e?.message);
   }
-  if (u)
-    r = h(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "dev"], {
-      cwd: o,
-      env: { ...process.env, PORT: "4000", DATABASE_URL: `file:${n}` },
+  if (l)
+    r = u(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "dev"], {
+      cwd: s,
+      env: { ...process.env, PORT: "4000", DATABASE_URL: `file:${t}` },
       stdio: "inherit",
       shell: !1
     }), d = "http://127.0.0.1:4000";
   else {
-    const e = t.join(process.resourcesPath, "backend", "src", "server.js");
-    r = h(process.execPath, [e], {
+    const e = o.join(process.resourcesPath, "backend", "src", "server.js");
+    r = u(process.execPath, [e], {
       cwd: process.resourcesPath,
-      env: { ...process.env, PORT: "4000", NODE_ENV: "production", DATABASE_URL: `file:${n}` },
+      env: { ...process.env, PORT: "4000", NODE_ENV: "production", DATABASE_URL: `file:${t}` },
       stdio: "ignore",
       detached: !0
     }), d = "http://127.0.0.1:4000";
   }
   r.on("exit", (e) => {
     console.log("[electron] backend exited with code", e);
-  }), await D(d).catch((e) => {
+  }), await P(d).catch((e) => {
     console.warn("[electron] backend health check failed:", e.message);
   });
 }
-async function w() {
+async function m() {
+  const s = l ? o.join(__dirname, "preload.js") : o.join(process.resourcesPath, "dist-electron", "preload.js");
   if (a = new f({
     width: 1280,
     height: 800,
     webPreferences: {
       contextIsolation: !0,
-      preload: t.join(__dirname, "preload.js")
+      preload: s
     }
-  }), u) {
-    const o = process.env.VITE_DEV_SERVER_URL;
-    await a.loadURL(o), a.webContents.openDevTools({ mode: "detach" });
-  } else
-    await a.loadFile(t.join(__dirname, "../dist-electron/index.html"));
+  }), l) {
+    const t = process.env.VITE_DEV_SERVER_URL;
+    await a.loadURL(t), a.webContents.openDevTools({ mode: "detach" });
+  } else {
+    const t = o.join(process.resourcesPath, "dist-electron", "index.html");
+    await a.loadFile(t);
+  }
 }
-c.whenReady().then(async () => {
-  E.handle("ayher:get-api-base", async () => d), await v(), await w(), c.on("activate", () => {
-    f.getAllWindows().length === 0 && w();
+i.whenReady().then(async () => {
+  E.handle("ayher:get-api-base", async () => d), await R(), await m(), i.on("activate", () => {
+    f.getAllWindows().length === 0 && m();
   });
 });
-c.on("before-quit", () => {
+i.on("before-quit", () => {
   try {
-    r && (process.platform === "win32" ? h("taskkill", ["/pid", String(r.pid), "/f", "/t"]) : process.kill(-Number(r.pid || 0)));
+    r && (process.platform === "win32" ? u("taskkill", ["/pid", String(r.pid), "/f", "/t"]) : process.kill(-Number(r.pid || 0)));
   } catch {
   }
 });
-c.on("window-all-closed", () => {
-  process.platform !== "darwin" && c.quit();
+i.on("window-all-closed", () => {
+  process.platform !== "darwin" && i.quit();
 });

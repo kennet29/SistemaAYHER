@@ -39,6 +39,8 @@ const ctrl = __importStar(require("./inventario.controller"));
 exports.inventarioRouter = (0, express_1.Router)();
 exports.inventarioRouter.get('/', ctrl.list);
 exports.inventarioRouter.post('/', ctrl.create);
+// Bajo stock (stockActual <= stockMinimo)
+exports.inventarioRouter.get('/low-stock', ctrl.listLowStock);
 exports.inventarioRouter.get('/:id', ctrl.getById);
 exports.inventarioRouter.put('/:id', ctrl.update);
 exports.inventarioRouter.delete('/:id', ctrl.remove);
@@ -49,4 +51,3 @@ exports.inventarioRouter.get('/buscar-disponible', ctrl.buscarProductoDisponible
 // Asignar ubicaciones en lote (A1..Z12)
 exports.inventarioRouter.post('/asignar-ubicaciones', ctrl.asignarUbicaciones);
 // Bajo stock (stockActual <= stockMinimo)
-exports.inventarioRouter.get('/low-stock', ctrl.listLowStock);

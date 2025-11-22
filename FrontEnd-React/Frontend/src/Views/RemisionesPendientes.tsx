@@ -5,7 +5,6 @@ import "react-toastify/dist/ReactToastify.css";
 import { useNavigate } from "react-router-dom";
 import "./Remisiones.css";
 import { fmtDate } from "../utils/dates";
-import ConfirmModal from "./ConfirmModal";
 import { ensureArray } from "../utils/ensureArray";
 import { buildApiUrl } from "../api/constants";
 
@@ -25,28 +24,11 @@ export default function RemisionesPendientes() {
   const [tipoCambio, setTipoCambio] = useState<number | null>(null);
   const token = getCookie("token");
   const navigate = useNavigate();
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmCfg, setConfirmCfg] = useState<{
-    title?: string;
-    message: React.ReactNode;
-    onConfirm: () => void;
-  } | null>(null);
-
   const getClienteNombre = (id: number) => {
     const list = Array.isArray(clientes) ? clientes : [];
     const c = list.find((x) => (x._id || x.id) === id);
     return c ? c.nombre || c.razonSocial || c.empresa : "Cliente no encontrado";
   };
-  const imprimirExcel = (id: number) => window.open(`${API_REMISION}/print/excel/${id}`, "_blank");
-  const imprimirExcelNotificado = (id: number) => {
-    setConfirmCfg({
-      title: "Confirmación",
-      message: `¿Abrir Excel de la remisión #${id}?`,
-      onConfirm: () => { setConfirmOpen(false); toast.info("Abriendo Excel..."); imprimirExcel(id); },
-    });
-    setConfirmOpen(true);
-  };
-
   useEffect(() => {
     let cancelled = false;
     const loadClientes = async () => {
@@ -113,6 +95,7 @@ export default function RemisionesPendientes() {
         <p><strong>Cliente:</strong> {getClienteNombre(remisionSeleccionada.clienteId)}</p>
         <p><strong>Fecha:</strong> {String(remisionSeleccionada.fecha).split('T')[0]}</p>
         <p><strong>Obs:</strong> {remisionSeleccionada.observacion || 'N/A'}</p>
+        <p><strong>PIO:</strong> {remisionSeleccionada.pio || 'N/A'}</p>
         <h4>Productos</h4>
         <div style={{ overflowX: 'auto' }}>
           <table className="rem-table" style={{ width: '100%' }}>
@@ -153,7 +136,6 @@ export default function RemisionesPendientes() {
           </table>
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <button className="rem-excel-btn" onClick={() => imprimirExcel(remisionSeleccionada.id)}>Excel</button>
           <button className="rem-close-btn" onClick={() => setRemisionSeleccionada(null)}>Cerrar detalle</button>
         </div>
       </div>
@@ -163,13 +145,6 @@ export default function RemisionesPendientes() {
   return (
     <div className="rem-container">
       <ToastContainer position="top-right" autoClose={2500} />
-      <ConfirmModal
-        open={confirmOpen}
-        title={confirmCfg?.title}
-        message={confirmCfg?.message || ""}
-        onConfirm={() => { confirmCfg?.onConfirm?.(); }}
-        onCancel={() => { setConfirmOpen(false); toast.info("Acción cancelada"); }}
-      />
       <h2 className="rem-title"><FaTruck /> Remisiones Pendientes</h2>
       <div style={{ marginBottom: 12 }}>
         <button className="rem-close-btn" onClick={() => navigate(-1)}>← Regresar</button>
@@ -202,7 +177,6 @@ export default function RemisionesPendientes() {
                   <td>
                     <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                       <button className="rem-table-btn rem-view-btn" onClick={() => { setRemisionSeleccionada(row); toast.info("Mostrando detalle"); }}>Ver</button>
-                      <button className="rem-table-btn rem-excel-btn" onClick={() => imprimirExcelNotificado(row.id)}>Excel</button>
                     </div>
                   </td>
                 </tr>

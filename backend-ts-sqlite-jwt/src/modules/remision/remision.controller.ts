@@ -10,6 +10,7 @@ const remisionSchema = z.object({
   clienteId: z.preprocess((v) => (v !== "" && v != null ? Number(v) : undefined), z.number().optional()),
   usuario: z.string().optional(),
   observacion: z.string().optional(),
+  pio: z.string().nullable().optional(),
   items: z.array(
     z.object({
       inventarioId: z.preprocess((v) => Number(v), z.number().int()),
@@ -30,11 +31,17 @@ export const crearRemision = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Datos inválidos", errors: parsed.error.errors });
     }
 
-    const { clienteId, usuario, observacion, items } = parsed.data;
+    const { clienteId, usuario, observacion, items, pio } = parsed.data;
     const numero = await generarNumeroRemision();
 
     const remision = await prisma.$transaction(async (tx) => {
-      const dataCreate: any = { numero, usuario, observacion, facturada: false };
+      const dataCreate: any = {
+        numero,
+        usuario,
+        observacion,
+        facturada: false,
+        pio: pio && typeof pio === "string" && pio.trim().length > 0 ? pio.trim() : null,
+      };
       if (typeof clienteId === 'number') dataCreate.clienteId = clienteId;
       const nuevaRemision = await tx.remision.create({ data: dataCreate });
 
@@ -214,97 +221,111 @@ export const imprimirRemisionExcel = async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
 
-    // ✅ Obtener remisión
     const remision = await prisma.remision.findUnique({
       where: { id },
       include: {
         cliente: true,
-        detalles: { include: { inventario: true } }
-      }
+        detalles: { include: { inventario: true } },
+      },
     });
-
     if (!remision) return res.status(404).json({ message: "Remisión no encontrada" });
-    const rem = remision; // non-null from here
-
-    // ✅ Obtener configuración de empresa
     const config = await prisma.configuracion.findFirst();
 
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Remisión", {
-      pageSetup: {
-        paperSize: 9, // A4
-        orientation: "portrait",
-        margins: { top: 0.4, right: 0.4, bottom: 0.4, left: 0.4, header: 0.3, footer: 0.3 } as any,
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Remisión", {
+      pageSetup: { paperSize: 9, orientation: "portrait", margins: { left: 0.35, right: 0.35, top: 0.35, bottom: 0.35 } as any },
+    });
+
+    // Encabezado
+    ws.mergeCells("A1:F1");
+    ws.getCell("A1").value = config?.razonSocial || "SERVICIOS MULTIPLES E IMPORTACIONES AYHER";
+    ws.getCell("A1").font = { size: 16, bold: true };
+    ws.getCell("A1").alignment = { horizontal: "left" };
+    ws.mergeCells("A2:F2");
+    ws.getCell("A2").value = `RUC: ${config?.ruc ?? ""}    Tel: ${[config?.telefono1, config?.telefono2].filter(Boolean).join(" / ")}`;
+    ws.getCell("A3").value = `Dirección: ${config?.direccion ?? ""}`;
+    ws.getCell("A4").value = `Correo: ${config?.correo ?? ""}    Sitio: ${config?.sitioWeb ?? ""}`;
+    ws.getCell("F2").value = "NOTA DE REMISION";
+    ws.getCell("F2").font = { bold: true };
+    ws.getCell("F3").value = `Fecha: ${remision.fecha.toLocaleDateString()}`;
+    ws.getCell("F4").value = `Oferta N°: ${remision.pio ?? "-"}`;
+
+    const startMeta = 6;
+    const meta = [
+      ["Entregado a:", remision.cliente?.nombre || remision.cliente?.empresa || "N/A", "Fecha:", remision.fecha.toLocaleDateString()],
+      ["Empresa (cliente):", remision.cliente?.empresa || remision.cliente?.nombre || "N/A", "Ruc:", remision.cliente?.ruc || config?.ruc || ""],
+      ["Dirección:", remision.cliente?.direccion || config?.direccion || "", "Pedido N°:", remision.pio || "-"],
+    ];
+    meta.forEach((r, idx) => {
+      const row = ws.getRow(startMeta + idx);
+      row.height = 18;
+      row.getCell(1).value = r[0];
+      row.getCell(2).value = r[1];
+      row.getCell(4).value = r[2];
+      row.getCell(5).value = r[3];
+      row.font = { size: 10 };
+      [1, 2, 4, 5].forEach((c) => {
+        row.getCell(c).alignment = { vertical: "middle", horizontal: c === 2 || c === 5 ? "left" : "right" };
+        row.getCell(c).border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } };
+      });
+      ws.mergeCells(row.number, 2, row.number, 3);
+      ws.mergeCells(row.number, 5, row.number, 6);
+    });
+
+    // Tabla de items
+    const headerRow = startMeta + meta.length + 2;
+    const cols = ["P.", "No. De Parte", "Descripcion", "Cant", "Precio Unitario", "Precio Tot."];
+    ws.getRow(headerRow).values = cols;
+    ws.getRow(headerRow).font = { bold: true, size: 10 };
+    ws.getRow(headerRow).alignment = { horizontal: "center" };
+    ws.columns = [
+      { width: 6 },
+      { width: 22 },
+      { width: 50 },
+      { width: 10 },
+      { width: 16 },
+      { width: 16 },
+    ];
+    let total = 0;
+    remision.detalles.forEach((d, idx) => {
+      const precio = Number(d.inventario?.precioVentaSugeridoCordoba ?? d.inventario?.precioVentaPromedioCordoba ?? 0) || 0;
+      const cant = Number(d.cantidad || 0);
+      const sub = cant * precio;
+      total += sub;
+      ws.addRow([
+        idx + 1,
+        d.inventario?.numeroParte || "",
+        d.inventario?.nombre || d.inventario?.descripcion || "",
+        cant,
+        precio,
+        sub,
+      ]);
+    });
+    ws.addRow(["", "", "", "", "TOTAL", total]).font = { bold: true };
+
+    // Bordes a la tabla
+    const firstDataRow = headerRow;
+    const lastDataRow = ws.lastRow?.number ?? headerRow;
+    for (let r = firstDataRow; r <= lastDataRow; r++) {
+      const row = ws.getRow(r);
+      row.eachCell((cell) => {
+        cell.border = {
+          top: { style: "thin" },
+          bottom: { style: "thin" },
+          left: { style: "thin" },
+          right: { style: "thin" },
+        };
+      });
+      if (r > firstDataRow && r < lastDataRow) {
+        row.getCell(5).numFmt = '"C$"#,##0.00';
+        row.getCell(6).numFmt = '"C$"#,##0.00';
       }
-    });
-
-    // ========== 🏢 ENCABEZADO EMPRESA ==========
-    sheet.mergeCells("A1:D1");
-    const empresa = sheet.getCell("A1");
-    empresa.value = config?.razonSocial || "EMPRESA";
-    empresa.font = { size: 18, bold: true };
-    empresa.alignment = { horizontal: "center" };
-
-    sheet.mergeCells("A2:D2");
-    sheet.getCell("A2").value = `RUC: ${config?.ruc || "-"}`;
-    sheet.getCell("A2").alignment = { horizontal: "center" };
-
-    sheet.mergeCells("A3:D3");
-    sheet.getCell("A3").value = `${config?.direccion || ""}`;
-    sheet.getCell("A3").alignment = { horizontal: "center" };
-
-    sheet.mergeCells("A4:D4");
-    sheet.getCell("A4").value = `Tel: ${config?.telefono1 || ""} ${config?.telefono2 || ""}`;
-    sheet.getCell("A4").alignment = { horizontal: "center" };
-
-    sheet.mergeCells("A5:D5");
-    sheet.getCell("A5").value = `${config?.correo || ""} | ${config?.sitioWeb || ""}`;
-    sheet.getCell("A5").alignment = { horizontal: "center" };
-
-    sheet.addRow([]);
-    sheet.addRow([]);
-
-    // ========== 📄 INFORMACIÓN DE REMISIÓN ==========
-    sheet.addRow([`Remisión No.:`, remision.numero]);
-    sheet.addRow([`Cliente:`, remision.cliente?.nombre || remision.cliente?.empresa]);
-    sheet.addRow([`Fecha:`, remision.fecha.toISOString().split("T")[0]]);
-    sheet.addRow([`Observación:`, remision.observacion || "N/A"]);
-    sheet.addRow([]);
-    sheet.addRow(["Producto", "Cantidad"]).font = { bold: true };
-
-    remision.detalles.forEach((d) => {
-      sheet.addRow([d.inventario.nombre, d.cantidad]);
-    });
-
-    // ✅ Bordes
-    sheet.eachRow((row, rowNumber) => {
-      if (rowNumber > 10) {
-        row.eachCell((cell) => {
-          cell.border = {
-            top: { style: "thin" },
-            bottom: { style: "thin" },
-            left: { style: "thin" },
-            right: { style: "thin" }
-          };
-        });
-      }
-    });
-
-    sheet.columns = [{ width: 45 }, { width: 15 }];
-
-    // ✅ Mensaje final
-    if (config?.mensajeFactura) {
-      sheet.addRow([]);
-      sheet.addRow([config.mensajeFactura]);
     }
 
-    // ✅ Descargar Excel
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename=remision_${remision.numero}.xlsx`);
-
-    await workbook.xlsx.write(res);
+    await wb.xlsx.write(res);
     res.status(200).end();
-
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error exportando remisión" });
@@ -434,7 +455,7 @@ export const imprimirRemisionPDF = async (req: Request, res: Response) => {
         numero: remision.numero || remision.id,
         fecha: remision.fecha,
         observacion: remision.observacion || null,
-        tipoCambio: tipoCambioValor,
+        pio: remision.pio || null,
       },
       res
     );

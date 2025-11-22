@@ -51,6 +51,7 @@ export default function Remisiones() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [fecha, setFecha] = useState<string>(new Date().toISOString().substring(0, 10));
   const [observacion, setObservacion] = useState("");
+  const [pio, setPio] = useState("");
   const [items, setItems] = useState<DetalleItem[]>([{ inventarioId: 0, cantidad: 1, stock: 0, query: "" }]);
   const [tipoCambio, setTipoCambio] = useState<number | null>(null);
   const itemsTableRef = useRef<HTMLTableElement | null>(null);
@@ -192,6 +193,7 @@ export default function Remisiones() {
     if (!clienteId) return toast.error("Seleccione cliente");
     if (!detalles.length) return toast.error("Seleccione productos");
 
+    const sanitizedPio = (pio || "").trim();
     const performGuardar = async () => {
       const res = await fetch(`${API_REMISION}/`, {
         method: "POST",
@@ -199,7 +201,13 @@ export default function Remisiones() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ clienteId, observacion, fecha, items: detalles })
+        body: JSON.stringify({
+          clienteId,
+          observacion,
+          fecha,
+          items: detalles,
+          pio: sanitizedPio ? sanitizedPio : null,
+        })
       });
 
       if (!res.ok) return toast.error("Error guardando");
@@ -208,6 +216,7 @@ export default function Remisiones() {
       setItems([{ inventarioId: 0, cantidad: 1, stock: 0, query: "" }]);
       setClienteId("");
       setObservacion("");
+      setPio("");
     };
 
     setConfirmCfg({
@@ -304,6 +313,14 @@ export default function Remisiones() {
 
           <label>Observación</label>
           <textarea className="rem-textarea" value={observacion} onChange={(e) => setObservacion(e.target.value)} />
+          <label>PIO</label>
+          <input
+            className="rem-input"
+            type="text"
+            value={pio}
+            placeholder="PIO"
+            onChange={(e) => setPio(e.target.value)}
+          />
 
           <div style={{ overflowX: "auto" }}>
             <table ref={itemsTableRef} className="display" style={{ width: "100%" }}>

@@ -7,6 +7,7 @@ COPY prisma ./prisma
 COPY tsconfig.seed.json .
 COPY tsconfig.seed.json .
 COPY src ./src
+COPY scripts ./scripts
 
 RUN npm install
 ENV DATABASE_URL=file:./dev.db

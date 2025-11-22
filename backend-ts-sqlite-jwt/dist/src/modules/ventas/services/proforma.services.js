@@ -6,10 +6,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.generarProformaPDF = generarProformaPDF;
 exports.generarProformaPDFStream = generarProformaPDFStream;
 exports.generarProformaPDFStreamV2 = generarProformaPDFStreamV2;
+exports.generarProformaPDFStreamV3 = generarProformaPDFStreamV3;
 const pdfkit_1 = __importDefault(require("pdfkit"));
 const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
-async function generarProformaPDF({ empresa, cliente, detalles, totalCordoba, totalDolar }) {
+const logo_1 = require("../../../utils/logo");
+const normalizePio = (pio) => {
+    return typeof pio === "string" && pio.trim().length > 0 ? pio.trim() : "N/A";
+};
+async function generarProformaPDF({ empresa, cliente, detalles, totalCordoba, totalDolar, pio }) {
     const fileName = `proforma_${Date.now()}.pdf`;
     const filePath = `./tmp/${fileName}`;
     if (!fs_1.default.existsSync("./tmp"))
@@ -18,9 +22,10 @@ async function generarProformaPDF({ empresa, cliente, detalles, totalCordoba, to
     const stream = fs_1.default.createWriteStream(filePath);
     doc.pipe(stream);
     // ===== Logo =====
-    if (empresa.logoUrl) {
+    const logoPath = (0, logo_1.resolveLogoPath)(empresa?.logoUrl);
+    if (logoPath) {
         try {
-            doc.image(empresa.logoUrl, 40, 40, { width: 120 });
+            doc.image(logoPath, 40, 40, { width: 120 });
         }
         catch {
             doc.fontSize(12).text("(Logo no disponible)", 40, 40);
@@ -43,11 +48,13 @@ async function generarProformaPDF({ empresa, cliente, detalles, totalCordoba, to
     doc.moveDown(1.5).fontSize(16).font("Helvetica-Bold").text("PROFORMA", { align: "center" });
     doc.moveDown(0.5);
     // ===== Cliente =====
+    const displayPio = normalizePio(pio);
     doc
         .fontSize(12)
         .font("Helvetica")
         .text(`Cliente: ${cliente?.nombre ?? "N/A"}`)
         .text(`Fecha: ${new Date().toLocaleDateString()}`)
+        .text(`PIO: ${displayPio}`)
         .moveDown(1);
     // ===== Tabla =====
     const tableTop = 200;
@@ -80,7 +87,7 @@ async function generarProformaPDF({ empresa, cliente, detalles, totalCordoba, to
     return filePath;
 }
 // Genera y envía el PDF directamente al Response sin escribir en disco
-async function generarProformaPDFStream({ empresa, cliente, detalles, totalCordoba, totalDolar, tipoCambio }, res) {
+async function generarProformaPDFStream({ empresa, cliente, detalles, totalCordoba, totalDolar, tipoCambio, pio }, res) {
     const doc = new pdfkit_1.default({ size: "A4", margin: 40 });
     // Encabezados de respuesta para descarga
     res.setHeader("Content-Type", "application/pdf");
@@ -97,26 +104,7 @@ async function generarProformaPDFStream({ empresa, cliente, detalles, totalCordo
     doc.rect(left, headerTop, contentWidth, headerHeight).fill("#ffffff");
     doc.restore();
     // ===== Logo (empresa.logoUrl o fallback a carpeta img) =====
-    const resolveLogoPath = () => {
-        const candidates = [];
-        const declared = empresa?.logoUrl && typeof empresa.logoUrl === 'string' ? empresa.logoUrl : null;
-        if (declared)
-            candidates.push(declared);
-        // Fallbacks comunes
-        const cwd = process.cwd();
-        candidates.push(path_1.default.join(cwd, "FrontEnd-React", "Frontend", "src", "img", "logo.png"));
-        candidates.push(path_1.default.join(cwd, "src", "img", "logo.png"));
-        candidates.push(path_1.default.join(__dirname, "../../../../../FrontEnd-React/Frontend/src/img/logo.png"));
-        for (const p of candidates) {
-            try {
-                if (p && fs_1.default.existsSync(p))
-                    return p;
-            }
-            catch { }
-        }
-        return null;
-    };
-    const logoPath = resolveLogoPath();
+    const logoPath = (0, logo_1.resolveLogoPath)(empresa?.logoUrl);
     if (logoPath) {
         try {
             doc.image(logoPath, left + 8, headerTop + 8, { width: 110 });
@@ -142,6 +130,7 @@ async function generarProformaPDFStream({ empresa, cliente, detalles, totalCordo
     const linesY = headerTop + 36;
     const linesW = contentWidth - (infoX - left) - (infoPadding * 2) - 8;
     const lineStep = 12; // mayor interlineado
+    const displayPio = normalizePio(pio);
     doc.text(`RUC: ${empresa?.ruc ?? ''}`, infoX + infoPadding, linesY, { width: linesW });
     doc.text(`Direccion: ${empresa?.direccion ?? ''}`, infoX + infoPadding, doc.y + lineStep, { width: linesW });
     doc.text(`Tel: ${[empresa?.telefono1, empresa?.telefono2].filter(Boolean).join(' / ')}`, infoX + infoPadding, doc.y + lineStep, { width: linesW });
@@ -165,6 +154,7 @@ async function generarProformaPDFStream({ empresa, cliente, detalles, totalCordo
         .text(`Cliente: ${cliente?.nombre ?? "N/A"}`, left + 10, metaTop + 10, { width: contentWidth / 2 - 12 })
         .text(`Fecha: ${new Date().toLocaleDateString()}`, left + contentWidth / 2, metaTop + 10, { width: contentWidth / 2 - 12 })
         .text(`Tipo de cambio: ${tipoCambio ? Number(tipoCambio).toFixed(4) : '-'}`, left + contentWidth / 2, metaTop + 28, { width: contentWidth / 2 - 12 });
+    doc.text(`PIO: ${displayPio}`, left + 10, doc.y + lineStep, { width: contentWidth - 20 });
     // ===== Tabla ===== con paginación A4
     const tableTop = metaTop + 70;
     // Calcular anchos de columnas en base al ancho disponible
@@ -272,7 +262,7 @@ async function generarProformaPDFStream({ empresa, cliente, detalles, totalCordo
     doc.end();
 }
 // Versión mejorada del PDF de Proforma con marca de agua, pie de página y formateo
-async function generarProformaPDFStreamV2({ empresa, cliente, detalles, totalCordoba, totalDolar, tipoCambio }, res) {
+async function generarProformaPDFStreamV2({ empresa, cliente, detalles, totalCordoba, totalDolar, tipoCambio, pio }, res) {
     const doc = new pdfkit_1.default({ size: "A4", margin: 40 });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="proforma.pdf"`);
@@ -330,25 +320,7 @@ async function generarProformaPDFStreamV2({ empresa, cliente, detalles, totalCor
     doc.save();
     doc.rect(left, headerTop, contentWidth, headerHeight).fill("#ffffff");
     doc.restore();
-    const resolveLogoPath = () => {
-        const candidates = [];
-        const declared = empresa?.logoUrl && typeof empresa.logoUrl === 'string' ? empresa.logoUrl : null;
-        if (declared)
-            candidates.push(declared);
-        const cwd = process.cwd();
-        candidates.push(path_1.default.join(cwd, "FrontEnd-React", "Frontend", "src", "img", "logo.png"));
-        candidates.push(path_1.default.join(cwd, "src", "img", "logo.png"));
-        candidates.push(path_1.default.join(__dirname, "../../../../../FrontEnd-React/Frontend/src/img/logo.png"));
-        for (const p of candidates) {
-            try {
-                if (p && fs_1.default.existsSync(p))
-                    return p;
-            }
-            catch { }
-        }
-        return null;
-    };
-    const logoPath = resolveLogoPath();
+    const logoPath = (0, logo_1.resolveLogoPath)(empresa?.logoUrl);
     if (logoPath) {
         try {
             doc.image(logoPath, left + 10, headerTop + 10, { width: 108 });
@@ -388,11 +360,13 @@ async function generarProformaPDFStreamV2({ empresa, cliente, detalles, totalCor
     const extraRows = Math.max(extraLeft, extraRight);
     // aumentar altura base y step para más interlineado
     const extraStep = 20;
+    const metaLineStep = 16;
     const metaHeight = 60 + (extraRows > 0 ? (extraRows * extraStep) : 0) + (hasMsg ? 28 : 0);
     doc.save();
     doc.lineWidth(1.5);
     doc.roundedRect(left, metaTop, contentWidth, metaHeight, 6).stroke("#64748b");
     doc.restore();
+    const displayPio = normalizePio(pio);
     doc
         .fontSize(11)
         .fillColor('#111827')
@@ -400,6 +374,7 @@ async function generarProformaPDFStreamV2({ empresa, cliente, detalles, totalCor
         .text(`Cliente: ${cliente?.nombre ?? "N/A"}`, left + 10, metaTop + 10, { width: contentWidth / 2 - 12 })
         .text(`Fecha: ${new Date().toLocaleDateString()}`, left + contentWidth / 2, metaTop + 10, { width: contentWidth / 2 - 12, align: 'right' })
         .text(`Tipo de cambio: ${tipoCambio ? Number(tipoCambio).toFixed(4) : '-'}`, left + contentWidth / 2, metaTop + 34, { width: contentWidth / 2 - 12, align: 'right' });
+    doc.text(`PIO: ${displayPio}`, left + 10, doc.y + metaLineStep, { width: contentWidth - 20 });
     // Campos extra: izquierda (RUC/ID, Empresa, Contacto, Razón/Representante, Dirección)
     let yLeft = metaTop + 36;
     if (cliRuc) {
@@ -559,5 +534,130 @@ async function generarProformaPDFStreamV2({ empresa, cliente, detalles, totalCor
     doc.text(fmtNIO(Number(totalCordoba || 0)), right - totalsBoxWidth + 12, totalsTop + 26, { width: totalsBoxWidth - 24, align: 'right' });
     doc.text('Total $', right - totalsBoxWidth + 12, totalsTop + 42, { width: (totalsBoxWidth / 2) - 16 });
     doc.text(fmtUSD(Number(totalDolar || 0)), right - totalsBoxWidth + 12, totalsTop + 42, { width: totalsBoxWidth - 24, align: 'right' });
+    doc.end();
+}
+// Formato inspirado en la muestra compartida (Ayher, tabla detallada, encabezado con oferta)
+async function generarProformaPDFStreamV3({ empresa, cliente, detalles, totalCordoba, totalDolar, tipoCambio, pio }, res) {
+    const doc = new pdfkit_1.default({ size: "A4", margin: 40 });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="proforma.pdf"`);
+    doc.pipe(res);
+    const fmtNIO = (n) => `C$ ${Number(n || 0).toFixed(2)}`;
+    const pageWidth = doc.page.width;
+    const pageHeight = doc.page.height;
+    const left = doc.page.margins.left;
+    const right = pageWidth - doc.page.margins.right;
+    const contentWidth = right - left;
+    const displayPio = normalizePio(pio);
+    const drawHeader = () => {
+        const headerTop = 20;
+        const logoPath = (0, logo_1.resolveLogoPath)(empresa?.logoUrl);
+        if (logoPath) {
+            try {
+                doc.image(logoPath, left, headerTop, { width: 140 });
+            }
+            catch { }
+        }
+        doc.font("Helvetica").fontSize(11).fillColor("#111827")
+            .text(`Fecha: ${new Date().toLocaleDateString()}`, right - 160, headerTop, { width: 160, align: "right" })
+            .text(`Oferta N°: ${displayPio}`, right - 160, headerTop + 16, { width: 160, align: "right" });
+    };
+    const drawAtencion = (startY) => {
+        doc.font("Helvetica-Bold").fontSize(11).fillColor("#0b2d64").text("Atención a:", left, startY);
+        doc.font("Helvetica").fontSize(11).fillColor("#111827");
+        const y = startY + 14;
+        const linea1 = cliente?.nombre || cliente?.empresa || "Cliente";
+        const linea2 = cliente?.direccion || cliente?.empresa || "";
+        const linea3 = cliente?.ciudad || cliente?.pais || "";
+        doc.text(linea1, left, y);
+        if (linea2)
+            doc.text(linea2, left, doc.y + 2);
+        if (linea3)
+            doc.text(linea3, left, doc.y + 2);
+        return doc.y + 6;
+    };
+    const drawCondiciones = (startY) => {
+        const lines = [
+            { k: "INCOTERM:", v: "DDP NICARAGUA" },
+            { k: "PLAZO DE ENTREGA:", v: "Inmediato" },
+            { k: "CONDICION DE PAGO:", v: "30 dias credito" },
+            { k: "PRECIO UNITARIO VALIDO UNICAMENTE SI SE CONFIRMA LA TOTALIDAD DE LAS CANTIDADES DE LINEAS SOLICITADAS.", v: "" },
+            { k: "Gracias por su amable solicitud, quedamos a su disposición para cualquier información adicional que pudiera necesitar.", v: "" },
+            { k: "Atendiendo a su solicitud de cotización, enviamos el detalle de la lista de precios solicitada:", v: "" },
+        ];
+        let y = startY;
+        lines.forEach(({ k, v }) => {
+            doc.font("Helvetica-Bold").fontSize(10).fillColor("#111827").text(k, left, y, { continued: !!v });
+            if (v)
+                doc.font("Helvetica").text(v);
+            y = doc.y + 6;
+        });
+        return y;
+    };
+    const drawTabla = (startY) => {
+        const cols = [
+            { w: 20, title: "P." },
+            { w: 80, title: "No. De Parte" },
+            { w: contentWidth - (20 + 80 + 60 + 90 + 90), title: "Descripcion" },
+            { w: 60, title: "Car." },
+            { w: 90, title: "Precio Unitario" },
+            { w: 90, title: "Precio Tot." },
+        ];
+        const colX = [];
+        cols.reduce((acc, c) => {
+            colX.push(acc);
+            return acc + c.w;
+        }, left);
+        const drawHeaderRow = (yHeader) => {
+            doc.save().rect(left, yHeader, contentWidth, 22).fill("#0b2d64").restore();
+            doc.font("Helvetica-Bold").fontSize(10).fillColor("#ffffff");
+            cols.forEach((c, idx) => {
+                doc.text(c.title, colX[idx] + 4, yHeader + 6, { width: c.w - 8, align: "center" });
+            });
+            doc.font("Helvetica").fillColor("#111827");
+        };
+        const bottomLimit = pageHeight - doc.page.margins.bottom - 80;
+        drawHeaderRow(startY);
+        let y = startY + 22;
+        const filas = Array.isArray(detalles) ? detalles : [];
+        let total = 0;
+        filas.forEach((d, i) => {
+            const cant = Number(d.cantidad || 0);
+            const precio = Number(d.precio ?? d.precioUnitarioCordoba ?? 0);
+            const sub = cant * precio;
+            total += sub;
+            const rowH = 18;
+            if (y + rowH > bottomLimit) {
+                doc.addPage();
+                drawHeaderRow(doc.page.margins.top);
+                y = doc.page.margins.top + 22;
+            }
+            if (i % 2 === 0) {
+                doc.save().rect(left, y, contentWidth, rowH).fill("#f8fafc").restore();
+            }
+            doc.text(String(i + 1), colX[0] + 2, y + 4, { width: cols[0].w - 4, align: "center" });
+            doc.text(String(d.numeroParte ?? ""), colX[1] + 4, y + 4, { width: cols[1].w - 8 });
+            doc.text(String(d.nombre ?? d.descripcion ?? ""), colX[2] + 4, y + 4, { width: cols[2].w - 8 });
+            doc.text(String(cant), colX[3], y + 4, { width: cols[3].w - 4, align: "center" });
+            doc.text(fmtNIO(precio), colX[4], y + 4, { width: cols[4].w - 4, align: "right" });
+            doc.text(fmtNIO(sub), colX[5], y + 4, { width: cols[5].w - 4, align: "right" });
+            y += rowH;
+        });
+        // Totales
+        y += 10;
+        doc.font("Helvetica-Bold").fontSize(11);
+        doc.text("TOTAL", colX[4], y, { width: cols[4].w - 4, align: "right" });
+        doc.text(fmtNIO(total), colX[5], y, { width: cols[5].w - 4, align: "right" });
+        return y + 24;
+    };
+    drawHeader();
+    let cursorY = 128;
+    cursorY = drawAtencion(cursorY);
+    cursorY = drawCondiciones(cursorY + 10);
+    cursorY = drawTabla(cursorY + 10);
+    if (empresa?.mensajeFactura) {
+        doc.font("Helvetica-Oblique").fontSize(9).fillColor("#111827")
+            .text(String(empresa.mensajeFactura), left, cursorY + 6, { width: contentWidth });
+    }
     doc.end();
 }

@@ -17,6 +17,7 @@ import Ventas from "./Views/Ventas";
 import CarteraClientes from "./Views/CarteraClientes";
 import FacturasPendientes from "./Views/FacturasPendientes";
 import StockCritico from "./Views/StockCritico";
+import CotizacionesRecientes from "./Views/CotizacionesRecientes";
 function App() {
   return (
     <>
@@ -42,6 +43,10 @@ function App() {
             element={<RemisionesHistorico />}
           />
           <Route path="/proforma" element={<Proforma />} />
+          <Route
+            path="/cotizaciones/recientes"
+            element={<CotizacionesRecientes />}
+          />
           <Route path="/ventas" element={<Ventas />} />
           <Route path="/cartera-clientes" element={<CarteraClientes />} />
           <Route

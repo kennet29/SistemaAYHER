@@ -1,7 +1,7 @@
 // src/pages/Proforma.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  FaCashRegister, FaPlus, FaPrint, FaFileExcel, FaSearch, FaTimes, FaArrowLeft
+  FaCashRegister, FaPlus, FaPrint, FaFileExcel, FaSearch, FaTimes, FaArrowLeft, FaSave
 } from "react-icons/fa";
 import DataTable from "react-data-table-component";
 import type { TableColumn } from "react-data-table-component";
@@ -88,6 +88,10 @@ const Proforma: React.FC = () => {
   const [moneda, setMoneda] = useState<Moneda>("NIO");
   const [tipoCambio, setTipoCambio] = useState<number | null>(null);
   const prevMoneda = useRef<Moneda>("NIO");
+  const [pio, setPio] = useState("");
+  const [incoterm, setIncoterm] = useState("DDP NICARAGUA");
+  const [plazoEntrega, setPlazoEntrega] = useState("Inmediato");
+  const [condicionPago, setCondicionPago] = useState("30 dias credito");
 
   const [productos, setProductos] = useState<Product[]>([]);
   const [busqueda, setBusqueda] = useState("");
@@ -103,6 +107,9 @@ const Proforma: React.FC = () => {
   const [items, setItems] = useState<LineItem[]>([
     { id: cryptoId(), producto: "", cantidad: 1, precio: 0 },
   ]);
+  const [guardada, setGuardada] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [exportandoPdf, setExportandoPdf] = useState(false);
 
   // Fetch
   useEffect(() => {
@@ -179,6 +186,7 @@ const Proforma: React.FC = () => {
 
   // Update rows
   function updateItem(id: string, patch: Partial<LineItem>) {
+    setGuardada(false);
     setItems(arr => arr.map(it => {
       if (it.id !== id) return it;
       let next = { ...it, ...patch };
@@ -193,15 +201,18 @@ const Proforma: React.FC = () => {
     }));
   }
 
-  const addRow = () =>
+  const addRow = () => {
+    setGuardada(false);
     setItems(s => [...s, { id: cryptoId(), producto: "", cantidad: 1, precio: 0 }]);
+  };
 
   const removeRow = (id: string) => {
+    setGuardada(false);
     setItems(arr => {
       const next = arr.filter(it => it.id !== id);
       return next.length ? next : [{ id: cryptoId(), producto: "", cantidad: 1, precio: 0 }];
     });
-    notify.ok("Línea eliminada");
+    notify.ok("L??nea eliminada");
   };
 
   // Totales
@@ -238,7 +249,7 @@ const Proforma: React.FC = () => {
       let numeroParte = (prod as any)?.numeroParte ?? "";
       let nombre = (prod as any)?.nombre ?? "";
       if (!numeroParte || !nombre) {
-        const split = String(it.producto || "").split("â€”");
+        const split = String(it.producto || "").split(" - ");
         if (!numeroParte && split[0]) numeroParte = split[0].trim();
         if (!nombre && split[1]) nombre = split[1].trim();
       }
@@ -251,44 +262,98 @@ const Proforma: React.FC = () => {
 
   const totalPrint = useMemo(() => printRows.reduce((a, r) => a + r.subtotal, 0), [printRows]);
 
+  // Construir payload reutilizable
+  const construirPayload = (opts?: { guardarHistorial?: boolean; soloGuardar?: boolean }) => {
+    const tc = Number(tipoCambio || 0);
+    if (moneda === "USD" && !(tc > 0)) {
+      notify.warn("Tipo de cambio no disponible para calcular C$");
+      return null;
+    }
+    const dets = items
+      .filter((it) => (it.producto?.trim() || "") !== "" && Number(it.cantidad) > 0)
+      .map((it) => {
+        const prod = typeof it.inventarioId === "number"
+          ? productos.find((p) => Number(p.id) === Number(it.inventarioId))
+          : undefined;
+        let numeroParte = (prod as any)?.numeroParte ?? "";
+        let nombre = (prod as any)?.nombre ?? "";
+        if (!numeroParte || !nombre) {
+          const split = String(it.producto || "").split(" - ");
+          if (!numeroParte && split[0]) numeroParte = split[0].trim();
+          if (!nombre && split[1]) nombre = split[1].trim();
+        }
+        const cantidad = Math.max(0, Number(it.cantidad) || 0);
+        const precioShown = Math.max(0, Number(it.precio) || 0);
+        const precioCordoba = moneda === "USD" ? precioShown * tc : precioShown;
+        const inventarioId = typeof it.inventarioId === "number" ? Number(it.inventarioId) : null;
+        return {
+          numeroParte,
+          nombre,
+          cantidad,
+          precio: Number(precioCordoba.toFixed(4)),
+          inventarioId,
+        };
+      });
+
+    if (!dets.length) {
+      notify.warn("No hay items para procesar");
+      return null;
+    }
+    const sanitizedPio = (pio || "").trim();
+    const payload: any = {
+      cliente: clienteObj ? { id: clienteObj.id, nombre: clienteObj.nombre } : { nombre: "" },
+      clienteId: clienteObj?.id ?? null,
+      detalles: dets,
+      tipoCambioValor: tc || null,
+      pio: sanitizedPio ? sanitizedPio : null,
+      incoterm: incoterm.trim() || null,
+      plazoEntrega: plazoEntrega.trim() || null,
+      condicionPago: condicionPago.trim() || null,
+      guardarHistorial: opts?.guardarHistorial ?? true,
+    };
+    if (opts?.soloGuardar) payload.soloGuardar = true;
+    return payload;
+  };
+
+  async function guardarProforma() {
+    const payload = construirPayload({ guardarHistorial: true, soloGuardar: true });
+    if (!payload) return;
+    const token = getCookie("token");
+    setGuardando(true);
+    try {
+      const resp = await fetch(`${API_VENTAS}/proforma/pdf`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        notify.err("No se pudo guardar la proforma");
+        return;
+      }
+      setGuardada(true);
+      notify.ok("Proforma guardada");
+    } catch {
+      notify.err("Error al guardar proforma");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
   // ======== Export PDF ========
   async function generarPDF() {
+    if (!guardada) {
+      notify.warn("Primero guarda la proforma");
+      return;
+    }
+    const payload = construirPayload({ guardarHistorial: false, soloGuardar: false });
+    if (!payload) return;
+    setExportandoPdf(true);
     try {
       const token = getCookie("token");
-      const tc = Number(tipoCambio || 0);
-      if (moneda === "USD" && !(tc > 0)) {
-        notify.warn("Tipo de cambio no disponible para calcular C$");
-        return;
-      }
-      const dets = items
-        .filter((it) => (it.producto?.trim() || "") !== "" && Number(it.cantidad) > 0)
-        .map((it) => {
-          const prod = typeof it.inventarioId === "number"
-            ? productos.find((p) => Number(p.id) === Number(it.inventarioId))
-            : undefined;
-          let numeroParte = (prod as any)?.numeroParte ?? "";
-          let nombre = (prod as any)?.nombre ?? "";
-          if (!numeroParte || !nombre) {
-            const split = String(it.producto || "").split("â€”");
-            if (!numeroParte && split[0]) numeroParte = split[0].trim();
-            if (!nombre && split[1]) nombre = split[1].trim();
-          }
-          const cantidad = Math.max(0, Number(it.cantidad) || 0);
-          const precioShown = Math.max(0, Number(it.precio) || 0);
-          const precioCordoba = moneda === "USD" ? precioShown * tc : precioShown;
-          return { numeroParte, nombre, cantidad, precio: Number(precioCordoba.toFixed(4)) };
-        });
-
-      if (!dets.length) {
-        notify.warn("No hay ítems para generar PDF");
-        return;
-      }
-      const payload: any = {
-        cliente: clienteObj ? { nombre: clienteObj.nombre } : { nombre: "" },
-        detalles: dets,
-        tipoCambioValor: tc || null,
-      };
-
       const resp = await fetch(`${API_VENTAS}/proforma/pdf`, {
         method: "POST",
         headers: {
@@ -313,11 +378,17 @@ const Proforma: React.FC = () => {
       notify.ok("PDF generado");
     } catch {
       notify.err("Error generando PDF");
+    } finally {
+      setExportandoPdf(false);
     }
   }
 
   // ======== Export Excel ========
   function generarExcel() {
+    if (!guardada) {
+      notify.warn("Primero guarda la proforma");
+      return;
+    }
     const rows = items.map(i => ({
       Producto: i.producto,
       Cantidad: i.cantidad,
@@ -441,6 +512,12 @@ const Proforma: React.FC = () => {
         <button className="ghost" onClick={() => navigate("/facturacion")}>
           <FaArrowLeft /> Volver a Facturación
         </button>
+        <button className="ghost" onClick={() => navigate("/cotizaciones/recientes")}>
+          Cotizaciones recientes
+        </button>
+        <button className="ghost" onClick={generarExcel}>
+          Exportar Excel
+        </button>
       </div>
 
       {/* ======= FORM ======= */}
@@ -449,14 +526,14 @@ const Proforma: React.FC = () => {
           <div className="grid-3">
             <label>
               Cliente
-              <select value={cliente} onChange={e => setCliente(e.target.value === "" ? "" : Number(e.target.value))}>
+              <select value={cliente} onChange={e => { setCliente(e.target.value === "" ? "" : Number(e.target.value)); setGuardada(false); }}>
                 <option value="">Seleccione cliente...</option>
                 {clientesList.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
             </label>
             <label>
               Moneda
-              <select value={moneda} onChange={e => setMoneda(e.target.value as Moneda)}>
+              <select value={moneda} onChange={e => { setMoneda(e.target.value as Moneda); setGuardada(false); }}>
                 <option value="NIO">Córdobas</option>
                 <option value="USD">Dólares</option>
               </select>
@@ -464,6 +541,42 @@ const Proforma: React.FC = () => {
             <label>
               Fecha
               <input type="date" value={fecha} readOnly />
+            </label>
+            <label>
+              PIO
+              <input
+                type="text"
+                value={pio}
+                placeholder="PIO"
+                onChange={(e) => { setPio(e.target.value); setGuardada(false); }}
+              />
+            </label>
+            <label>
+              Incoterm
+              <input
+                type="text"
+                value={incoterm}
+                placeholder="Incoterm"
+                onChange={(e) => { setIncoterm(e.target.value); setGuardada(false); }}
+              />
+            </label>
+            <label>
+              Plazo de entrega
+              <input
+                type="text"
+                value={plazoEntrega}
+                placeholder="Plazo de entrega"
+                onChange={(e) => { setPlazoEntrega(e.target.value); setGuardada(false); }}
+              />
+            </label>
+            <label>
+              Condicion de pago
+              <input
+                type="text"
+                value={condicionPago}
+                placeholder="Condicion de pago"
+                onChange={(e) => { setCondicionPago(e.target.value); setGuardada(false); }}
+              />
             </label>
           </div>
 
@@ -558,8 +671,15 @@ const Proforma: React.FC = () => {
         </div>
 
         <div className="actions">
-          <button className="primary" onClick={generarPDF}><FaPrint /> PDF</button>
-          <button className="ghost" onClick={generarExcel}><FaFileExcel /> Excel</button>
+          <button className="primary" onClick={guardarProforma} disabled={guardando}>
+            <FaSave /> {guardando ? "Guardando..." : "Guardar proforma"}
+          </button>
+          <button className="ghost" onClick={generarPDF} disabled={!guardada || exportandoPdf}>
+            <FaPrint /> PDF
+          </button>
+          <button className="ghost" onClick={generarExcel} disabled={!guardada}>
+            <FaFileExcel /> Excel
+          </button>
         </div>
 
         {pickerAbierto && (
@@ -605,6 +725,7 @@ const Proforma: React.FC = () => {
                   if (!pickerTargetId) return;
                   if (selectedIds.has(Number(p.id))) { notify.warn("Producto ya agregado"); return; }
                   if ((Number(p.stockActual)||0) <= 0) return notify.warn("Sin stock");
+                  setGuardada(false);
                   setItems(prev => prev.map(it =>
                     it.id === pickerTargetId
                       ? {
@@ -655,6 +776,7 @@ const Proforma: React.FC = () => {
           <div><strong>Fecha:</strong> {fecha}</div>
           <div><strong>Moneda:</strong> {moneda === "USD" ? "Dólares (USD)" : "Córdobas (NIO)"}</div>
           <div><strong>Tipo de cambio:</strong> {Number(tipoCambio || 0) > 0 ? Number(tipoCambio).toFixed(4) : "-"}</div>
+          <div><strong>PIO:</strong> {pio.trim() || "—"}</div>
         </div>
         <table>
           <thead>

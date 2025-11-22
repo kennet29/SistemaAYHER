@@ -26,6 +26,7 @@ const VentaSchema = zod_1.z.object({
     plazoDias: zod_1.z.number().nullable().optional(),
     usuario: zod_1.z.string().nullable().optional(),
     observacion: zod_1.z.string().nullable().optional(),
+    pio: zod_1.z.string().nullable().optional(),
     tipoCambioValor: zod_1.z.number().nullable().optional(),
     detalles: zod_1.z.array(DetalleSchema).min(1),
 });
@@ -56,6 +57,7 @@ async function create(req, res) {
     if (!parsed.success)
         return res.status(400).json(parsed.error.format());
     const data = parsed.data;
+    const pioValue = data.pio && typeof data.pio === "string" && data.pio.trim().length > 0 ? data.pio.trim() : null;
     const tipoCambio = Number(data.tipoCambioValor ?? 36.5);
     const baseFecha = data.fecha ? new Date(data.fecha) : new Date();
     if (!(tipoCambio > 0))
@@ -94,6 +96,7 @@ async function create(req, res) {
                     const nota = `Consecutivo: ${numeroFacturaFinal}`;
                     return base ? `${base} | ${nota}` : nota;
                 })(),
+                pio: pioValue,
             };
             let venta = null;
             try {
@@ -278,11 +281,12 @@ async function proforma(req, res) {
             ua: req.headers['user-agent'],
             ip: req.headers['x-forwarded-for'] || req.ip,
         });
-        const { cliente, clienteId, detalles, tipoCambioValor } = req.body;
+        const { cliente, clienteId, detalles, tipoCambioValor, pio } = req.body;
         console.info('[ventas] proforma body', {
             cliente: cliente?.nombre ?? null,
             detallesCount: Array.isArray(detalles) ? detalles.length : 0,
             tipoCambioValor,
+            pio: typeof pio === "string" ? pio : null,
         });
         if (!cliente || !detalles?.length) {
             return res.status(400).json({ message: "Datos incompletos para proforma" });
@@ -297,6 +301,8 @@ async function proforma(req, res) {
         }
         // Obtener datos completos del cliente
         let clienteData = cliente || null;
+        const clienteIdParsed = Number.isFinite(Number(clienteId)) ? Number(clienteId) : null;
+        const clienteIdFromObject = cliente && Number.isFinite(Number(cliente.id)) ? Number(cliente.id) : null;
         const resolveClienteById = async (id) => {
             const r = await fetch(`http://localhost:4000/api/clientes/${id}`, { headers: { Authorization: req.headers.authorization || "" } });
             if (!r.ok)
@@ -334,30 +340,60 @@ async function proforma(req, res) {
             catch { }
             return null;
         };
-        if (Number.isFinite(Number(clienteId))) {
-            clienteData = await resolveClienteById(Number(clienteId));
+        if (clienteIdParsed !== null) {
+            clienteData = await resolveClienteById(clienteIdParsed);
         }
-        else if (cliente?.id && Number.isFinite(Number(cliente.id))) {
-            clienteData = await resolveClienteById(Number(cliente.id));
+        else if (clienteIdFromObject !== null) {
+            clienteData = await resolveClienteById(clienteIdFromObject);
         }
         else if (cliente?.nombre) {
             clienteData = (await resolveClienteByNombre(String(cliente.nombre))) || cliente;
         }
+        const clienteIdParaRegistro = clienteIdParsed ?? clienteIdFromObject;
         const tipoCambio = Number(tipoCambioValor ?? 36.5);
         const totalCordoba = detalles.reduce((acc, d) => acc + Number(d.cantidad || 0) * Number(d.precio || 0), 0);
         const totalDolar = tipoCambio > 0 ? totalCordoba / tipoCambio : 0;
+        const quoteEntries = detalles
+            .map((item) => {
+            const inventarioId = Number(item?.inventarioId);
+            if (!Number.isFinite(inventarioId))
+                return null;
+            const cantidad = Math.max(0, Number(item.cantidad) || 0);
+            if (cantidad <= 0)
+                return null;
+            const precioCordoba = Number(item.precio ?? 0);
+            const precioDolar = tipoCambio > 0 ? Number((precioCordoba / tipoCambio).toFixed(4)) : 0;
+            return {
+                inventarioId,
+                clienteId: clienteIdParaRegistro,
+                cantidad,
+                precioCordoba,
+                precioDolar,
+                moneda: "NIO",
+            };
+        })
+            .filter((entry) => Boolean(entry));
+        if (quoteEntries.length) {
+            try {
+                await prisma_1.prisma.productoCotizado.createMany({ data: quoteEntries });
+            }
+            catch (logError) {
+                console.warn("[ventas] No se pudo registrar cotizaciones recientes:", logError);
+            }
+        }
         console.info('[ventas] proforma totals', {
             totalCordoba: Number(totalCordoba || 0).toFixed(2),
             totalDolar: Number(totalDolar || 0).toFixed(2),
             tipoCambio: Number(tipoCambio || 0).toFixed(4),
         });
-        await (0, proforma_services_1.generarProformaPDFStreamV2)({
+        await (0, proforma_services_1.generarProformaPDFStreamV3)({
             empresa: empresaData,
             cliente: clienteData || cliente,
             detalles,
             totalCordoba,
             totalDolar,
             tipoCambio,
+            pio: typeof pio === "string" && pio.trim().length > 0 ? pio.trim() : null,
         }, res);
     }
     catch (error) {

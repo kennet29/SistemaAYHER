@@ -4,14 +4,15 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "build": "tsc",
+    "build": "tsc && npm run copy:logo",
     "start": "node dist/server.js",
     "build:db": "cross-env DATABASE_URL=file:./dist/ayher.db prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:studio": "prisma studio",
     "seed:build": "tsc --project tsconfig.seed.json",
-    "seed": "npm run seed:build && node dist/seed.js"
+    "seed": "npm run seed:build && node dist/seed.js",
+    "copy:logo": "node scripts/copy-logo.js"
   },
   "dependencies": {
     "node-fetch": "^3.3.2",

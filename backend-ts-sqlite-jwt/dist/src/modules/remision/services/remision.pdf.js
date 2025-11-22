@@ -5,10 +5,19 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generarRemisionPDFStreamV2 = generarRemisionPDFStreamV2;
 const pdfkit_1 = __importDefault(require("pdfkit"));
-const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
-async function generarRemisionPDFStreamV2({ empresa, cliente, detalles, numero, fecha, observacion, tipoCambio, }, res) {
-    const doc = new pdfkit_1.default({ size: "A4", margin: 40 });
+const logo_1 = require("../../../utils/logo");
+const fmtDate = (val) => {
+    try {
+        return new Date(val).toLocaleDateString("es-NI", { day: "2-digit", month: "2-digit", year: "numeric" });
+    }
+    catch {
+        return String(val);
+    }
+};
+const fmtNIO = (n) => `C$ ${Number(n || 0).toFixed(2)}`;
+const pickPrecioCordoba = (inv) => Number(inv?.precioVentaSugeridoCordoba ?? inv?.precioVentaPromedioCordoba ?? 0) || 0;
+async function generarRemisionPDFStreamV2({ empresa, cliente, detalles, numero, fecha, observacion, pio, }, res) {
+    const doc = new pdfkit_1.default({ size: "A4", margin: 36 });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="remision_${numero}.pdf"`);
     doc.pipe(res);
@@ -17,215 +26,120 @@ async function generarRemisionPDFStreamV2({ empresa, cliente, detalles, numero, 
     const left = doc.page.margins.left;
     const right = pageWidth - doc.page.margins.right;
     const contentWidth = right - left;
-    // Watermark ligera (REMISION)
-    const drawWatermark = () => {
-        doc.save();
-        doc.fillColor('#1f2937').fillOpacity(0.06);
-        doc.font('Helvetica-Bold').fontSize(90);
-        const originX = pageWidth / 2;
-        const originY = pageHeight / 2;
-        doc.rotate(-30, { origin: [originX, originY] });
-        doc.text('REMISION', originX - 260, originY - 60, { width: 520, align: 'center' });
-        doc.restore();
-    };
-    const drawFooter = () => {
-        const footerBase = pageHeight - doc.page.margins.bottom;
-        const textY = footerBase - 10;
-        doc.save();
-        doc.moveTo(left, footerBase - 16).lineTo(right, footerBase - 16).stroke('#e5e7eb');
-        doc.fontSize(8).fillColor('#000000').font('Helvetica');
-        const pageNum = doc.page?.number || 1;
-        doc.text('Documento de remisión de productos', left, textY, { width: contentWidth - 80, lineBreak: false, ellipsis: true });
-        doc.text('Página ' + pageNum, right - 60, textY, { width: 60, align: 'right', lineBreak: false });
-        doc.restore();
-    };
-    const addNewPage = () => {
-        doc.addPage();
-        drawWatermark();
-        drawFooter();
-    };
-    // Header band
-    const headerTop = 36;
-    const headerHeight = 86;
-    doc.save();
-    doc.rect(left, headerTop, contentWidth, headerHeight).fill("#ffffff");
-    doc.restore();
-    // Resolve logo path (similar a proforma)
-    const resolveLogoPath = () => {
-        const candidates = [];
-        const declared = empresa?.logoUrl && typeof empresa.logoUrl === 'string' ? empresa.logoUrl : null;
-        if (declared)
-            candidates.push(declared);
-        const cwd = process.cwd();
-        candidates.push(path_1.default.join(cwd, "FrontEnd-React", "Frontend", "src", "img", "logo.png"));
-        candidates.push(path_1.default.join(cwd, "src", "img", "logo.png"));
-        candidates.push(path_1.default.join(__dirname, "../../../../../FrontEnd-React/Frontend/src/img/logo.png"));
-        for (const p of candidates) {
+    const drawHeader = () => {
+        const logoPath = (0, logo_1.resolveLogoPath)(empresa?.logoUrl ?? null);
+        if (logoPath) {
             try {
-                if (p && fs_1.default.existsSync(p))
-                    return p;
+                doc.image(logoPath, right - 150, 24, { width: 140 });
             }
             catch { }
         }
-        return null;
+        doc.font("Helvetica-Bold").fontSize(10).fillColor("#111827");
+        doc.text("NOTA DE REMISION", left, 38, { width: contentWidth, align: "center" });
+        doc.fillColor("#b91c1c").fontSize(11).text(`N° ${numero}`, left, 54, { width: contentWidth, align: "center" });
     };
-    const logoPath = resolveLogoPath();
-    if (logoPath) {
-        try {
-            doc.image(logoPath, left + 8, headerTop + 8, { width: 110 });
-        }
-        catch { }
-    }
-    // Empresa block
-    const infoX = left + 140;
-    const infoPadding = 10;
-    doc.save();
-    doc.roundedRect(infoX - 8, headerTop + 8, contentWidth - (infoX - left) - 16, headerHeight - 16, 8).fill('#ffffff');
-    doc.fill('#2563eb').rect(infoX - 8, headerTop + 8, 4, headerHeight - 16).fill();
-    doc.restore();
-    doc.font('Helvetica-Bold').fontSize(18).fillColor('#0b3a9b')
-        .text(empresa?.razonSocial || 'EMPRESA', infoX + infoPadding - 2, headerTop + 12, {
-        width: contentWidth - (infoX - left) - (infoPadding * 2) - 8,
-    });
-    doc.font('Helvetica').fontSize(10).fillColor('#334155');
-    const linesY = headerTop + 36;
-    const linesW = contentWidth - (infoX - left) - (infoPadding * 2) - 8;
-    const lineStep = 12;
-    const headerTextOpts = { width: linesW, lineBreak: false, ellipsis: true };
-    doc.text(`RUC: ${empresa?.ruc ?? ''}`, infoX + infoPadding, linesY, headerTextOpts);
-    doc.text(`Dirección: ${empresa?.direccion ?? ''}`, infoX + infoPadding, doc.y + lineStep, headerTextOpts);
-    doc.text(`Tel: ${[empresa?.telefono1, empresa?.telefono2].filter(Boolean).join(' / ')}`, infoX + infoPadding, doc.y + lineStep, headerTextOpts);
-    doc.text(`Correo: ${empresa?.correo ?? ''}`, infoX + infoPadding, doc.y + lineStep, headerTextOpts);
-    doc.text(`Sitio Web: ${empresa?.sitioWeb ?? ''}`, infoX + infoPadding, doc.y + lineStep, headerTextOpts);
-    const headerTextBottom = doc.y;
-    // Title
-    const afterHeaderY = Math.max(headerTop + headerHeight, headerTextBottom) + 16;
-    doc.font("Helvetica-Bold").fontSize(16).fillColor('#0b3a9b')
-        .text("REMISIÓN", left, afterHeaderY, { align: "center", width: contentWidth });
-    // Meta (cuadro de cliente)
-    const metaTop = afterHeaderY + 22; // más abajo
-    doc.save();
-    doc.roundedRect(left, metaTop, contentWidth, 58, 6).stroke("#cbd5e1");
-    doc.restore();
-    doc.fontSize(11).fillColor('#111827').font("Helvetica")
-        .text(`No.: ${numero}`, left + 10, metaTop + 10, { width: contentWidth / 3 - 12 })
-        .text(`Cliente: ${cliente?.nombre || cliente?.empresa || 'N/A'}`, left + contentWidth / 3, metaTop + 10, { width: contentWidth / 3 - 12 })
-        .text(`Fecha: ${new Date(fecha).toLocaleDateString()}`, left + (2 * contentWidth) / 3, metaTop + 10, { width: contentWidth / 3 - 12 })
-        .text(`Observación: ${observacion || 'N/A'}`, left + 10, metaTop + 32, { width: contentWidth - 20 });
-    // Tabla (Parte | Producto | Cant | Subtotal)
-    const tableTop = metaTop + 74;
-    const wParte = 100;
-    const wCant = 60;
-    const wSub = 90;
-    const wNombre = contentWidth - (wParte + wCant + wSub);
-    const colX = [left, left + wParte, left + wParte + wNombre, right - wSub];
-    const drawTableHeader = (yHeader) => {
-        const headerHeight2 = 24;
-        doc.save();
-        doc.roundedRect(left, yHeader - 8, contentWidth, headerHeight2, 6).fill('#0b3a9b');
+    const drawDatosGenerales = (startY) => {
+        const rows = [
+            ["Entregado a:", cliente?.nombre || cliente?.empresa || "N/A", "Fecha:", fmtDate(fecha)],
+            ["Empresa:", cliente?.empresa || cliente?.nombre || "N/A", "Ruc:", cliente?.ruc || empresa?.ruc || ""],
+            ["Dirección:", cliente?.direccion || empresa?.direccion || "", "Pedido N°:", pio || "-"],
+        ];
+        const colW = contentWidth / 2;
+        const rowH = 22;
+        doc.save().lineWidth(1).strokeColor("#111827");
+        rows.forEach((r, idx) => {
+            const y = startY + idx * rowH;
+            doc.rect(left, y, contentWidth, rowH).stroke();
+            doc.moveTo(left + colW, y).lineTo(left + colW, y + rowH).stroke();
+            doc.font("Helvetica-Bold").fontSize(10).fillColor("#111827");
+            doc.text(r[0], left + 4, y + 6, { width: 90 });
+            doc.font("Helvetica").text(r[1], left + 96, y + 6, { width: colW - 100 });
+            doc.font("Helvetica-Bold").text(r[2], left + colW + 4, y + 6, { width: 90 });
+            doc.font("Helvetica").text(r[3], left + colW + 96, y + 6, { width: colW - 100 });
+        });
         doc.restore();
-        doc.font("Helvetica-Bold").fillColor('#ffffff').fontSize(10);
-        const headerTextY = yHeader - 6;
-        doc.text("Parte", colX[0], headerTextY, { width: wParte, align: 'center' });
-        doc.text("Producto", colX[1], headerTextY, { width: wNombre, align: 'center' });
-        doc.text("Cant", colX[2], headerTextY, { width: wCant, align: 'center' });
-        doc.text("Subtotal", colX[3], headerTextY, { width: wSub, align: 'center' });
-        // separador bajo header
-        doc.moveTo(left, yHeader + (headerHeight2 - 8)).lineTo(right, yHeader + (headerHeight2 - 8)).stroke('#e5e7eb');
-        doc.font("Helvetica").fillColor('#111827');
+        return startY + rows.length * rowH + 10;
     };
-    const pageBottom = doc.page.height - doc.page.margins.bottom;
-    let y = tableTop + 34; // más espacio entre header y primera fila
-    const rowHeight = 22; // filas más altas
-    drawTableHeader(tableTop);
-    let rowOnPage = 0;
-    const truncate = (s, maxWidth) => {
-        if (!s)
-            return s;
-        let out = s;
-        while (doc.widthOfString(out) > maxWidth && out.length > 1)
-            out = out.slice(0, -1);
-        return out !== s ? out + '…' : out;
-    };
-    for (const d of detalles) {
-        if (y + rowHeight > pageBottom) {
-            addNewPage();
-            const yHeader = doc.page.margins.top + 10;
-            drawTableHeader(yHeader);
-            y = yHeader + 34;
-            rowOnPage = 0;
-        }
-        const inv = d.inventario || {};
-        const parteTxt = truncate(String(inv.numeroParte ?? ''), wParte - 8);
-        const nombreTxt = truncate(String(inv.nombre ?? inv.descripcion ?? ''), wNombre - 8);
-        const cantidad = Number(d.cantidad || 0);
-        const cantidadTxt = String(cantidad);
-        const pSugNio = Number(inv.precioVentaSugeridoCordoba ?? inv.precioVentaPromedioCordoba ?? 0) || 0;
-        const pUsd = Number(inv.precioVentaSugeridoDolar ?? inv.precioVentaPromedioDolar ?? 0) || 0;
-        const tc = Number(tipoCambio || 0) || 0;
-        const unitNio = pSugNio || (pUsd && tc ? pUsd * tc : 0);
-        const subNio = cantidad * unitNio;
-        const contentY = y - (rowHeight - 8);
-        doc.text(parteTxt, colX[0] + 3, contentY, { width: wParte - 6, align: 'center' });
-        doc.text(nombreTxt, colX[1] + 3, contentY, { width: wNombre - 6, align: 'center' });
-        doc.text(cantidadTxt, colX[2], contentY, { width: wCant - 6, align: 'center' });
-        doc.text(`C$ ${Number(subNio || 0).toFixed(2)}`, colX[3], contentY, { width: wSub - 6, align: 'right' });
-        // Bordes estilo Excel (sin borde superior en la primera fila bajo el header)
-        const rowTop = y - rowHeight + 2;
-        const isFirstOnPage = rowOnPage === 0;
-        doc.save();
-        doc.lineWidth(0.6);
-        const gridColor = '#0b3a9b';
-        const drawCellBox = (x, w) => {
-            if (isFirstOnPage) {
-                doc.moveTo(x, rowTop).lineTo(x, rowTop + rowHeight).stroke(gridColor); // izquierdo
-                doc.moveTo(x + w, rowTop).lineTo(x + w, rowTop + rowHeight).stroke(gridColor); // derecho
-                doc.moveTo(x, rowTop + rowHeight).lineTo(x + w, rowTop + rowHeight).stroke(gridColor); // inferior
+    const drawItemsTable = (startY) => {
+        const cols = [
+            { title: "CODIGO", w: 120 },
+            { title: "DESCRIPCION PRODUCTO", w: contentWidth - 120 - 90 },
+            { title: "CANTIDAD", w: 90 },
+        ];
+        const colX = [];
+        cols.reduce((acc, c) => { colX.push(acc); return acc + c.w; }, left);
+        const headerH = 22;
+        doc.save().rect(left, startY, contentWidth, headerH).fill("#cbd5e1").restore();
+        doc.font("Helvetica-Bold").fontSize(10).fillColor("#111827");
+        cols.forEach((c, idx) => doc.text(c.title, colX[idx] + 4, startY + 6, { width: c.w - 8, align: "center" }));
+        let y = startY + headerH;
+        const bottomLimit = pageHeight - doc.page.margins.bottom - 140;
+        const filas = Array.isArray(detalles) ? detalles : [];
+        doc.font("Helvetica").fontSize(10).fillColor("#111827");
+        filas.forEach((d, idx) => {
+            const codigo = d.inventario?.numeroParte || d.numeroParte || "-";
+            const desc = d.inventario?.nombre || d.inventario?.descripcion || d.nombre || d.descripcion || "";
+            const cant = Number(d.cantidad || 0);
+            const descH = doc.heightOfString(desc, { width: cols[1].w - 10 });
+            const rowH = Math.max(32, descH + 12);
+            if (y + rowH > bottomLimit) {
+                doc.addPage();
+                drawHeader();
+                y = 120;
+                doc.save().rect(left, y, contentWidth, headerH).fill("#cbd5e1").restore();
+                doc.font("Helvetica-Bold").fontSize(10).fillColor("#111827");
+                cols.forEach((c, idx2) => doc.text(c.title, colX[idx2] + 4, y + 6, { width: c.w - 8, align: "center" }));
+                doc.font("Helvetica").fontSize(10).fillColor("#111827");
+                y += headerH;
             }
-            else {
-                doc.rect(x, rowTop, w, rowHeight).stroke(gridColor);
+            if (idx % 2 === 0) {
+                doc.save().rect(left, y, contentWidth, rowH).fill("#f8fafc").restore();
             }
-        };
-        drawCellBox(left, wParte);
-        drawCellBox(colX[1], wNombre);
-        drawCellBox(colX[2], wCant);
-        drawCellBox(colX[3], wSub);
-        doc.restore();
-        y += rowHeight;
-        rowOnPage++;
-    }
-    // Área de firmas
-    const drawSignatures = () => {
-        const bottomMargin = doc.page.margins.bottom;
-        const areaHeight = 100;
-        const raise = 36; // subir bloque
-        let sigTop = doc.page.height - bottomMargin - areaHeight - raise;
-        if (y + 40 > sigTop) {
-            addNewPage();
-            sigTop = doc.page.margins.top + 40;
-        }
-        const gap = 20;
-        const colWidth = (contentWidth - gap) / 2;
-        const lineY = sigTop + 50;
-        const labelY = lineY + 6;
-        const color = '#94a3b8';
-        doc.save();
-        doc.lineWidth(1);
-        // Firma responsable (izquierda)
-        doc.moveTo(left, lineY).lineTo(left + colWidth, lineY).stroke(color);
-        // Firma cliente (derecha)
-        doc.moveTo(left + colWidth + gap, lineY).lineTo(right, lineY).stroke(color);
-        // Nombre y cédula
-        const secondLineY = lineY + 34;
-        doc.moveTo(left, secondLineY).lineTo(right, secondLineY).stroke(color);
-        doc.restore();
-        doc.font('Helvetica').fontSize(9).fillColor('#111827');
-        doc.text('Firma del responsable que entrega', left, labelY, { width: colWidth, align: 'center' });
-        doc.text('Firma del cliente que recibe', left + colWidth + gap, labelY, { width: colWidth, align: 'center' });
-        doc.text('Nombre y cédula del receptor', left, secondLineY + 6, { width: contentWidth, align: 'center' });
+            doc.save().lineWidth(1).strokeColor("#111827");
+            doc.rect(left, y, contentWidth, rowH).stroke();
+            doc.moveTo(colX[1], y).lineTo(colX[1], y + rowH).stroke();
+            doc.moveTo(colX[2], y).lineTo(colX[2], y + rowH).stroke();
+            doc.restore();
+            doc.text(String(codigo), colX[0] + 4, y + 6, { width: cols[0].w - 8, align: "center" });
+            doc.text(desc, colX[1] + 4, y + 6, { width: cols[1].w - 8, align: "center" });
+            doc.text(String(cant), colX[2] + 4, y + 6, { width: cols[2].w - 8, align: "center" });
+            y += rowH;
+        });
+        return y + 12;
     };
-    drawWatermark();
-    drawSignatures();
-    drawFooter();
+    const drawFirmas = (startY) => {
+        const rowH = 22;
+        const labelW = 110;
+        const fechaW = 100;
+        const gridColor = "#111827";
+        // Marco exterior
+        doc.save().lineWidth(1).strokeColor(gridColor);
+        doc.rect(left, startY, contentWidth, rowH * 2).stroke();
+        // Columna fecha (gris)
+        doc.rect(left + contentWidth - fechaW, startY, fechaW, rowH * 2).stroke().fillOpacity(0.12).fill("#9ca3af").fillOpacity(1);
+        // Divide filas
+        doc.moveTo(left, startY + rowH).lineTo(right, startY + rowH).stroke(gridColor);
+        // Divide columnas principales
+        doc.moveTo(left + labelW, startY).lineTo(left + labelW, startY + rowH * 2).stroke(gridColor);
+        doc.moveTo(left + contentWidth - fechaW, startY).lineTo(left + contentWidth - fechaW, startY + rowH * 2).stroke(gridColor);
+        doc.restore();
+        doc.font("Helvetica").fontSize(10).fillColor("#111827");
+        // Usamos sin acentos para evitar problemas de codificación en algunos visores
+        doc.text("Recibi Conforme:", left + 6, startY + 6, { width: labelW - 12 });
+        doc.text("Entregue Conforme:", left + 6, startY + rowH + 6, { width: labelW - 12 });
+        // Fecha centrada verticalmente en la columna gris
+        const fechaY = startY + (rowH * 2 - doc.currentLineHeight(true)) / 2;
+        doc.font("Helvetica-Bold").text("Fecha:", left + contentWidth - fechaW + 6, fechaY, { width: fechaW - 12 });
+        doc.font("Helvetica").text(fmtDate(fecha), left + contentWidth - fechaW + 6, fechaY + 12, { width: fechaW - 12, align: "right" });
+        return startY + rowH * 2 + 10;
+    };
+    drawHeader();
+    let cursorY = 110;
+    cursorY = drawDatosGenerales(cursorY);
+    cursorY = drawItemsTable(cursorY + 6);
+    cursorY = drawFirmas(cursorY + 6);
+    doc.font("Helvetica").fontSize(10).fillColor("#111827");
+    doc.text("Atentamente,", left, cursorY + 8);
+    doc.text("SERVICIOS MÚLTIPLES E IMPORTADORA AyHer", left, cursorY + 22);
     doc.end();
 }

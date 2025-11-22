@@ -17,6 +17,7 @@ import { devolucionRouter } from './modules/devoluciones/devolucion.routes';
 import { cambioRouter } from './modules/cambio/cambio.routes';
 import { configuracionRouter } from './modules/configuracion/configuracion.routes';
 import { remisionRouter } from './modules/remision/remision.routes';
+import { cotizacionRouter } from './modules/cotizacion/cotizacion.routes';
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use('/api/remision',remisionRouter);
 app.use('/api/clientes',clienteRouter);
 app.use('/api/configuracion',configuracionRouter);
 app.use('/api/remision',remisionRouter);
+app.use('/api/cotizaciones', cotizacionRouter);
 // NUEVOS
 app.use('/api/marcas', marcaRouter);
 app.use('/api/inventario', inventarioRouter);

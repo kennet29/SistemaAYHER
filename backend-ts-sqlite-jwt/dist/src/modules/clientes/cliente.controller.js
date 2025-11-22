@@ -25,6 +25,9 @@ const clienteSchema = zod_1.z.object({
     direccion: zod_1.z.string().optional(),
     observacion: zod_1.z.string().optional(),
     estado: zod_1.z.string().default("ACTIVO"),
+    creditoHabilitado: zod_1.z.boolean().default(false),
+    creditoMaximoCordoba: zod_1.z.number().nonnegative().optional().default(0),
+    creditoMaximoDolar: zod_1.z.number().nonnegative().optional().default(0),
 });
 //// =============================
 // ✅ Crear nuevo cliente
