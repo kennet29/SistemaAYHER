@@ -17,6 +17,7 @@ function getCookie(name: string) {
 type ClienteForm = {
   id?: number;
   tipoCliente: string;
+  codigo: string;
   nombre: string;
   empresa: string;
   nombreContacto: string;
@@ -35,6 +36,7 @@ type ClienteForm = {
 
 const defaultForm: ClienteForm = {
   tipoCliente: "PERSONA",
+  codigo: "",
   nombre: "",
   empresa: "",
   nombreContacto: "",
@@ -202,7 +204,13 @@ export default function Clientes() {
               <option value="PERSONA">Persona</option>
               <option value="EMPRESA">Empresa</option>
             </select>
-            <label>Nombre</label>
+            <label>Codigo</label>
+            <input 
+              value={form.codigo} 
+              onChange={(e) => setForm({ ...form, codigo: e.target.value })} 
+              placeholder="Codigo del cliente (opcional)"
+            />
+            <label>Nombre de Contacto</label>
             <input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
             <label>Empresa</label>
             <input value={form.empresa} onChange={(e) => setForm({ ...form, empresa: e.target.value })} />

@@ -29,6 +29,7 @@ model User {
 model Cliente {
   id             Int     @id @default(autoincrement())
   tipoCliente    String  @default("PERSONA")
+  codigo         String?
   nombre         String
   empresa        String?
   nombreContacto String?
@@ -50,6 +51,7 @@ model Cliente {
   ventas     Venta[]
   remisiones Remision[]
   productosCotizados ProductoCotizado[]
+  proformas  Proforma[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -231,6 +233,25 @@ model Remision {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Proforma {
+  id             Int       @id @default(autoincrement())
+  fecha          DateTime  @default(now())
+  clienteId      Int?
+  cliente        Cliente?  @relation(fields: [clienteId], references: [id])
+  totalCordoba   Decimal   @default(0)
+  totalDolar     Decimal   @default(0)
+  tipoCambioValor Decimal?
+  pio            String?
+  incoterm       String?
+  plazoEntrega   String?
+  condicionPago  String?
+  detallesJson   String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([clienteId, fecha])
 }
 
 model ProductoCotizado {
@@ -443,4 +464,18 @@ model Configuracion {
   mensajeFactura String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+model MetodoPago {
+  id            Int      @id @default(autoincrement())
+  nombre        String
+  tipoCuenta    String   // BANCO, EFECTIVO, TRANSFERENCIA, etc.
+  banco         String?
+  numeroCuenta  String?
+  titular       String?
+  moneda        String   @default("NIO") // NIO o USD
+  activo        Boolean  @default(true)
+  observaciones String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

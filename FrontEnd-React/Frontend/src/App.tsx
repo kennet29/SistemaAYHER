@@ -10,11 +10,13 @@ import MovimientosView from "./Views/MovimientoInventario";
 import FacturacionView from "./Views/Facturacion";
 import Clientes from "./Views/Clientes";
 import Proforma from "./Views/Proforma"
+import ProformasHistorico from "./Views/ProformasHistorico";
 import Remisiones from "./Views/Remision";
 import RemisionesHistorico from "./Views/RemisionesHistorico";
 import RemisionesPendientes from "./Views/RemisionesPendientes";
 import Ventas from "./Views/Ventas";
 import CarteraClientes from "./Views/CarteraClientes";
+import ClienteDetalle from "./Views/ClienteDetalle";
 import FacturasPendientes from "./Views/FacturasPendientes";
 import StockCritico from "./Views/StockCritico";
 import CotizacionesRecientes from "./Views/CotizacionesRecientes";
@@ -43,12 +45,14 @@ function App() {
             element={<RemisionesHistorico />}
           />
           <Route path="/proforma" element={<Proforma />} />
+          <Route path="/proformas/historico" element={<ProformasHistorico />} />
           <Route
             path="/cotizaciones/recientes"
             element={<CotizacionesRecientes />}
           />
           <Route path="/ventas" element={<Ventas />} />
           <Route path="/cartera-clientes" element={<CarteraClientes />} />
+          <Route path="/cliente-detalle/:clienteId" element={<ClienteDetalle />} />
           <Route
             path="/facturas-pendientes"
             element={<FacturasPendientes />}

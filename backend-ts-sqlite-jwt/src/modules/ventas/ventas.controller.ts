@@ -4,7 +4,9 @@ import { prisma } from "../../db/prisma";
 import { z } from "zod";
 import { crearMovimientosYAjustarStockBatch } from "../services/stock.service";
 import { generarProformaPDF, generarProformaPDFStreamV3 as generarProformaPDFStream } from "./services/proforma.services";
+import ExcelJS from "exceljs";
 import fs from "fs";
+import { resolveLogoPath } from "../../utils/logo";
 
 const round4 = (n: number) => Number((n ?? 0).toFixed(4));
 
@@ -379,7 +381,7 @@ export async function proforma(req: Request, res: Response) {
 
     const clienteIdParaRegistro = clienteIdParsed ?? clienteIdFromObject;
 
-    // Marcar si se desea guardar en historial (por defecto true)
+    // Marcar si se desea guardar en historial de productos (por defecto true)
     const shouldGuardarHistorial = guardarHistorial !== false;
 
     const detallesNorm = Array.isArray(detalles) ? detalles : [];
@@ -482,6 +484,34 @@ export async function proforma(req: Request, res: Response) {
       }
     }
 
+    // Guardar registro de Proforma (encabezado + detalles) - SIEMPRE se guarda para tener un ID
+    let proformaRecord: any = null;
+    try {
+      const detallesForJson = detallesNorm.map((item: any) => ({
+        inventarioId: Number(item?.inventarioId) || null,
+        numeroParte: item?.numeroParte ?? null,
+        nombre: item?.nombre ?? null,
+        cantidad: Number(item?.cantidad || 0),
+        precioCordoba: Number(item?.precio || 0),
+      }));
+      proformaRecord = await prisma.proforma.create({
+        data: {
+          clienteId: clienteIdParaRegistro ?? null,
+          fecha: new Date(),
+          totalCordoba: totalCordoba,
+          totalDolar: totalDolar,
+          tipoCambioValor: tipoCambio || null,
+          pio: typeof pio === "string" && pio.trim().length > 0 ? pio.trim() : null,
+          incoterm: typeof incoterm === "string" && incoterm.trim().length > 0 ? incoterm.trim() : null,
+          plazoEntrega: typeof plazoEntrega === "string" && plazoEntrega.trim().length > 0 ? plazoEntrega.trim() : null,
+          condicionPago: typeof condicionPago === "string" && condicionPago.trim().length > 0 ? condicionPago.trim() : null,
+          detallesJson: JSON.stringify(detallesForJson),
+        },
+      });
+    } catch (err) {
+      console.warn("[ventas] No se pudo registrar proforma en historial:", err);
+    }
+
     console.info('[ventas] proforma totals', {
       totalCordoba: Number(totalCordoba || 0).toFixed(2),
       totalDolar: Number(totalDolar || 0).toFixed(2),
@@ -494,6 +524,7 @@ export async function proforma(req: Request, res: Response) {
         message: "Proforma guardada en historial",
         guardada: true,
         recientes: recientesResumen,
+        proforma: proformaRecord,
       });
     }
 
@@ -508,6 +539,7 @@ export async function proforma(req: Request, res: Response) {
       incoterm: typeof incoterm === "string" && incoterm.trim().length > 0 ? incoterm.trim() : null,
       plazoEntrega: typeof plazoEntrega === "string" && plazoEntrega.trim().length > 0 ? plazoEntrega.trim() : null,
       condicionPago: typeof condicionPago === "string" && condicionPago.trim().length > 0 ? condicionPago.trim() : null,
+      proformaId: proformaRecord?.id ?? null,
     }, res);
 
   } catch (error) {
@@ -553,6 +585,40 @@ export async function listPendientes(_req: Request, res: Response) {
   }
 }
 
+// ===== Historial de Proformas (encabezados) =====
+export async function listProformas(_req: Request, res: Response) {
+  try {
+    const proformas = await prisma.proforma.findMany({
+      include: { cliente: true },
+      orderBy: { fecha: "desc" },
+    });
+    res.json({ proformas });
+  } catch (error) {
+    console.error("❌ Error al listar proformas:", error);
+    res.status(500).json({ message: "Error interno al listar proformas" });
+  }
+}
+
+export async function getProformaById(req: Request, res: Response) {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    return res.status(400).json({ message: "ID inválido" });
+  }
+  try {
+    const proforma = await prisma.proforma.findUnique({
+      where: { id },
+      include: { cliente: true },
+    });
+    if (!proforma) {
+      return res.status(404).json({ message: "Proforma no encontrada" });
+    }
+    res.json({ proforma });
+  } catch (error) {
+    console.error("❌ Error al obtener proforma:", error);
+    res.status(500).json({ message: "Error interno al obtener proforma" });
+  }
+}
+
 // ===============================
 // ✅ Marcar/Actualizar cancelada (crédito pagado)
 // ===============================
@@ -585,3 +651,277 @@ export async function updateCancelada(req: Request, res: Response) {
 
 
 
+
+
+// ===============================
+// ✅ Generar Excel de Proforma
+// ===============================
+export async function generarProformaExcel(req: Request, res: Response) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({ message: "ID inválido" });
+    }
+
+    const moneda = (req.query.moneda as string) || "NIO";
+    const esUSD = moneda === "USD";
+
+    const proforma = await prisma.proforma.findUnique({
+      where: { id },
+      include: { cliente: true },
+    });
+
+    if (!proforma) {
+      return res.status(404).json({ message: "Proforma no encontrada" });
+    }
+
+    const empresa = await prisma.configuracion.findFirst();
+    
+    let detalles: any[] = [];
+    try {
+      const parsed = JSON.parse(proforma.detallesJson || "[]");
+      if (Array.isArray(parsed)) detalles = parsed;
+    } catch {
+      detalles = [];
+    }
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Proforma", {
+      pageSetup: { 
+        paperSize: 9, // A4
+        orientation: "portrait", 
+        margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5 } as any 
+      },
+    });
+
+    // Configurar anchos de columnas
+    ws.columns = [
+      { width: 6 },  // A - Pos
+      { width: 18 }, // B - No. De Parte
+      { width: 40 }, // C - Descripción
+      { width: 10 }, // D - Cantidad
+      { width: 18 }, // E - Precio Unitario
+      { width: 18 }, // F - Precio Total
+    ];
+
+    let currentRow = 1;
+
+    // Logo (si existe)
+    const logoPath = resolveLogoPath(empresa?.logoUrl);
+    if (logoPath && fs.existsSync(logoPath)) {
+      try {
+        const logoId = wb.addImage({
+          filename: logoPath,
+          extension: logoPath.endsWith('.png') ? 'png' : 'jpeg',
+        });
+        ws.addImage(logoId, {
+          tl: { col: 0, row: 0 },
+          ext: { width: 140, height: 60 },
+        });
+      } catch (err) {
+        console.warn("No se pudo agregar logo al Excel:", err);
+      }
+    }
+
+    // Encabezado empresa (lado derecho)
+    ws.mergeCells(`D${currentRow}:F${currentRow}`);
+    ws.getCell(`D${currentRow}`).value = empresa?.razonSocial || "EMPRESA";
+    ws.getCell(`D${currentRow}`).font = { size: 14, bold: true, color: { argb: "FF0b3a9b" } };
+    ws.getCell(`D${currentRow}`).alignment = { horizontal: "right", vertical: "middle" };
+    currentRow++;
+
+    ws.mergeCells(`D${currentRow}:F${currentRow}`);
+    ws.getCell(`D${currentRow}`).value = `RUC: ${empresa?.ruc ?? ""}`;
+    ws.getCell(`D${currentRow}`).font = { size: 9 };
+    ws.getCell(`D${currentRow}`).alignment = { horizontal: "right" };
+    currentRow++;
+
+    ws.mergeCells(`D${currentRow}:F${currentRow}`);
+    ws.getCell(`D${currentRow}`).value = `Tel: ${[empresa?.telefono1, empresa?.telefono2].filter(Boolean).join(" / ")}`;
+    ws.getCell(`D${currentRow}`).font = { size: 9 };
+    ws.getCell(`D${currentRow}`).alignment = { horizontal: "right" };
+    currentRow++;
+
+    ws.mergeCells(`D${currentRow}:F${currentRow}`);
+    ws.getCell(`D${currentRow}`).value = `Correo: ${empresa?.correo ?? ""}`;
+    ws.getCell(`D${currentRow}`).font = { size: 9 };
+    ws.getCell(`D${currentRow}`).alignment = { horizontal: "right" };
+    currentRow++;
+
+    currentRow++; // Espacio
+
+    // Título PROFORMA
+    ws.mergeCells(`A${currentRow}:F${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = "PROFORMA";
+    ws.getCell(`A${currentRow}`).font = { size: 16, bold: true, color: { argb: "FF0b3a9b" } };
+    ws.getCell(`A${currentRow}`).alignment = { horizontal: "center", vertical: "middle" };
+    ws.getRow(currentRow).height = 25;
+    currentRow++;
+
+    currentRow++; // Espacio
+
+    // Información de la proforma
+    ws.getCell(`A${currentRow}`).value = "Fecha:";
+    ws.getCell(`A${currentRow}`).font = { bold: true };
+    ws.getCell(`B${currentRow}`).value = new Date(proforma.fecha).toLocaleDateString();
+    
+    ws.getCell(`D${currentRow}`).value = "Oferta N°:";
+    ws.getCell(`D${currentRow}`).font = { bold: true };
+    ws.getCell(`D${currentRow}`).alignment = { horizontal: "right" };
+    ws.getCell(`E${currentRow}`).value = String(proforma.id).padStart(6, '0');
+    ws.getCell(`E${currentRow}`).alignment = { horizontal: "right" };
+    currentRow++;
+
+    currentRow++; // Espacio
+
+    // Cliente
+    ws.getCell(`A${currentRow}`).value = "ATENCIÓN A:";
+    ws.getCell(`A${currentRow}`).font = { bold: true, color: { argb: "FF0b2d64" } };
+    currentRow++;
+
+    ws.mergeCells(`A${currentRow}:F${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = proforma.cliente?.empresa || proforma.cliente?.nombre || "Cliente";
+    ws.getCell(`A${currentRow}`).font = { bold: true };
+    currentRow++;
+
+    if (proforma.cliente?.direccion) {
+      ws.mergeCells(`A${currentRow}:F${currentRow}`);
+      ws.getCell(`A${currentRow}`).value = proforma.cliente.direccion;
+      ws.getCell(`A${currentRow}`).font = { size: 10 };
+      currentRow++;
+    }
+
+    currentRow++; // Espacio
+
+    // Condiciones
+    ws.getCell(`A${currentRow}`).value = "CONDICIONES:";
+    ws.getCell(`A${currentRow}`).font = { bold: true, size: 10 };
+    currentRow++;
+
+    const incoterm = proforma.incoterm || "DDP NICARAGUA";
+    ws.mergeCells(`A${currentRow}:F${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = `INCOTERM: ${incoterm}`;
+    ws.getCell(`A${currentRow}`).font = { bold: true, size: 9 };
+    currentRow++;
+
+    const plazoEntrega = proforma.plazoEntrega || "Inmediato";
+    ws.mergeCells(`A${currentRow}:F${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = `PLAZO DE ENTREGA: ${plazoEntrega}`;
+    ws.getCell(`A${currentRow}`).font = { bold: true, size: 9 };
+    currentRow++;
+
+    const condicionPago = proforma.condicionPago || "30 dias credito";
+    ws.mergeCells(`A${currentRow}:F${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = `CONDICION DE PAGO: ${condicionPago}`;
+    ws.getCell(`A${currentRow}`).font = { bold: true, size: 9 };
+    currentRow++;
+
+    currentRow++; // Espacio
+
+    // Encabezado de tabla
+    const headerRow = currentRow;
+    const headers = ["Pos", "No. De Parte", "Descripcion", "Cant.", "Precio Unitario", "Precio Tot."];
+    headers.forEach((header, idx) => {
+      const cell = ws.getRow(headerRow).getCell(idx + 1);
+      cell.value = header;
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF0b2d64" }, // Azul oscuro
+      };
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+      cell.border = {
+        top: { style: "thin", color: { argb: "FFFFFFFF" } },
+        bottom: { style: "thin", color: { argb: "FFFFFFFF" } },
+        left: { style: "thin", color: { argb: "FFFFFFFF" } },
+        right: { style: "thin", color: { argb: "FFFFFFFF" } },
+      };
+    });
+    ws.getRow(headerRow).height = 20;
+    currentRow++;
+
+    // Datos de la tabla
+    const tipoCambio = Number(proforma.tipoCambioValor || 36.5);
+    let total = 0;
+    detalles.forEach((item, idx) => {
+      const cantidad = Number(item.cantidad || 0);
+      const precioCordoba = Number(item.precioCordoba || 0);
+      const precio = esUSD ? (precioCordoba / tipoCambio) : precioCordoba;
+      const subtotal = cantidad * precio;
+      total += subtotal;
+
+      const row = ws.getRow(currentRow);
+      row.getCell(1).value = idx + 1; // Posición
+      row.getCell(2).value = item.numeroParte || "";
+      row.getCell(3).value = item.nombre || "";
+      row.getCell(4).value = cantidad;
+      row.getCell(5).value = precio;
+      row.getCell(5).numFmt = esUSD ? '"$"#,##0.00' : '"C$"#,##0.00';
+      row.getCell(6).value = subtotal;
+      row.getCell(6).numFmt = esUSD ? '"$"#,##0.00' : '"C$"#,##0.00';
+
+      // Fondo alternado
+      if (idx % 2 === 0) {
+        [1, 2, 3, 4, 5, 6].forEach((colIdx) => {
+          row.getCell(colIdx).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF8FAFC" },
+          };
+        });
+      }
+
+      // Bordes y alineación
+      [1, 2, 3, 4, 5, 6].forEach((colIdx) => {
+        row.getCell(colIdx).border = {
+          top: { style: "thin", color: { argb: "FFCCCCCC" } },
+          bottom: { style: "thin", color: { argb: "FFCCCCCC" } },
+          left: { style: "thin", color: { argb: "FFCCCCCC" } },
+          right: { style: "thin", color: { argb: "FFCCCCCC" } },
+        };
+        row.getCell(colIdx).alignment = { 
+          horizontal: "center", 
+          vertical: "middle" 
+        };
+      });
+
+      currentRow++;
+    });
+
+    currentRow++; // Espacio
+
+    // Total
+    ws.getCell(`E${currentRow}`).value = "TOTAL:";
+    ws.getCell(`E${currentRow}`).font = { bold: true, size: 11 };
+    ws.getCell(`E${currentRow}`).alignment = { horizontal: "right" };
+    ws.getCell(`F${currentRow}`).value = total;
+    ws.getCell(`F${currentRow}`).numFmt = esUSD ? '"$"#,##0.00' : '"C$"#,##0.00';
+    ws.getCell(`F${currentRow}`).font = { bold: true, size: 11 };
+    ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
+    currentRow++;
+
+    currentRow += 2; // Espacio
+
+    // Despedida
+    ws.mergeCells(`A${currentRow}:F${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = "Atentamente";
+    ws.getCell(`A${currentRow}`).font = { size: 11, bold: true };
+    ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
+    currentRow++;
+
+    ws.mergeCells(`A${currentRow}:F${currentRow}`);
+    ws.getCell(`A${currentRow}`).value = "SERVICIOS MULTIPLES E IMPORTACIONES AYHER";
+    ws.getCell(`A${currentRow}`).font = { size: 11, bold: true };
+    ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
+
+    // Enviar el archivo
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename=proforma_${proforma.id}.xlsx`);
+    await wb.xlsx.write(res);
+    res.status(200).end();
+  } catch (error) {
+    console.error("Error generando Excel de proforma:", error);
+    res.status(500).json({ message: "Error generando Excel de proforma" });
+  }
+}

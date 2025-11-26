@@ -1,7 +1,7 @@
 // src/pages/Facturacion.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  FaCashRegister, FaPlus, FaTrash, FaPrint, FaSave, FaSearch, FaTimes,
+  FaCashRegister, FaPlus, FaTrash, FaSave, FaSearch, FaTimes,
 } from "react-icons/fa";
 import DataTable from "react-data-table-component";
 import type { TableColumn } from "react-data-table-component";
@@ -48,6 +48,7 @@ type Product = {
   precioVentaSugeridoDolar?: number | string;
   precioVentaPromedioCordoba?: number | string;
   precioVentaPromedioDolar?: number | string;
+  marca?: { id: number; nombre: string };
 };
 type RemisionDetalle = {
   id: number;
@@ -85,7 +86,13 @@ const Facturacion: React.FC = () => {
 
   const [cliente, setCliente] = useState<number | "">("");
   const [clientesList, setClientesList] = useState<any[]>([]);
-  const [fecha] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [fecha] = useState<string>(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
 
   const [moneda, setMoneda] = useState<Moneda>("NIO");
   const [tipoCambio, setTipoCambio] = useState<number | null>(null);
@@ -100,6 +107,10 @@ const Facturacion: React.FC = () => {
   const [pickerRemisionAbierto, setPickerRemisionAbierto] = useState(false);
   const [filaSeleccionRemision, setFilaSeleccionRemision] = useState<string | null>(null);
   const [remisionSearch, setRemisionSearch] = useState("");
+  const [productosRecientes, setProductosRecientes] = useState<Map<number, { clienteNombre: string; clienteEmpresa: string; fecha: string }>>(new Map());
+
+  const [pickerClienteAbierto, setPickerClienteAbierto] = useState(false);
+  const [busquedaCliente, setBusquedaCliente] = useState("");
 
   const [items, setItems] = useState<LineItem[]>([
     { id: cryptoId(), producto: "", cantidad: 1, precio: 0, precioBaseNIO: 0 },
@@ -135,6 +146,44 @@ const Facturacion: React.FC = () => {
       .catch(() => setRemisiones([]));
   }, []);
 
+  // Cargar productos cotizados recientemente cuando cambia el cliente
+  useEffect(() => {
+    if (cliente === "") {
+      setProductosRecientes(new Map());
+      return;
+    }
+    
+    const token = getCookie("token");
+    const params = new URLSearchParams();
+    params.set("clienteId", String(cliente));
+    
+    fetch(`${API_COTIZACIONES}?${params.toString()}`, {
+      headers: { Authorization: token ? `Bearer ${token}` : "" },
+    })
+      .then((r) => r.json())
+      .then((body) => {
+        const recientes = Array.isArray(body?.recientes) ? body.recientes : [];
+        const mapa = new Map<number, { clienteNombre: string; clienteEmpresa: string; fecha: string }>();
+        
+        for (const entry of recientes) {
+          const invId = Number(entry.inventarioId);
+          if (!Number.isFinite(invId)) continue;
+          
+          // Solo guardar la primera (más reciente) cotización de cada producto
+          if (!mapa.has(invId)) {
+            mapa.set(invId, {
+              clienteNombre: entry.cliente?.nombre || "Cliente desconocido",
+              clienteEmpresa: entry.cliente?.empresa || "",
+              fecha: entry.fecha || "",
+            });
+          }
+        }
+        
+        setProductosRecientes(mapa);
+      })
+      .catch(() => setProductosRecientes(new Map()));
+  }, [cliente]);
+
   const getPrecioProducto = (p: Product, m: Moneda) => {
     const raw =
       m === "USD"
@@ -168,6 +217,19 @@ const Facturacion: React.FC = () => {
       [p.nombre, p.numeroParte, p.descripcion].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
     );
   }, [busqueda, productos]);
+
+  const clientesFiltrados = useMemo(() => {
+    const q = busquedaCliente.trim().toLowerCase();
+    if (!q) return clientesList;
+    return clientesList.filter((c) =>
+      [c.nombre, c.empresa, c.telefono, c.correo].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
+    );
+  }, [busquedaCliente, clientesList]);
+
+  const clienteSeleccionado = useMemo(() => {
+    if (cliente === "") return null;
+    return clientesList.find((c) => c.id === cliente) || null;
+  }, [cliente, clientesList]);
 
   const total = useMemo(
     () => items.reduce((acc, it) => acc + (Number(it.cantidad) || 0) * (Number(it.precio) || 0), 0),
@@ -489,15 +551,46 @@ const Facturacion: React.FC = () => {
           <div className="grid-3">
             <label>
               Cliente
-              <select
-                value={cliente}
-                onChange={(e) => setCliente(e.target.value === "" ? "" : Number(e.target.value))}
-              >
-                <option value="">Seleccione cliente...</option>
-                {clientesList.map((c) => (
-                  <option key={c.id} value={c.id}>{c.nombre}</option>
-                ))}
-              </select>
+              <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
+                <button
+                  type="button"
+                  onClick={() => setPickerClienteAbierto(true)}
+                  style={{
+                    flex: 1,
+                    padding: ".5rem .75rem",
+                    borderRadius: ".5rem",
+                    border: "1px solid #6b7a99",
+                    background: "#fff",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    fontSize: ".9rem",
+                    color: clienteSeleccionado ? "#001a33" : "#6b7a99",
+                  }}
+                >
+                  {clienteSeleccionado 
+                    ? `${clienteSeleccionado.nombre}${clienteSeleccionado.empresa ? ` - ${clienteSeleccionado.empresa}` : ''}`
+                    : "Seleccione cliente..."}
+                </button>
+                {clienteSeleccionado && (
+                  <button
+                    type="button"
+                    onClick={() => setCliente("")}
+                    style={{
+                      padding: ".5rem",
+                      borderRadius: ".5rem",
+                      border: "1px solid #dc2626",
+                      background: "#fee",
+                      color: "#dc2626",
+                      cursor: "pointer",
+                      fontSize: ".9rem",
+                      fontWeight: 600,
+                    }}
+                    title="Limpiar cliente"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </label>
 
             <label>
@@ -521,7 +614,20 @@ const Facturacion: React.FC = () => {
           <div className="grid-3">
             <label>
               Tipo de pago
-              <select value={tipoPago} onChange={(e) => setTipoPago(e.target.value as any)}>
+              <select 
+                value={tipoPago} 
+                onChange={(e) => {
+                  const nuevoTipo = e.target.value as "CONTADO" | "CREDITO";
+                  if (nuevoTipo === "CREDITO") {
+                    const clienteSeleccionado = clientesList.find(c => c.id === cliente);
+                    if (clienteSeleccionado && !clienteSeleccionado.creditoHabilitado) {
+                      notify.warn("⚠️ Este cliente no tiene habilitada una linea de credito. Solo puede realizar compras al contado.");
+                      return;
+                    }
+                  }
+                  setTipoPago(nuevoTipo);
+                }}
+              >
                 <option value="CONTADO">Contado</option>
                 <option value="CREDITO">Crédito</option>
               </select>
@@ -672,7 +778,6 @@ const Facturacion: React.FC = () => {
 
         <div className="actions">
           <button type="button" className="primary" onClick={guardar}><FaSave /> Guardar</button>
-          <button type="button" className="ghost" onClick={() => window.print()}><FaPrint /> Imprimir</button>
         </div>
 
         {/* MODALES — Productos */}
@@ -688,14 +793,67 @@ const Facturacion: React.FC = () => {
 
               <DataTable
                 columns={[
-                  { name: "Parte", selector: (r: Product) => r.numeroParte as any },
-                  { name: "Nombre", selector: (r: Product) => r.nombre as any, grow: 2 },
+                  { name: "Parte", selector: (r: Product) => r.numeroParte as any, width: "120px" },
+                  { 
+                    name: "Marca", 
+                    selector: (r: Product) => r.marca?.nombre as any,
+                    cell: (r: Product) => <span>{r.marca?.nombre || "-"}</span>,
+                    width: "120px"
+                  },
+                  { 
+                    name: "Nombre", 
+                    selector: (r: Product) => r.nombre as any, 
+                    grow: 2,
+                    cell: (r: Product) => {
+                      const cotizacionInfo = productosRecientes.get(Number(r.id));
+                      const esCotizado = !!cotizacionInfo;
+                      
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.25rem", width: "100%" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", width: "100%" }}>
+                            <span>{r.nombre}</span>
+                            {esCotizado && (
+                              <span
+                                style={{
+                                  fontSize: "0.7rem",
+                                  padding: "0.15rem 0.45rem",
+                                  borderRadius: "12px",
+                                  background: "#fef3c7",
+                                  border: "1px solid #fbbf24",
+                                  color: "#92400e",
+                                  fontWeight: 600,
+                                  whiteSpace: "nowrap",
+                                }}
+                                title={`Cotizado por ${cotizacionInfo.clienteNombre}${cotizacionInfo.clienteEmpresa ? ` - ${cotizacionInfo.clienteEmpresa}` : ''}`}
+                              >
+                                📋 Cotizado Recientemente
+                              </span>
+                            )}
+                          </div>
+                          {esCotizado && (
+                            <span
+                              style={{
+                                fontSize: "0.7rem",
+                                color: "#78716c",
+                                fontStyle: "italic",
+                                paddingLeft: "0.25rem",
+                              }}
+                            >
+                              Por: {cotizacionInfo.clienteNombre}
+                              {cotizacionInfo.clienteEmpresa && ` - ${cotizacionInfo.clienteEmpresa}`}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    }
+                  },
                   {
                     name: "Precio",
                     selector: (r: Product) => getPrecioProducto(r, moneda) as any,
                     cell: (r: Product) => formatMoney(getPrecioProducto(r, moneda), moneda),
+                    width: "120px"
                   },
-                  { name: "Stock", selector: (r: Product) => r.stockActual as any },
+                  { name: "Stock", selector: (r: Product) => r.stockActual as any, width: "100px" },
                 ] as unknown as TableColumn<Product>[]}
                 data={productosFiltrados}
                 pagination
@@ -771,6 +929,49 @@ const Facturacion: React.FC = () => {
                 customStyles={{
                   headCells: { style: { justifyContent: "center", textAlign: "center" } },
                   cells: { style: { justifyContent: "center", textAlign: "center" } },
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* MODAL Clientes */}
+        {pickerClienteAbierto && (
+          <div className="picker-overlay" role="dialog" aria-modal="true">
+            <div className="picker-card">
+              <div className="picker-top">
+                <h3 className="picker-title"><FaSearch /> Seleccionar Cliente</h3>
+                <button type="button" className="picker-close" onClick={() => setPickerClienteAbierto(false)}>
+                  <FaTimes />
+                </button>
+              </div>
+
+              <input 
+                placeholder="Buscar por nombre, empresa, teléfono o correo..." 
+                value={busquedaCliente} 
+                onChange={(e) => setBusquedaCliente(e.target.value)} 
+              />
+
+              <DataTable
+                columns={[
+                  { name: "Nombre", selector: (r: any) => r.nombre, sortable: true, grow: 2 },
+                  { name: "Empresa", selector: (r: any) => r.empresa || "-", sortable: true, grow: 2 },
+                  { name: "Teléfono", selector: (r: any) => r.telefono || "-", width: "140px" },
+                  { name: "Correo", selector: (r: any) => r.correo || "-", grow: 2 },
+                ] as any}
+                data={clientesFiltrados}
+                pagination
+                highlightOnHover
+                pointerOnHover
+                customStyles={{
+                  headCells: { style: { justifyContent: "center", textAlign: "center" } },
+                  cells: { style: { justifyContent: "center", textAlign: "center" } },
+                }}
+                onRowClicked={(c: any) => {
+                  setCliente(Number(c.id));
+                  setPickerClienteAbierto(false);
+                  setBusquedaCliente("");
+                  notify.ok(`Cliente seleccionado: ${c.nombre}`);
                 }}
               />
             </div>

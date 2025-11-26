@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { FaExchangeAlt, FaPlus, FaSearch, FaTrash } from "react-icons/fa";
+import { FaExchangeAlt, FaPlus, FaSearch, FaTrash, FaHome } from "react-icons/fa";
 import DataTable from "react-data-table-component";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "./Movimientos.css";
 import { fmtDateTime } from "../utils/dates";
 import { buildApiUrl } from "../api/constants";
+import { useNavigate } from "react-router-dom";
 
 const API_MOVIMIENTOS = buildApiUrl("/MovimientoInventario");
 const API_TIPOS = buildApiUrl("/tipos-movimiento");
@@ -17,6 +18,7 @@ function getCookie(name: string) {
 }
 
 const MovimientosView = () => {
+  const navigate = useNavigate();
   const [movimientos, setMovimientos] = useState<any[]>([]);
   const [productos, setProductos] = useState<any[]>([]);
   const [tipos, setTipos] = useState<any[]>([]);
@@ -179,6 +181,25 @@ const MovimientosView = () => {
   return (
     <div className="movimientos-container">
       <ToastContainer />
+      <button 
+        type="button" 
+        onClick={() => navigate('/home')}
+        style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '0.5rem',
+          backgroundColor: '#007bff',
+          color: 'white',
+          border: 'none',
+          padding: '0.5rem 1rem',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          marginBottom: '1rem',
+          fontSize: '0.9rem'
+        }}
+      >
+        <FaHome /> Regresar a Home
+      </button>
       <h1>
         <FaExchangeAlt /> Movimientos de Inventario
       </h1>

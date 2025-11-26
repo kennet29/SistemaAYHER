@@ -45,6 +45,10 @@ exports.ventaRouter
     .post(auth_1.authenticate, ctrl.create);
 // Facturas de crédito no canceladas
 exports.ventaRouter.get('/pendientes', auth_1.authenticate, ctrl.listPendientes);
+// Historial de Proformas
+exports.ventaRouter.get('/proformas', auth_1.authenticate, ctrl.listProformas);
+exports.ventaRouter.get('/proformas/:id', auth_1.authenticate, ctrl.getProformaById);
+exports.ventaRouter.get('/proformas/:id/excel', auth_1.authenticate, ctrl.generarProformaExcel);
 exports.ventaRouter
     .route('/:id')
     .get(auth_1.authenticate, ctrl.getById);

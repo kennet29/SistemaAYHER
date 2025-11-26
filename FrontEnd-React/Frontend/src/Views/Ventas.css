@@ -1,18 +1,13 @@
 /* src/Views/Ventas.css - Estilos aislados para Ventas */
 
-/* ================== */
-/*    Variables       */
-/* ================== */
 :root{
   --brand-1:#003399;
   --brand-2:#0052cc;
   --bg-1:#eef3ff;
   --text-1:#001a33;
-
   --input-border:#6b7a99;
   --input-border-focus:#3451b2;
   --input-shadow-focus: rgba(52,81,178,.25);
-
   --ctrl-font: .9rem;
   --ctrl-pad-y: .45rem;
   --ctrl-pad-x: .6rem;
@@ -20,9 +15,6 @@
   --icon-size-sm: 32px;
 }
 
-/* ================== */
-/*     Base App       */
-/* ================== */
 .fact-page{
   width:100%;min-height:100vh;overflow-x:hidden;
   background:linear-gradient(180deg,#ffffff 0%,var(--bg-1) 100%);
@@ -44,14 +36,19 @@ html, body{overflow-x:hidden;background:#ffffff}
 .fact-header .back-btn:hover{ text-decoration:underline; }
 .fact-header h1{margin:0;font-weight:700;font-size:1.9rem}
 .fact-content{width:min(1200px,95%);margin:2rem auto;display:grid;gap:1.5rem}
-.ventas-page .fact-content{width:100%}
+.ventas-page .fact-content{width:100%;padding:0;}
 .card{
   background:#fff;padding:1.2rem;border-radius:10px;
   box-shadow:0 4px 15px rgba(0,0,0,.08);
   border:1px solid #e3e9f5
 }
+.ventas-page .card{
+  padding:1.2rem 0;
+  border-radius:0;
+  box-shadow:none;
+  border:none;
+}
 
-/* Inputs básicos dentro de tarjeta */
 .card input[type="text"],
 .card input[type="search"],
 .card input[type="number"],
@@ -69,9 +66,6 @@ html, body{overflow-x:hidden;background:#ffffff}
   box-shadow:0 0 0 3px var(--input-shadow-focus);
 }
 
-/* ================== */
-/*   Controles/Btns   */
-/* ================== */
 button{cursor:pointer}
 .icon-btn{
   width: var(--icon-size);
@@ -81,9 +75,6 @@ button{cursor:pointer}
 }
 .icon-btn:hover{background:#d9e7ff;color:black}
 
-/* ================== */
-/*     Ventas UI      */
-/* ================== */
 .toolbar{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:.6rem}
 .toolbar .flex-spacer{flex:1}
 .metrics{display:flex;gap:.5rem;flex-wrap:wrap}
@@ -91,7 +82,6 @@ button{cursor:pointer}
 .chip--danger{background:#ffe9e9;border-color:#ffb3b3;color:#b00020}
 .chip--muted{background:#f1f4f8;border-color:#d8e1ee;color:#445}
 
-/* Helpers para DataTable */
 .rdt_TableHead .rdt_TableHeadRow,
 .rdt_TableBody .rdt_TableRow{align-items:center}
 .rdt_TableHead .rdt_TableCol,
@@ -105,9 +95,6 @@ button{cursor:pointer}
 .rdt_TableHeadRow{ border-bottom: 2px solid #7d8fb8 !important; }
 .num-right{display:block;width:100%;text-align:right}
 
-/* ================== */
-/*      Modales       */
-/* ================== */
 .picker-overlay{
   position:fixed;inset:0;background:rgba(0,0,0,.55);
   display:flex;justify-content:center;align-items:center;z-index:9999
@@ -122,9 +109,6 @@ button{cursor:pointer}
   background:#111;color:#fff;border:none;width:34px;height:34px;border-radius:8px;font-size:16px
 }
 
-/* ================== */
-/*   Tabla detalles   */
-/* ================== */
 .rem-modal{max-height:70vh;overflow:auto;display:flex;flex-direction:column;gap:.9rem;padding-right:.25rem}
 .rem-table{padding:.2rem 0 1rem 0}
 .rem-head,.rem-row{display:grid;grid-template-columns:4fr .8fr 1.2fr 64px;align-items:center}
@@ -142,40 +126,45 @@ button{cursor:pointer}
 .rem-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rem-col--qty,.rem-col--price,.rem-col--action{justify-content:center}
 
-/* ================== */
-/*   Ventas table     */
-/* ================== */
 .ventas-table-wrap{
   display:flex;
-  justify-content:flex-start; /* alinea a la izquierda dentro de la card */
+  justify-content:flex-start;
+  width: 100%;
+  padding:0;
+  margin-top: 2rem;
+  padding-left: 5px;
 }
 .ventas-table{
-  width:90%;
-  margin-left:0;   /* sin margen a la izquierda */
-  margin-right:auto; /* conserva proporcin hacia la derecha */
-  padding-right:1rem; /* respiro a la derecha sin romper el centrado */
+  width:65%;
+  margin:0;
   box-sizing:border-box;
   overflow-x:auto;
+  border: 1px solid #e3e9f5;
+  border-radius: 8px;
+  background: #fff;
 }
 
-/* Separador entre tablas (historial vs detalles) */
+.ventas-table .rdt_Table {
+  min-height: 500px;
+}
+
 .ventas-separator{
-  width:90%;
+  width:100%;
   height:1px;
   background:linear-gradient(90deg, transparent, #dfe7f5, transparent);
-  margin:1rem auto;
+  margin:1rem 0;
 }
 
-/* Contenedor centrado para barra superior (buscador + métricas) */
-.ventas-center{ width:90%; margin:0 auto; }
+.ventas-center{ width:100%; margin:0; padding:0 1rem; }
 .ventas-page .toolbar .flex-spacer{ flex: 0 0 1rem; }
+
 @media (max-width: 700px){
   .ventas-page .toolbar .flex-spacer{ flex: 1 1 auto; }
+  .ventas-table-wrap, .ventas-table, .ventas-center {
+    width: 98%;
+  }
 }
 
-/* ================== */
-/*    Breakpoints     */
-/* ================== */
 @media (max-width:500px){
   :root{ --icon-size: var(--icon-size-sm); }
 }

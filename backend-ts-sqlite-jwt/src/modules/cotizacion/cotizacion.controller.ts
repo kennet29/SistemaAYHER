@@ -12,20 +12,22 @@ const parseIds = (value: string | string[] | undefined): number[] => {
 export const listarRecientes = async (req: Request, res: Response) => {
   try {
     const inventarioIds = parseIds(req.query.inventarioIds as string | string[] | undefined);
-    if (!inventarioIds.length) {
-      return res.json({ recientes: [] });
-    }
-
     const clienteId = Number.isFinite(Number(req.query.clienteId)) ? Number(req.query.clienteId) : null;
     const desde = new Date();
     desde.setDate(desde.getDate() - 14);
 
+    const where: any = {
+      fecha: { gte: desde },
+    };
+    if (inventarioIds.length) {
+      where.inventarioId = { in: inventarioIds };
+    }
+    if (clienteId) {
+      where.clienteId = clienteId;
+    }
+
     const recientes = await prisma.productoCotizado.findMany({
-      where: {
-        inventarioId: { in: inventarioIds },
-        fecha: { gte: desde },
-        ...(clienteId ? { clienteId } : {}),
-      },
+      where,
       orderBy: { fecha: "desc" },
       include: {
         inventario: {

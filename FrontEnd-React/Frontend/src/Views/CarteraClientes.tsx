@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import styled, { keyframes } from 'styled-components';
 import { buildApiUrl } from '../api/constants';
 
@@ -24,6 +25,7 @@ type CarteraItem = {
 // Removed unused COLORS
 
 const CarteraClientes: React.FC = () => {
+  const navigate = useNavigate();
   const [data, setData] = useState<CarteraItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +34,9 @@ const CarteraClientes: React.FC = () => {
   const [sortKey, setSortKey] = useState<'total' | 'credito' | 'contado'>('total');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
   const [topN, setTopN] = useState<number>(20);
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [fechaFin, setFechaFin] = useState('');
+  const [generandoExcel, setGenerandoExcel] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -103,6 +108,39 @@ const CarteraClientes: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const exportarReporteExcel = async () => {
+    if (!fechaInicio || !fechaFin) {
+      alert('Por favor seleccione fecha de inicio y fecha fin');
+      return;
+    }
+
+    setGenerandoExcel(true);
+    try {
+      const token = getCookie('token') || localStorage.getItem('token');
+      const params = new URLSearchParams();
+      params.set('fechaInicio', fechaInicio);
+      params.set('fechaFin', fechaFin);
+      
+      const res = await fetch(buildApiUrl(`/reportes/ventas-detalladas-clientes?${params.toString()}`), {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+
+      if (!res.ok) throw new Error('Error generando reporte');
+      
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `reporte_ventas_clientes_${fechaInicio}_${fechaFin}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e?.message || 'Error generando reporte');
+    } finally {
+      setGenerandoExcel(false);
+    }
+  };
+
   const rows = useMemo(() => {
     return limited.map((row) => {
       const contado = moneda === 'C$' ? row.totalContadoCordoba : row.totalContadoDolar;
@@ -125,6 +163,7 @@ const CarteraClientes: React.FC = () => {
     <PageContainer>
       <AnimatedBackground />
       <Header>
+        <button className="back-btn" onClick={() => navigate(-1)}>← Volver</button>
         <div className="header-content">
           <div className="logo">
             <span className="logo-icon">📊</span>
@@ -148,16 +187,6 @@ const CarteraClientes: React.FC = () => {
               <option value="C$">C$</option>
               <option value="US$">US$</option>
             </select>
-            <label>Orden:</label>
-            <select value={sortKey} onChange={(e) => setSortKey(e.target.value as any)}>
-              <option value="total">Total</option>
-              <option value="credito">Credito</option>
-              <option value="contado">Contado</option>
-            </select>
-            <select value={sortDir} onChange={(e) => setSortDir(e.target.value as any)}>
-              <option value="desc">Desc</option>
-              <option value="asc">Asc</option>
-            </select>
             <label>Top:</label>
             <input
               type="number"
@@ -165,8 +194,35 @@ const CarteraClientes: React.FC = () => {
               max={200}
               value={topN}
               onChange={(e) => setTopN(Math.max(1, Number(e.target.value || 1)))}
+              style={{ width: '80px' }}
             />
-            <button onClick={exportCSV}>Exportar CSV</button>
+          </div>
+          <div className="row" style={{ marginTop: '10px', padding: '10px', background: '#f8f9fa', borderRadius: '8px' }}>
+            <label style={{ fontWeight: 700 }}>Reporte Detallado Excel:</label>
+            <label>Fecha Inicio:</label>
+            <input
+              type="date"
+              value={fechaInicio}
+              onChange={(e) => setFechaInicio(e.target.value)}
+            />
+            <label>Fecha Fin:</label>
+            <input
+              type="date"
+              value={fechaFin}
+              onChange={(e) => setFechaFin(e.target.value)}
+            />
+            <button 
+              onClick={exportarReporteExcel}
+              disabled={generandoExcel}
+              style={{ 
+                background: generandoExcel ? '#ccc' : '#2e7d32',
+                color: '#fff',
+                fontWeight: 600,
+                padding: '6px 16px'
+              }}
+            >
+              {generandoExcel ? 'Generando...' : '📊 Generar Excel'}
+            </button>
           </div>
         </Controls>
 
@@ -204,10 +260,13 @@ const CarteraClientes: React.FC = () => {
                 <ClientCard key={r.key}>
                   <div className="name">{r.cliente}</div>
                   <div className="row"><span>Contado:</span><b className="contado">{r.contado.toFixed(2)} {moneda}</b></div>
-                  <div className="row"><span>Cr�dito:</span><b className="credito">{r.credito.toFixed(2)} {moneda}</b></div>
-                  <div className="row"><span>L�mite cr�dito:</span><b className="total">{r.limite.toFixed(2)} {moneda}</b></div>
-                  <div className="row"><span>Cr�dito habilitado:</span><b className={r.habilitado ? "contado" : "credito"}>{r.habilitado ? "S�" : "No"}</b></div>
+                  <div className="row"><span>Credito:</span><b className="credito">{r.credito.toFixed(2)} {moneda}</b></div>
+                  <div className="row"><span>Limite credito:</span><b className="total">{r.limite.toFixed(2)} {moneda}</b></div>
+                  <div className="row"><span>Credito habilitado:</span><b className={r.habilitado ? "contado" : "credito"}>{r.habilitado ? "Si" : "No"}</b></div>
                   <div className="row sep"><span>Total:</span><b className="total">{r.total.toFixed(2)} {moneda}</b></div>
+                  <button className="btn-detalle" onClick={() => navigate(`/cliente-detalle/${r.key}`)}>
+                    📊 Ver detalle completo
+                  </button>
                 </ClientCard>
               ))}
               {rows.length === 0 && <p>No hay datos para mostrar.</p>}
@@ -216,7 +275,7 @@ const CarteraClientes: React.FC = () => {
         )}
       </Main>
 
-      <Footer>© 2025 AYHER — Reportes</Footer>
+      <Footer>© 2025 AYHER - Reportes</Footer>
     </PageContainer>
   );
 };
@@ -262,9 +321,30 @@ const Header = styled.header`
   position: relative;
   z-index: 1;
 
+  .back-btn {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: 2px solid #fff;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    
+    &:hover {
+      background: #fff;
+      color: #004aad;
+    }
+  }
+
   .logo { display: flex; justify-content: center; align-items: center; gap: 10px; }
   .logo-icon { font-size: 28px; }
-  h1 { font-size: 28px; font-weight: 700; margin: 0; }
+  h1 { font-size: 28px; font-weight: 700; margin: 0; color: #fff; }
   p { font-size: 14px; margin-top: 6px; color: #f8eaea; }
 `;
 
@@ -323,12 +403,52 @@ const ClientCard = styled.div`
   border-radius: 12px;
   padding: 12px;
   box-shadow: 0 4px 10px rgba(0,0,0,0.04);
+  display: flex;
+  flex-direction: column;
+  
   .name { font-weight: 700; margin-bottom: 8px; }
   .row { display: flex; justify-content: space-between; margin: 2px 0; }
   .row.sep { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #eee; }
   .contado { color: #2e7d32; }
   .credito { color: #c62828; }
+  
+  .btn-detalle {
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, #004aad, #0066ff);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    transition: all 0.3s ease;
+    
+    &:hover {
+      background: linear-gradient(135deg, #003a8d, #0052cc);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 74, 173, 0.3);
+    }
+  }
   .total { color: #1a237e; }
+  
+  .btn-detalle {
+    margin-top: 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #004aad;
+    background: linear-gradient(135deg, #004aad, #0066ff);
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 74, 173, 0.3);
+    }
+  }
 `;
 
 const Footer = styled.footer`

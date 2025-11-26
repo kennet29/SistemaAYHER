@@ -13,8 +13,10 @@ import {
   FaUserFriends,
   FaExclamationTriangle,
 } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { buildApiUrl } from "../api/constants";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const LOW_STOCK_THRESHOLD = 8;
 
@@ -33,7 +35,6 @@ const Home = () => {
   const [lowStockItems, setLowStockItems] = useState<InventoryItem[]>([]);
   const [lowStockLoading, setLowStockLoading] = useState(true);
   const [lowStockError, setLowStockError] = useState<string | null>(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     let aborted = false;
@@ -78,7 +79,66 @@ const Home = () => {
       }
     };
 
+    const loadRemisionesPendientes = async () => {
+      try {
+        const response = await fetch(buildApiUrl("/remision/pendientes"), {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          signal: controller.signal,
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const pendientes = data.remisiones || data.data || data || [];
+        const cantidad = Array.isArray(pendientes) ? pendientes.length : 0;
+        
+        if (cantidad > 0) {
+          toast.info(`📋 Remisiones pendientes: ${cantidad}`, {
+            position: "top-right",
+            autoClose: 5000,
+          });
+        } else {
+          toast.success(`✅ Sin remisiones pendientes por facturar`, {
+            position: "top-right",
+            autoClose: 5000,
+          });
+        }
+      } catch (error) {
+        // Silenciar errores de remisiones
+      }
+    };
+
+    const loadFacturasPendientes = async () => {
+      try {
+        const response = await fetch(buildApiUrl("/ventas"), {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          signal: controller.signal,
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const ventas = data.ventas || data.data || [];
+        const pendientes = ventas.filter((v: any) => 
+          v.tipoPago === "CREDITO" && !(v.cancelada === true || v.estadoPago === "PAGADO")
+        );
+        const cantidad = pendientes.length;
+        
+        if (cantidad > 0) {
+          toast.warning(`💰 Facturas Pendientes de Cobrar: ${cantidad}`, {
+            position: "top-right",
+            autoClose: 5000,
+          });
+        }
+      } catch (error) {
+        // Silenciar errores de facturas
+      }
+    };
+
     loadLowStock();
+    loadRemisionesPendientes();
+    loadFacturasPendientes();
+    
     return () => {
       aborted = true;
       controller.abort();
@@ -87,6 +147,7 @@ const Home = () => {
 
   return (
     <HomeContainer>
+      <ToastContainer />
       <AnimatedBackground />
       <Header>
         <div className="header-content">
@@ -105,7 +166,7 @@ const Home = () => {
           </div>
           <h2>Inventario</h2>
           <p>Control total sobre tus productos, existencias y repuestos.</p>
-          <button onClick={() => navigate("/inventario")}>Entrar</button>
+          <Link to="/inventario" className="card-link">Entrar</Link>
         </Card>
 
         <Card color1="#ff8f00" color2="#ffc107">
@@ -114,9 +175,9 @@ const Home = () => {
           </div>
           <h2>Stock crítico</h2>
          <p>Listado de Productos Bajos de Stock </p>
-          <button onClick={() => navigate("/stock-critico")}>
+          <Link to="/stock-critico" className="card-link">
             Ver productos críticos
-          </button>
+          </Link>
         </Card>
 
         <Card color1="#0052cc" color2="#0080ff">
@@ -125,7 +186,7 @@ const Home = () => {
           </div>
           <h2>Facturación</h2>
           <p>Emití facturas, remisiones y cotizaciones fácilmente.</p>
-          <button onClick={() => navigate("/facturacion")}>Entrar</button>
+          <Link to="/facturacion" className="card-link">Entrar</Link>
         </Card>
 
         {/* ✅ Nueva Card Clientes */}
@@ -135,7 +196,7 @@ const Home = () => {
           </div>
           <h2>Clientes</h2>
           <p>Administra tus clientes y su historial de compras y crédito.</p>
-          <button onClick={() => navigate("/clientes")}>Entrar</button>
+          <Link to="/clientes" className="card-link">Entrar</Link>
         </Card>
 
         {/* ✅ Facturas de crédito pendientes */}
@@ -145,7 +206,7 @@ const Home = () => {
           </div>
           <h2>Facturas pendientes</h2>
           <p>Ver facturas de crédito sin cancelar y sus fechas.</p>
-          <button onClick={() => navigate("/facturas-pendientes")}>Ver pendientes</button>
+          <Link to="/facturas-pendientes" className="card-link">Ver pendientes</Link>
         </Card>
 
         {/* ✅ Nueva Card Cartera de clientes */}
@@ -155,7 +216,7 @@ const Home = () => {
           </div>
           <h2>Cartera de clientes</h2>
           <p>Totales de ventas por cliente (Crédito vs Contado).</p>
-          <button onClick={() => navigate("/cartera-clientes")}>Entrar</button>
+          <Link to="/cartera-clientes" className="card-link">Entrar</Link>
         </Card>
 
         <Card color1="#cc0000" color2="#ff3333">
@@ -164,7 +225,7 @@ const Home = () => {
           </div>
           <h2>Marcas</h2>
           <p>Organiza tus proveedores y catálogos de productos.</p>
-          <button onClick={() => navigate("/marcas")}>Entrar</button>
+          <Link to="/marcas" className="card-link">Entrar</Link>
         </Card>
 
         <Card color1="#001f33" color2="#003366">
@@ -173,7 +234,7 @@ const Home = () => {
           </div>
           <h2>Movimientos</h2>
           <p>Consulta entradas, salidas y ajustes de inventario.</p>
-          <button onClick={() => navigate("/movimientos")}>Entrar</button>
+          <Link to="/movimientos" className="card-link">Entrar</Link>
         </Card>
 
         <Card color1="#660000" color2="#990000">
@@ -182,7 +243,7 @@ const Home = () => {
           </div>
           <h2>Categorías</h2>
           <p>Clasificación total del catálogo de productos.</p>
-          <button onClick={() => navigate("/categorias")}>Entrar</button>
+          <Link to="/categorias" className="card-link">Entrar</Link>
         </Card>
 
         <Card color1="#00695c" color2="#26a69a">
@@ -191,7 +252,7 @@ const Home = () => {
           </div>
           <h2>Tipo de Cambio</h2>
           <p>Consulta y actualiza el valor del dólar.</p>
-          <button onClick={() => navigate("/tipo-cambio")}>Entrar</button>
+          <Link to="/tipo-cambio" className="card-link">Entrar</Link>
         </Card>
 
         <Card color1="#004d40" color2="#009688">
@@ -200,7 +261,7 @@ const Home = () => {
           </div>
           <h2>Configuración</h2>
           <p>Gestión del sistema, usuarios y preferencias.</p>
-          <button onClick={() => navigate("/configuracion")}>Entrar</button>
+          <Link to="/configuracion" className="card-link">Entrar</Link>
         </Card>
       </MainContent>
 
@@ -359,7 +420,8 @@ const Card = styled.div<{ color1: string; color2: string }>`
     margin-bottom: 6%;
   }
 
-  button {
+  button,
+  .card-link {
     background: #fff;
     border: none;
     color: ${(p) => p.color1};
@@ -368,9 +430,12 @@ const Card = styled.div<{ color1: string; color2: string }>`
     padding: 0.6em 1.5em;
     cursor: pointer;
     transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-block;
   }
 
-  button:hover {
+  button:hover,
+  .card-link:hover {
     background: #fff0f0;
     color: #cc0000;
     transform: scale(1.07);

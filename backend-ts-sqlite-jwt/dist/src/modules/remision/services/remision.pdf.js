@@ -108,9 +108,9 @@ async function generarRemisionPDFStreamV2({ empresa, cliente, detalles, numero, 
         return y + 12;
     };
     const drawFirmas = (startY) => {
-        const rowH = 22;
-        const labelW = 110;
-        const fechaW = 100;
+        const rowH = 28; // más alto para facilitar firma
+        const labelW = 120;
+        const fechaW = 110;
         const gridColor = "#111827";
         // Marco exterior
         doc.save().lineWidth(1).strokeColor(gridColor);
@@ -124,13 +124,13 @@ async function generarRemisionPDFStreamV2({ empresa, cliente, detalles, numero, 
         doc.moveTo(left + contentWidth - fechaW, startY).lineTo(left + contentWidth - fechaW, startY + rowH * 2).stroke(gridColor);
         doc.restore();
         doc.font("Helvetica").fontSize(10).fillColor("#111827");
-        // Usamos sin acentos para evitar problemas de codificación en algunos visores
-        doc.text("Recibi Conforme:", left + 6, startY + 6, { width: labelW - 12 });
-        doc.text("Entregue Conforme:", left + 6, startY + rowH + 6, { width: labelW - 12 });
-        // Fecha centrada verticalmente en la columna gris
-        const fechaY = startY + (rowH * 2 - doc.currentLineHeight(true)) / 2;
-        doc.font("Helvetica-Bold").text("Fecha:", left + contentWidth - fechaW + 6, fechaY, { width: fechaW - 12 });
-        doc.font("Helvetica").text(fmtDate(fecha), left + contentWidth - fechaW + 6, fechaY + 12, { width: fechaW - 12, align: "right" });
+        doc.text("Recibi Conforme:", left + 6, startY + 8, { width: labelW - 12 });
+        doc.text("Entregue Conforme:", left + 6, startY + rowH + 8, { width: labelW - 12 });
+        // Fecha en su propio cuadro gris
+        const fechaLabelY = startY + 6;
+        const fechaValorY = startY + rowH + 4;
+        doc.font("Helvetica-Bold").text("Fecha:", left + contentWidth - fechaW + 6, fechaLabelY, { width: fechaW - 12, align: "left" });
+        doc.font("Helvetica").text(fmtDate(fecha), left + contentWidth - fechaW + 6, fechaValorY, { width: fechaW - 12, align: "right" });
         return startY + rowH * 2 + 10;
     };
     drawHeader();

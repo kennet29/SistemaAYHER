@@ -1,11 +1,18 @@
 import { Router } from 'express';
 import * as ctrl from './inventario.controller';
+import { importarExcel } from './importar.controller';
 import { authenticate } from '../../middleware/auth';
+import multer from 'multer';
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 export const inventarioRouter = Router();
 
 inventarioRouter.get('/',  ctrl.list);
 inventarioRouter.post('/',  ctrl.create);
+
+// Importar desde Excel
+inventarioRouter.post('/importar', upload.single('file'), importarExcel);
 
 // Bajo stock (stockActual <= stockMinimo)
 inventarioRouter.get('/low-stock', ctrl.listLowStock);

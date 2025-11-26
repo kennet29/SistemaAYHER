@@ -1,15 +1,24 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.list = list;
 exports.getById = getById;
 exports.create = create;
 exports.proforma = proforma;
 exports.listPendientes = listPendientes;
+exports.listProformas = listProformas;
+exports.getProformaById = getProformaById;
 exports.updateCancelada = updateCancelada;
+exports.generarProformaExcel = generarProformaExcel;
 const prisma_1 = require("../../db/prisma");
 const zod_1 = require("zod");
 const stock_service_1 = require("../services/stock.service");
 const proforma_services_1 = require("./services/proforma.services");
+const exceljs_1 = __importDefault(require("exceljs"));
+const fs_1 = __importDefault(require("fs"));
+const logo_1 = require("../../utils/logo");
 const round4 = (n) => Number((n ?? 0).toFixed(4));
 /* ===== Zod ===== */
 const DetalleSchema = zod_1.z.object({
@@ -281,12 +290,17 @@ async function proforma(req, res) {
             ua: req.headers['user-agent'],
             ip: req.headers['x-forwarded-for'] || req.ip,
         });
-        const { cliente, clienteId, detalles, tipoCambioValor, pio } = req.body;
+        const { cliente, clienteId, detalles, tipoCambioValor, pio, incoterm, plazoEntrega, condicionPago, guardarHistorial, soloGuardar } = req.body;
         console.info('[ventas] proforma body', {
             cliente: cliente?.nombre ?? null,
             detallesCount: Array.isArray(detalles) ? detalles.length : 0,
             tipoCambioValor,
             pio: typeof pio === "string" ? pio : null,
+            incoterm,
+            plazoEntrega,
+            condicionPago,
+            guardarHistorial,
+            soloGuardar,
         });
         if (!cliente || !detalles?.length) {
             return res.status(400).json({ message: "Datos incompletos para proforma" });
@@ -350,10 +364,67 @@ async function proforma(req, res) {
             clienteData = (await resolveClienteByNombre(String(cliente.nombre))) || cliente;
         }
         const clienteIdParaRegistro = clienteIdParsed ?? clienteIdFromObject;
+        // Marcar si se desea guardar en historial de productos (por defecto true)
+        const shouldGuardarHistorial = guardarHistorial !== false;
+        const detallesNorm = Array.isArray(detalles) ? detalles : [];
         const tipoCambio = Number(tipoCambioValor ?? 36.5);
-        const totalCordoba = detalles.reduce((acc, d) => acc + Number(d.cantidad || 0) * Number(d.precio || 0), 0);
+        const totalCordoba = detallesNorm.reduce((acc, d) => acc + Number(d.cantidad || 0) * Number(d.precio || 0), 0);
         const totalDolar = tipoCambio > 0 ? totalCordoba / tipoCambio : 0;
-        const quoteEntries = detalles
+        // Buscar si los productos fueron cotizados en los ultimos 14 dias
+        const inventarioIds = detallesNorm
+            .map((item) => Number(item?.inventarioId))
+            .filter((id) => Number.isFinite(id));
+        let recientesResumen = [];
+        const recientesMap = new Map();
+        if (inventarioIds.length) {
+            const desde = new Date();
+            desde.setDate(desde.getDate() - 14);
+            const recientes = await prisma_1.prisma.productoCotizado.findMany({
+                where: {
+                    inventarioId: { in: inventarioIds },
+                    fecha: { gte: desde },
+                },
+                orderBy: { fecha: "desc" },
+                select: { inventarioId: true, fecha: true, precioCordoba: true, clienteId: true },
+            });
+            recientes.forEach((r) => {
+                const prev = recientesMap.get(r.inventarioId);
+                const coincide = Boolean(clienteIdParaRegistro && r.clienteId === clienteIdParaRegistro);
+                if (prev) {
+                    prev.conteo += 1;
+                    prev.clienteCoincide = prev.clienteCoincide || coincide;
+                    if (r.fecha > prev.ultimaFecha) {
+                        prev.ultimaFecha = r.fecha;
+                        prev.precioCordoba = Number(r.precioCordoba || prev.precioCordoba || 0);
+                    }
+                }
+                else {
+                    recientesMap.set(r.inventarioId, {
+                        ultimaFecha: r.fecha,
+                        precioCordoba: Number(r.precioCordoba || 0),
+                        conteo: 1,
+                        clienteCoincide: coincide,
+                    });
+                }
+            });
+            recientesResumen = Array.from(recientesMap.entries()).map(([inventarioId, info]) => ({
+                inventarioId,
+                ultimaFecha: info.ultimaFecha.toISOString(),
+                precioCordoba: info.precioCordoba,
+                conteo14d: info.conteo,
+                clienteCoincide: info.clienteCoincide,
+            }));
+            if (recientesResumen.length) {
+                // Hasta 10 entradas para no inflar encabezados
+                res.setHeader("X-Proforma-Recientes", JSON.stringify(recientesResumen.slice(0, 10)));
+            }
+        }
+        // Propagar bandera de cotizacion reciente a detalles para el PDF
+        const detallesMarcados = detallesNorm.map((item) => ({
+            ...item,
+            cotizadoReciente: recientesMap.has(Number(item?.inventarioId)),
+        }));
+        const quoteEntries = detallesNorm
             .map((item) => {
             const inventarioId = Number(item?.inventarioId);
             if (!Number.isFinite(inventarioId))
@@ -373,7 +444,7 @@ async function proforma(req, res) {
             };
         })
             .filter((entry) => Boolean(entry));
-        if (quoteEntries.length) {
+        if (shouldGuardarHistorial && quoteEntries.length) {
             try {
                 await prisma_1.prisma.productoCotizado.createMany({ data: quoteEntries });
             }
@@ -381,19 +452,60 @@ async function proforma(req, res) {
                 console.warn("[ventas] No se pudo registrar cotizaciones recientes:", logError);
             }
         }
+        // Guardar registro de Proforma (encabezado + detalles) - SIEMPRE se guarda para tener un ID
+        let proformaRecord = null;
+        try {
+            const detallesForJson = detallesNorm.map((item) => ({
+                inventarioId: Number(item?.inventarioId) || null,
+                numeroParte: item?.numeroParte ?? null,
+                nombre: item?.nombre ?? null,
+                cantidad: Number(item?.cantidad || 0),
+                precioCordoba: Number(item?.precio || 0),
+            }));
+            proformaRecord = await prisma_1.prisma.proforma.create({
+                data: {
+                    clienteId: clienteIdParaRegistro ?? null,
+                    fecha: new Date(),
+                    totalCordoba: totalCordoba,
+                    totalDolar: totalDolar,
+                    tipoCambioValor: tipoCambio || null,
+                    pio: typeof pio === "string" && pio.trim().length > 0 ? pio.trim() : null,
+                    incoterm: typeof incoterm === "string" && incoterm.trim().length > 0 ? incoterm.trim() : null,
+                    plazoEntrega: typeof plazoEntrega === "string" && plazoEntrega.trim().length > 0 ? plazoEntrega.trim() : null,
+                    condicionPago: typeof condicionPago === "string" && condicionPago.trim().length > 0 ? condicionPago.trim() : null,
+                    detallesJson: JSON.stringify(detallesForJson),
+                },
+            });
+        }
+        catch (err) {
+            console.warn("[ventas] No se pudo registrar proforma en historial:", err);
+        }
         console.info('[ventas] proforma totals', {
             totalCordoba: Number(totalCordoba || 0).toFixed(2),
             totalDolar: Number(totalDolar || 0).toFixed(2),
             tipoCambio: Number(tipoCambio || 0).toFixed(4),
         });
+        // Si solo se desea guardar en historial (sin PDF) responder JSON
+        if (soloGuardar) {
+            return res.status(201).json({
+                message: "Proforma guardada en historial",
+                guardada: true,
+                recientes: recientesResumen,
+                proforma: proformaRecord,
+            });
+        }
         await (0, proforma_services_1.generarProformaPDFStreamV3)({
             empresa: empresaData,
             cliente: clienteData || cliente,
-            detalles,
+            detalles: detallesMarcados,
             totalCordoba,
             totalDolar,
             tipoCambio,
             pio: typeof pio === "string" && pio.trim().length > 0 ? pio.trim() : null,
+            incoterm: typeof incoterm === "string" && incoterm.trim().length > 0 ? incoterm.trim() : null,
+            plazoEntrega: typeof plazoEntrega === "string" && plazoEntrega.trim().length > 0 ? plazoEntrega.trim() : null,
+            condicionPago: typeof condicionPago === "string" && condicionPago.trim().length > 0 ? condicionPago.trim() : null,
+            proformaId: proformaRecord?.id ?? null,
         }, res);
     }
     catch (error) {
@@ -440,6 +552,40 @@ async function listPendientes(_req, res) {
         res.status(500).json({ message: 'Error interno al listar pendientes' });
     }
 }
+// ===== Historial de Proformas (encabezados) =====
+async function listProformas(_req, res) {
+    try {
+        const proformas = await prisma_1.prisma.proforma.findMany({
+            include: { cliente: true },
+            orderBy: { fecha: "desc" },
+        });
+        res.json({ proformas });
+    }
+    catch (error) {
+        console.error("❌ Error al listar proformas:", error);
+        res.status(500).json({ message: "Error interno al listar proformas" });
+    }
+}
+async function getProformaById(req, res) {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+    }
+    try {
+        const proforma = await prisma_1.prisma.proforma.findUnique({
+            where: { id },
+            include: { cliente: true },
+        });
+        if (!proforma) {
+            return res.status(404).json({ message: "Proforma no encontrada" });
+        }
+        res.json({ proforma });
+    }
+    catch (error) {
+        console.error("❌ Error al obtener proforma:", error);
+        res.status(500).json({ message: "Error interno al obtener proforma" });
+    }
+}
 // ===============================
 // ✅ Marcar/Actualizar cancelada (crédito pagado)
 // ===============================
@@ -467,5 +613,241 @@ async function updateCancelada(req, res) {
     catch (err) {
         console.error('❌ Error al actualizar cancelada:', err);
         res.status(500).json({ message: 'Error interno al actualizar cancelada' });
+    }
+}
+// ===============================
+// ✅ Generar Excel de Proforma
+// ===============================
+async function generarProformaExcel(req, res) {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isFinite(id)) {
+            return res.status(400).json({ message: "ID inválido" });
+        }
+        const moneda = req.query.moneda || "NIO";
+        const esUSD = moneda === "USD";
+        const proforma = await prisma_1.prisma.proforma.findUnique({
+            where: { id },
+            include: { cliente: true },
+        });
+        if (!proforma) {
+            return res.status(404).json({ message: "Proforma no encontrada" });
+        }
+        const empresa = await prisma_1.prisma.configuracion.findFirst();
+        let detalles = [];
+        try {
+            const parsed = JSON.parse(proforma.detallesJson || "[]");
+            if (Array.isArray(parsed))
+                detalles = parsed;
+        }
+        catch {
+            detalles = [];
+        }
+        const wb = new exceljs_1.default.Workbook();
+        const ws = wb.addWorksheet("Proforma", {
+            pageSetup: {
+                paperSize: 9, // A4
+                orientation: "portrait",
+                margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5 }
+            },
+        });
+        // Configurar anchos de columnas
+        ws.columns = [
+            { width: 6 }, // A - Pos
+            { width: 18 }, // B - No. De Parte
+            { width: 40 }, // C - Descripción
+            { width: 10 }, // D - Cantidad
+            { width: 18 }, // E - Precio Unitario
+            { width: 18 }, // F - Precio Total
+        ];
+        let currentRow = 1;
+        // Logo (si existe)
+        const logoPath = (0, logo_1.resolveLogoPath)(empresa?.logoUrl);
+        if (logoPath && fs_1.default.existsSync(logoPath)) {
+            try {
+                const logoId = wb.addImage({
+                    filename: logoPath,
+                    extension: logoPath.endsWith('.png') ? 'png' : 'jpeg',
+                });
+                ws.addImage(logoId, {
+                    tl: { col: 0, row: 0 },
+                    ext: { width: 140, height: 60 },
+                });
+            }
+            catch (err) {
+                console.warn("No se pudo agregar logo al Excel:", err);
+            }
+        }
+        // Encabezado empresa (lado derecho)
+        ws.mergeCells(`D${currentRow}:F${currentRow}`);
+        ws.getCell(`D${currentRow}`).value = empresa?.razonSocial || "EMPRESA";
+        ws.getCell(`D${currentRow}`).font = { size: 14, bold: true, color: { argb: "FF0b3a9b" } };
+        ws.getCell(`D${currentRow}`).alignment = { horizontal: "right", vertical: "middle" };
+        currentRow++;
+        ws.mergeCells(`D${currentRow}:F${currentRow}`);
+        ws.getCell(`D${currentRow}`).value = `RUC: ${empresa?.ruc ?? ""}`;
+        ws.getCell(`D${currentRow}`).font = { size: 9 };
+        ws.getCell(`D${currentRow}`).alignment = { horizontal: "right" };
+        currentRow++;
+        ws.mergeCells(`D${currentRow}:F${currentRow}`);
+        ws.getCell(`D${currentRow}`).value = `Tel: ${[empresa?.telefono1, empresa?.telefono2].filter(Boolean).join(" / ")}`;
+        ws.getCell(`D${currentRow}`).font = { size: 9 };
+        ws.getCell(`D${currentRow}`).alignment = { horizontal: "right" };
+        currentRow++;
+        ws.mergeCells(`D${currentRow}:F${currentRow}`);
+        ws.getCell(`D${currentRow}`).value = `Correo: ${empresa?.correo ?? ""}`;
+        ws.getCell(`D${currentRow}`).font = { size: 9 };
+        ws.getCell(`D${currentRow}`).alignment = { horizontal: "right" };
+        currentRow++;
+        currentRow++; // Espacio
+        // Título PROFORMA
+        ws.mergeCells(`A${currentRow}:F${currentRow}`);
+        ws.getCell(`A${currentRow}`).value = "PROFORMA";
+        ws.getCell(`A${currentRow}`).font = { size: 16, bold: true, color: { argb: "FF0b3a9b" } };
+        ws.getCell(`A${currentRow}`).alignment = { horizontal: "center", vertical: "middle" };
+        ws.getRow(currentRow).height = 25;
+        currentRow++;
+        currentRow++; // Espacio
+        // Información de la proforma
+        ws.getCell(`A${currentRow}`).value = "Fecha:";
+        ws.getCell(`A${currentRow}`).font = { bold: true };
+        ws.getCell(`B${currentRow}`).value = new Date(proforma.fecha).toLocaleDateString();
+        ws.getCell(`D${currentRow}`).value = "Oferta N°:";
+        ws.getCell(`D${currentRow}`).font = { bold: true };
+        ws.getCell(`D${currentRow}`).alignment = { horizontal: "right" };
+        ws.getCell(`E${currentRow}`).value = String(proforma.id).padStart(6, '0');
+        ws.getCell(`E${currentRow}`).alignment = { horizontal: "right" };
+        currentRow++;
+        currentRow++; // Espacio
+        // Cliente
+        ws.getCell(`A${currentRow}`).value = "ATENCIÓN A:";
+        ws.getCell(`A${currentRow}`).font = { bold: true, color: { argb: "FF0b2d64" } };
+        currentRow++;
+        ws.mergeCells(`A${currentRow}:F${currentRow}`);
+        ws.getCell(`A${currentRow}`).value = proforma.cliente?.empresa || proforma.cliente?.nombre || "Cliente";
+        ws.getCell(`A${currentRow}`).font = { bold: true };
+        currentRow++;
+        if (proforma.cliente?.direccion) {
+            ws.mergeCells(`A${currentRow}:F${currentRow}`);
+            ws.getCell(`A${currentRow}`).value = proforma.cliente.direccion;
+            ws.getCell(`A${currentRow}`).font = { size: 10 };
+            currentRow++;
+        }
+        currentRow++; // Espacio
+        // Condiciones
+        ws.getCell(`A${currentRow}`).value = "CONDICIONES:";
+        ws.getCell(`A${currentRow}`).font = { bold: true, size: 10 };
+        currentRow++;
+        const incoterm = proforma.incoterm || "DDP NICARAGUA";
+        ws.mergeCells(`A${currentRow}:F${currentRow}`);
+        ws.getCell(`A${currentRow}`).value = `INCOTERM: ${incoterm}`;
+        ws.getCell(`A${currentRow}`).font = { bold: true, size: 9 };
+        currentRow++;
+        const plazoEntrega = proforma.plazoEntrega || "Inmediato";
+        ws.mergeCells(`A${currentRow}:F${currentRow}`);
+        ws.getCell(`A${currentRow}`).value = `PLAZO DE ENTREGA: ${plazoEntrega}`;
+        ws.getCell(`A${currentRow}`).font = { bold: true, size: 9 };
+        currentRow++;
+        const condicionPago = proforma.condicionPago || "30 dias credito";
+        ws.mergeCells(`A${currentRow}:F${currentRow}`);
+        ws.getCell(`A${currentRow}`).value = `CONDICION DE PAGO: ${condicionPago}`;
+        ws.getCell(`A${currentRow}`).font = { bold: true, size: 9 };
+        currentRow++;
+        currentRow++; // Espacio
+        // Encabezado de tabla
+        const headerRow = currentRow;
+        const headers = ["Pos", "No. De Parte", "Descripcion", "Cant.", "Precio Unitario", "Precio Tot."];
+        headers.forEach((header, idx) => {
+            const cell = ws.getRow(headerRow).getCell(idx + 1);
+            cell.value = header;
+            cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 10 };
+            cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FF0b2d64" }, // Azul oscuro
+            };
+            cell.alignment = { horizontal: "center", vertical: "middle" };
+            cell.border = {
+                top: { style: "thin", color: { argb: "FFFFFFFF" } },
+                bottom: { style: "thin", color: { argb: "FFFFFFFF" } },
+                left: { style: "thin", color: { argb: "FFFFFFFF" } },
+                right: { style: "thin", color: { argb: "FFFFFFFF" } },
+            };
+        });
+        ws.getRow(headerRow).height = 20;
+        currentRow++;
+        // Datos de la tabla
+        const tipoCambio = Number(proforma.tipoCambioValor || 36.5);
+        let total = 0;
+        detalles.forEach((item, idx) => {
+            const cantidad = Number(item.cantidad || 0);
+            const precioCordoba = Number(item.precioCordoba || 0);
+            const precio = esUSD ? (precioCordoba / tipoCambio) : precioCordoba;
+            const subtotal = cantidad * precio;
+            total += subtotal;
+            const row = ws.getRow(currentRow);
+            row.getCell(1).value = idx + 1; // Posición
+            row.getCell(2).value = item.numeroParte || "";
+            row.getCell(3).value = item.nombre || "";
+            row.getCell(4).value = cantidad;
+            row.getCell(5).value = precio;
+            row.getCell(5).numFmt = esUSD ? '"$"#,##0.00' : '"C$"#,##0.00';
+            row.getCell(6).value = subtotal;
+            row.getCell(6).numFmt = esUSD ? '"$"#,##0.00' : '"C$"#,##0.00';
+            // Fondo alternado
+            if (idx % 2 === 0) {
+                [1, 2, 3, 4, 5, 6].forEach((colIdx) => {
+                    row.getCell(colIdx).fill = {
+                        type: "pattern",
+                        pattern: "solid",
+                        fgColor: { argb: "FFF8FAFC" },
+                    };
+                });
+            }
+            // Bordes y alineación
+            [1, 2, 3, 4, 5, 6].forEach((colIdx) => {
+                row.getCell(colIdx).border = {
+                    top: { style: "thin", color: { argb: "FFCCCCCC" } },
+                    bottom: { style: "thin", color: { argb: "FFCCCCCC" } },
+                    left: { style: "thin", color: { argb: "FFCCCCCC" } },
+                    right: { style: "thin", color: { argb: "FFCCCCCC" } },
+                };
+                row.getCell(colIdx).alignment = {
+                    horizontal: "center",
+                    vertical: "middle"
+                };
+            });
+            currentRow++;
+        });
+        currentRow++; // Espacio
+        // Total
+        ws.getCell(`E${currentRow}`).value = "TOTAL:";
+        ws.getCell(`E${currentRow}`).font = { bold: true, size: 11 };
+        ws.getCell(`E${currentRow}`).alignment = { horizontal: "right" };
+        ws.getCell(`F${currentRow}`).value = total;
+        ws.getCell(`F${currentRow}`).numFmt = esUSD ? '"$"#,##0.00' : '"C$"#,##0.00';
+        ws.getCell(`F${currentRow}`).font = { bold: true, size: 11 };
+        ws.getCell(`F${currentRow}`).alignment = { horizontal: "center" };
+        currentRow++;
+        currentRow += 2; // Espacio
+        // Despedida
+        ws.mergeCells(`A${currentRow}:F${currentRow}`);
+        ws.getCell(`A${currentRow}`).value = "Atentamente";
+        ws.getCell(`A${currentRow}`).font = { size: 11, bold: true };
+        ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
+        currentRow++;
+        ws.mergeCells(`A${currentRow}:F${currentRow}`);
+        ws.getCell(`A${currentRow}`).value = "SERVICIOS MULTIPLES E IMPORTACIONES AYHER";
+        ws.getCell(`A${currentRow}`).font = { size: 11, bold: true };
+        ws.getCell(`A${currentRow}`).alignment = { horizontal: "center" };
+        // Enviar el archivo
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename=proforma_${proforma.id}.xlsx`);
+        await wb.xlsx.write(res);
+        res.status(200).end();
+    }
+    catch (error) {
+        console.error("Error generando Excel de proforma:", error);
+        res.status(500).json({ message: "Error generando Excel de proforma" });
     }
 }

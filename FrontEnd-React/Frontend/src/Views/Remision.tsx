@@ -49,7 +49,13 @@ export default function Remisiones() {
   const [clienteId, setClienteId] = useState("");
   const [clientes, setClientes] = useState<any[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
-  const [fecha, setFecha] = useState<string>(new Date().toISOString().substring(0, 10));
+  const [fecha, setFecha] = useState<string>(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
   const [observacion, setObservacion] = useState("");
   const [pio, setPio] = useState("");
   const [items, setItems] = useState<DetalleItem[]>([{ inventarioId: 0, cantidad: 1, stock: 0, query: "" }]);
@@ -279,8 +285,8 @@ export default function Remisiones() {
       <h2 className="rem-title"><FaTruck /> Remisiones</h2>
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <Link to="/home" className="rem-history-btn">
-          <FaHome /> Home
+        <Link to="/facturacion" className="rem-history-btn">
+          <FaHome /> Volver a Facturación
         </Link>
         <Link to="/remisiones/historico" className="rem-history-btn">
           <FaHistory /> Histórico

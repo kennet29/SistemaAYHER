@@ -179,19 +179,37 @@ export async function create(req: Request, res: Response) {
       // Remove input-only key to avoid Prisma unknown argument
       delete createData.preciosCompetencia;
     }
-    // Relación sustituto vía connect compuesto (si viene)
+    // Relación sustituto: intentar conectar si existe, sino guardar los campos directamente
     if (data.codigoSustituto && data.marcaSustitutoId) {
-      createData.sustituto = {
-        connect: {
-          UQ_NumeroParte_Marca: {
-            numeroParte: data.codigoSustituto,
-            marcaId: data.marcaSustitutoId,
-          },
+      // Verificar si el producto sustituto existe
+      const sustitutoExiste = await prisma.inventario.findFirst({
+        where: {
+          numeroParte: data.codigoSustituto,
+          marcaId: data.marcaSustitutoId,
         },
-      };
+      });
+
+      if (sustitutoExiste) {
+        // Si existe, conectar la relación
+        createData.sustituto = {
+          connect: {
+            UQ_NumeroParte_Marca: {
+              numeroParte: data.codigoSustituto,
+              marcaId: data.marcaSustitutoId,
+            },
+          },
+        };
+        delete createData.codigoSustituto;
+        delete createData.marcaSustitutoId;
+      } else {
+        // Si no existe, guardar los campos directamente (sin relación)
+        createData.codigoSustituto = data.codigoSustituto;
+        createData.marcaSustitutoId = data.marcaSustitutoId;
+      }
+    } else {
+      delete createData.codigoSustituto;
+      delete createData.marcaSustitutoId;
     }
-    delete createData.codigoSustituto;
-    delete createData.marcaSustitutoId;
 
     try {
     console.log("[Inventario.create] prisma data:", JSON.stringify(createData));
@@ -373,26 +391,47 @@ export async function update(req: Request, res: Response) {
       // Remove input-only key to avoid Prisma unknown argument
       delete updateData.preciosCompetencia;
     }
-    // Relación sustituto: si se provee, conectar o desconectar
+    // Relación sustituto: intentar conectar si existe, sino guardar los campos directamente
     if (
       Object.prototype.hasOwnProperty.call(data, "codigoSustituto") ||
       Object.prototype.hasOwnProperty.call(data, "marcaSustitutoId")
     ) {
+      // Siempre eliminar estos campos del updateData ya que se manejan via relación
+      delete updateData.codigoSustituto;
+      delete updateData.marcaSustitutoId;
+      
       if (data.codigoSustituto && data.marcaSustitutoId) {
-        updateData.sustituto = {
-          connect: {
-            UQ_NumeroParte_Marca: {
-              numeroParte: data.codigoSustituto,
-              marcaId: data.marcaSustitutoId,
-            },
+        // Verificar si el producto sustituto existe
+        const sustitutoExiste = await prisma.inventario.findFirst({
+          where: {
+            numeroParte: data.codigoSustituto,
+            marcaId: data.marcaSustitutoId,
           },
-        };
+        });
+
+        if (sustitutoExiste) {
+          // Si existe, conectar la relación
+          updateData.sustituto = {
+            connect: {
+              UQ_NumeroParte_Marca: {
+                numeroParte: data.codigoSustituto,
+                marcaId: data.marcaSustitutoId,
+              },
+            },
+          };
+        } else {
+          // Si no existe, desconectar cualquier relación previa
+          // No podemos guardar codigoSustituto sin relación en Prisma
+          updateData.sustituto = { disconnect: true };
+        }
       } else {
+        // Si se envían vacíos, desconectar
         updateData.sustituto = { disconnect: true };
       }
+    } else {
+      delete updateData.codigoSustituto;
+      delete updateData.marcaSustitutoId;
     }
-    delete updateData.codigoSustituto;
-    delete updateData.marcaSustitutoId;
 
     try {
       console.log("[Inventario.update] prisma data:", JSON.stringify(updateData));
@@ -446,21 +485,34 @@ export async function update(req: Request, res: Response) {
 }
 
 // ===============================
-// 📉 LISTAR BAJO STOCK (stockActual <= stockMinimo)
+// 📉 LISTAR BAJO STOCK (stockActual <= stockMinimo O stockActual = 0)
 // ===============================
 export async function listLowStock(_req: Request, res: Response) {
   try {
     const tipoCambio = await getTipoCambioDesdeAPI();
     const items = await prisma.inventario.findMany({
-      where: { stockMinimo: { not: null } },
       include: {
         marca: true,
         categoria: true,
       },
       orderBy: [{ marcaId: 'asc' }, { numeroParte: 'asc' }],
     });
-    // Prisma no permite comparar dos columnas con lte directamente; fallback a filtro en memoria
-    const filtered = items.filter((i: any) => typeof i.stockMinimo === 'number' && i.stockActual <= i.stockMinimo);
+    // Filtrar productos con stock crítico:
+    // 1. Stock en 0 (sin importar si tiene stockMinimo)
+    // 2. Stock <= stockMinimo (si tiene stockMinimo definido)
+    const filtered = items.filter((i: any) => {
+      const stockActual = Number(i.stockActual || 0);
+      const stockMinimo = Number(i.stockMinimo || 0);
+      
+      // Incluir si stock es 0
+      if (stockActual === 0) return true;
+      
+      // Incluir si tiene stockMinimo definido y está por debajo o igual
+      if (typeof i.stockMinimo === 'number' && stockActual <= stockMinimo) return true;
+      
+      return false;
+    });
+    
     res.json({ tipoCambio, items: filtered });
   } catch (err) {
     console.error('❌ Error al listar bajo stock:', err);

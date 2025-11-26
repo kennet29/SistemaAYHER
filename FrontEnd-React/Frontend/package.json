@@ -12,9 +12,13 @@
     "electron:dev": "vite --mode electron",
     "preelectron:build": "npm --prefix ../../backend-ts-sqlite-jwt run prisma:generate && npm --prefix ../../backend-ts-sqlite-jwt run build",
     "build:electron": "tsc --project electron/tsconfig.json",
-    "electron:build": "npm run preelectron:build && npm run build:electron && npm run build -- --mode electron && electron-builder"
+    "electron:build": "npm run preelectron:build && npm run build:electron && npm run build -- --mode electron && electron-builder",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "react": "^19.1.1",
     "react-chartjs-2": "^5.3.1",
     "react-data-table-component": "^7.7.0",
@@ -26,21 +30,27 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
+    "@testing-library/jest-dom": "^6.4.2",
+    "@testing-library/react": "^14.2.1",
+    "@testing-library/user-event": "^14.5.2",
     "@types/node": "^24.6.0",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
     "@types/styled-components": "^5.1.34",
     "@vitejs/plugin-react": "^5.0.4",
+    "@vitest/ui": "^1.3.1",
+    "electron": "^33.0.0",
+    "electron-builder": "^24.13.3",
     "eslint": "^9.36.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.22",
     "globals": "^16.4.0",
+    "jsdom": "^24.0.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.45.0",
     "vite": "^7.1.12",
-    "electron": "^33.0.0",
     "vite-plugin-electron": "^0.28.8",
-    "electron-builder": "^24.13.3"
+    "vitest": "^1.3.1"
   },
   "build": {
     "appId": "com.ayher.app",
@@ -55,7 +65,9 @@
       {
         "from": "../../backend-ts-sqlite-jwt/dist",
         "to": "backend",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "../../backend-ts-sqlite-jwt/node_modules",
@@ -63,7 +75,9 @@
       }
     ],
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "public/icon.ico"
     }
   }

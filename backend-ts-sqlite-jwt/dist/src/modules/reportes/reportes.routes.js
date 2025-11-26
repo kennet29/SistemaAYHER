@@ -42,3 +42,7 @@ exports.reportesRouter = (0, express_1.Router)();
 exports.reportesRouter.get('/kardex/:inventarioId', auth_1.authenticate, ctrl.kardex);
 // Cartera de clientes (totales crédito vs contado)
 exports.reportesRouter.get('/cartera-clientes', auth_1.authenticate, ctrl.carteraClientes);
+// Detalle completo de un cliente
+exports.reportesRouter.get('/cliente-detalle/:clienteId', auth_1.authenticate, ctrl.clienteDetalle);
+// Reporte detallado de ventas por clientes con utilidad
+exports.reportesRouter.get('/ventas-detalladas-clientes', auth_1.authenticate, ctrl.ventasDetalladasClientes);

@@ -14,6 +14,7 @@ import DataTable from "react-data-table-component";
 import "./Inventario.css";
 import { fmtDateTime } from "../utils/dates";
 import { buildApiUrl } from "../api/constants";
+import { ImportarExcel } from "../components/ImportarExcel";
 
 // Ubicaciones físicas válidas: A1..A12, B1..B12, ... Z1..Z12
 const UBICACIONES = Array.from({ length: 26 }, (_, i) =>
@@ -451,6 +452,10 @@ const InventarioView = () => {
         </p>
       </header>
 
+      <div style={{ display: "flex", justifyContent: "flex-end", padding: "1rem 5%", background: "linear-gradient(180deg, #ffffff 0%, #f0f4ff 100%)" }}>
+        <ImportarExcel onSuccess={fetchData} />
+      </div>
+
       {/* ===== Formulario Crear/Editar ===== */}
       <div className="inventario-card">
         <h2 className="inventario-title">
@@ -614,19 +619,65 @@ const InventarioView = () => {
           <div className="inventario-row">
             <div>
               <label>Código Sustituto</label>
-              <select
-                value={form.codigoSustituto}
-                onChange={(e) => setForm({ ...form, codigoSustituto: e.target.value })}
-              >
-                <option value="">Seleccione un producto</option>
-                {items
-                  .filter((i) => i.id !== editing)
-                  .map((i) => (
-                    <option key={i.id} value={i.numeroParte}>
-                      {i.numeroParte} — {i.nombre}
-                    </option>
-                  ))}
-              </select>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", flexDirection: "column" }}>
+                <select
+                  value={form.codigoSustituto}
+                  onChange={(e) => {
+                    const selectedParte = e.target.value;
+                    if (selectedParte) {
+                      const selectedProduct = items.find((i) => i.numeroParte === selectedParte);
+                      setForm({ 
+                        ...form, 
+                        codigoSustituto: selectedParte,
+                        marcaSustitutoId: selectedProduct?.marcaId || 0
+                      });
+                    } else {
+                      setForm({ ...form, codigoSustituto: "" });
+                    }
+                  }}
+                  style={{ width: "100%" }}
+                >
+                  <option value="">— Seleccione un producto existente —</option>
+                  {items
+                    .filter((i) => i.id !== editing)
+                    .map((i) => (
+                      <option key={i.id} value={i.numeroParte}>
+                        {i.numeroParte} — {i.nombre} ({i.marca?.nombre})
+                      </option>
+                    ))}
+                </select>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", width: "100%" }}>
+                  <span style={{ whiteSpace: "nowrap", fontSize: "0.9rem", color: "#666" }}>o ingrese manualmente:</span>
+                  <input
+                    type="text"
+                    value={form.codigoSustituto}
+                    onChange={(e) => {
+                      const codigo = e.target.value;
+                      // Verificar si el código existe en el inventario
+                      const productoExiste = items.find((i) => i.numeroParte === codigo);
+                      
+                      if (productoExiste) {
+                        // Si existe, usar su marca
+                        setForm({ 
+                          ...form, 
+                          codigoSustituto: codigo,
+                          marcaSustitutoId: productoExiste.marcaId || 0
+                        });
+                      } else {
+                        // Si no existe, marca como "Desconocida" (0)
+                        setForm({ 
+                          ...form, 
+                          codigoSustituto: codigo,
+                          marcaSustitutoId: 0
+                        });
+                      }
+                    }}
+                    placeholder="Número de parte del sustituto"
+                    style={{ flex: 1 }}
+                  />
+                </div>
+              </div>
+              <small>Seleccione de la lista o ingrese un código manualmente (aunque no exista aún)</small>
             </div>
 
             <div>
@@ -637,13 +688,14 @@ const InventarioView = () => {
                   setForm({ ...form, marcaSustitutoId: Number(e.target.value) })
                 }
               >
-                <option value={0}>Seleccione</option>
+                <option value={0}>Desconocida</option>
                 {marcas.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.nombre}
                   </option>
                 ))}
               </select>
+              <small>Si el código no existe, deje en "Desconocida"</small>
             </div>
           </div>
 

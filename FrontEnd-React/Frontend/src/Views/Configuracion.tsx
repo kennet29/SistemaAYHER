@@ -1,11 +1,20 @@
 import React, { useEffect, useState } from "react";
 import styled, { keyframes } from "styled-components";
-import { FaCog, FaSave, FaArrowLeft } from "react-icons/fa";
+import {
+  FaCog,
+  FaSave,
+  FaArrowLeft,
+  FaEdit,
+  FaTrash,
+  FaCreditCard,
+  FaExclamationTriangle,
+} from "react-icons/fa";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { buildApiUrl } from "../api/constants";
 
 const API_URL = buildApiUrl("/configuracion");
+const API_METODOS_PAGO = buildApiUrl("/metodos-pago");
 
 // 🔹 Leer cookies manualmente
 function getCookie(name: string) {
@@ -40,6 +49,17 @@ const ConfiguracionView = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Estado para métodos de pago
+  const [metodosPago, setMetodosPago] = useState<any[]>([]);
+  const [editandoMetodo, setEditandoMetodo] = useState<number | null>(null);
+  const [formMetodo, setFormMetodo] = useState({
+    nombre: "",
+    banco: "",
+    numeroCuenta: "",
+    titular: "",
+    moneda: "NIO",
+  });
+
   useEffect(() => {
     const token = getCookie("token");
     if (!token) {
@@ -71,7 +91,23 @@ const ConfiguracionView = () => {
         toast.error("❌ Error al cargar configuración.");
         setLoading(false);
       });
+
+    // 🔹 Obtener métodos de pago
+    fetchMetodosPago();
   }, []);
+
+  const fetchMetodosPago = async () => {
+    const token = getCookie("token");
+    try {
+      const res = await fetch(API_METODOS_PAGO, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setMetodosPago(data.metodos || []);
+    } catch {
+      toast.error("❌ Error al cargar métodos de pago");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,6 +132,73 @@ const ConfiguracionView = () => {
       toast.error("❌ No se pudo guardar la configuración");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleGuardarMetodo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = getCookie("token");
+
+    if (!formMetodo.nombre || !formMetodo.banco || !formMetodo.numeroCuenta || !formMetodo.titular) {
+      toast.warn("⚠️ Complete todos los campos obligatorios");
+      return;
+    }
+
+    try {
+      const url = editandoMetodo ? `${API_METODOS_PAGO}/${editandoMetodo}` : API_METODOS_PAGO;
+      const method = editandoMetodo ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...formMetodo,
+          tipoCuenta: "BANCO",
+          activo: true,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Error al guardar método de pago");
+
+      toast.success(editandoMetodo ? "✅ Método actualizado" : "✅ Método agregado");
+      setFormMetodo({ nombre: "", banco: "", numeroCuenta: "", titular: "", moneda: "NIO" });
+      setEditandoMetodo(null);
+      fetchMetodosPago();
+    } catch {
+      toast.error("❌ Error al guardar método de pago");
+    }
+  };
+
+  const handleEditarMetodo = (metodo: any) => {
+    setFormMetodo({
+      nombre: metodo.nombre || "",
+      banco: metodo.banco || "",
+      numeroCuenta: metodo.numeroCuenta || "",
+      titular: metodo.titular || "",
+      moneda: metodo.moneda || "NIO",
+    });
+    setEditandoMetodo(metodo.id);
+  };
+
+  const handleEliminarMetodo = async (id: number) => {
+    if (!confirm("¿Eliminar este método de pago?")) return;
+
+    const token = getCookie("token");
+    try {
+      const res = await fetch(`${API_METODOS_PAGO}/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error("Error al eliminar");
+
+      toast.success("🗑️ Método eliminado");
+      fetchMetodosPago();
+    } catch {
+      toast.error("❌ Error al eliminar método de pago");
     }
   };
 
@@ -223,6 +326,164 @@ const ConfiguracionView = () => {
           {saving ? "Guardando..." : "Guardar Cambios"}
         </SaveButton>
       </FormContainer>
+
+      {/* 🔹 Sección de Métodos de Pago */}
+      <MetodosPagoSection>
+        <SectionTitle>Métodos de Pago</SectionTitle>
+
+        {/* Formulario para agregar/editar método de pago */}
+        <FormMetodoContainer onSubmit={handleGuardarMetodo}>
+          {editandoMetodo && (
+            <EditModeIndicator>
+              <FaExclamationTriangle className="icon" />
+              Editando método de pago
+            </EditModeIndicator>
+          )}
+
+          <div>
+            <label>Nombre del Método *</label>
+            <input
+              type="text"
+              placeholder="Ej: Transferencia BAC"
+              value={formMetodo.nombre}
+              onChange={(e) =>
+                setFormMetodo({ ...formMetodo, nombre: e.target.value })
+              }
+              required
+            />
+          </div>
+
+          <div>
+            <label>Banco *</label>
+            <input
+              type="text"
+              placeholder="Ej: BAC"
+              value={formMetodo.banco}
+              onChange={(e) =>
+                setFormMetodo({ ...formMetodo, banco: e.target.value })
+              }
+              required
+            />
+          </div>
+
+          <div>
+            <label>Número de Cuenta *</label>
+            <input
+              type="text"
+              placeholder="Ej: 123456789"
+              value={formMetodo.numeroCuenta}
+              onChange={(e) =>
+                setFormMetodo({ ...formMetodo, numeroCuenta: e.target.value })
+              }
+              required
+            />
+          </div>
+
+          <div>
+            <label>Titular *</label>
+            <input
+              type="text"
+              placeholder="Nombre del titular"
+              value={formMetodo.titular}
+              onChange={(e) =>
+                setFormMetodo({ ...formMetodo, titular: e.target.value })
+              }
+              required
+            />
+          </div>
+
+          <div>
+            <label>Moneda *</label>
+            <select
+              value={formMetodo.moneda}
+              onChange={(e) =>
+                setFormMetodo({ ...formMetodo, moneda: e.target.value })
+              }
+              required
+            >
+              <option value="NIO">NIO (Córdoba)</option>
+              <option value="USD">USD (Dólar)</option>
+            </select>
+          </div>
+
+          <ActionButton type="submit" variant="save">
+            <FaSave />
+            {editandoMetodo ? "Actualizar Método" : "Guardar Método"}
+          </ActionButton>
+
+          {editandoMetodo && (
+            <ActionButton
+              type="button"
+              variant="cancel"
+              onClick={() => {
+                setEditandoMetodo(null);
+                setFormMetodo({
+                  nombre: "",
+                  banco: "",
+                  numeroCuenta: "",
+                  titular: "",
+                  moneda: "NIO",
+                });
+              }}
+            >
+              Cancelar
+            </ActionButton>
+          )}
+        </FormMetodoContainer>
+
+        {/* Lista de métodos de pago */}
+        {metodosPago.length === 0 ? (
+          <EmptyState>
+            <FaCreditCard className="icon" />
+            <p>No hay métodos de pago configurados</p>
+          </EmptyState>
+        ) : (
+          <ListaMetodosPago>
+            {metodosPago.map((metodo) => (
+              <MetodoPagoCard key={metodo.id}>
+                <div className="metodo-nombre">
+                  <FaCreditCard />
+                  {metodo.nombre}
+                </div>
+                <div className="metodo-info">
+                  <div className="info-row">
+                    <span className="info-label">Banco:</span>
+                    <span className="info-value">{metodo.banco}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Cuenta:</span>
+                    <span className="info-value">{metodo.numeroCuenta}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Titular:</span>
+                    <span className="info-value">{metodo.titular}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Moneda:</span>
+                    <span className="moneda-badge">{metodo.moneda}</span>
+                  </div>
+                </div>
+                <div className="actions">
+                  <ActionButton
+                    variant="edit"
+                    onClick={() => handleEditarMetodo(metodo)}
+                  >
+                    <FaEdit />
+                    Editar
+                  </ActionButton>
+                  <ActionButton
+                    variant="delete"
+                    onClick={() => handleEliminarMetodo(metodo.id)}
+                  >
+                    <FaTrash />
+                    Eliminar
+                  </ActionButton>
+                </div>
+              </MetodoPagoCard>
+            ))}
+          </ListaMetodosPago>
+        )}
+      </MetodosPagoSection>
 
       <Footer>© 2025 AYHER — Todos los derechos reservados</Footer>
     </Container>
@@ -439,4 +700,270 @@ const Footer = styled.footer`
   margin-top: auto;
   font-size: 0.9em;
   letter-spacing: 0.5px;
+`;
+
+// === 🎨 STYLED COMPONENTS FOR PAYMENT METHODS ===
+
+const MetodosPagoSection = styled.div`
+  width: 85%;
+  max-width: 950px;
+  margin-top: 2%;
+  padding: 2.5%;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border-radius: 1em;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  z-index: 1;
+`;
+
+const FormMetodoContainer = styled.form`
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6em;
+  margin-bottom: 2em;
+  padding: 2.5em;
+  background: rgba(240, 245, 255, 0.5);
+  border-radius: 0.8em;
+  border: 2px solid #e0e7ff;
+  max-width: 850px;
+  margin-left: auto;
+  margin-right: auto;
+
+  label {
+    font-weight: 600;
+    color: #002b5b;
+    margin-bottom: 0.3em;
+    display: block;
+  }
+
+  input,
+  select {
+    width: 100%;
+    padding: 0.7em;
+    border: 2px solid #5a6d90;
+    border-radius: 0.6em;
+    font-size: 0.95em;
+    background-color: rgba(255, 255, 255, 0.95);
+    color: #001a33;
+    font-weight: 500;
+    transition: all 0.3s ease;
+
+    &:focus {
+      outline: none;
+      border-color: #003399;
+      box-shadow: 0 0 6px rgba(0, 51, 153, 0.3);
+    }
+  }
+
+  @media (max-width: 1024px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const ListaMetodosPago = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5em;
+  margin-top: 1.5em;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+`;
+
+const MetodoPagoCard = styled.div`
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(240, 245, 255, 0.9));
+  border-radius: 0.8em;
+  padding: 1.5em;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  border: 2px solid #e0e7ff;
+  transition: all 0.3s ease;
+  position: relative;
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 74, 173, 0.2);
+    border-color: #004aad;
+  }
+
+  .metodo-nombre {
+    font-size: 1.2em;
+    font-weight: 700;
+    color: #004aad;
+    margin-bottom: 0.8em;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+  }
+
+  .metodo-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    margin-bottom: 1em;
+  }
+
+  .info-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    font-size: 0.95em;
+    color: #002b5b;
+  }
+
+  .info-label {
+    font-weight: 600;
+    color: #5a6d90;
+  }
+
+  .info-value {
+    color: #001a33;
+    font-weight: 500;
+  }
+
+  .moneda-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #004aad, #0066cc);
+    color: white;
+    padding: 0.3em 0.8em;
+    border-radius: 0.5em;
+    font-size: 0.85em;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .actions {
+    display: flex;
+    gap: 0.8em;
+    margin-top: 1em;
+  }
+`;
+
+const EmptyState = styled.div`
+  text-align: center;
+  padding: 3em 2em;
+  background: rgba(240, 245, 255, 0.5);
+  border-radius: 0.8em;
+  border: 2px dashed #5a6d90;
+  margin-top: 1.5em;
+
+  p {
+    font-size: 1.1em;
+    color: #5a6d90;
+    font-weight: 500;
+    margin: 0;
+  }
+
+  .icon {
+    font-size: 3em;
+    color: #004aad;
+    opacity: 0.3;
+    margin-bottom: 0.5em;
+  }
+`;
+
+const ActionButton = styled.button<{ variant?: 'edit' | 'delete' | 'save' | 'cancel' }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  padding: 0.6em 1.2em;
+  border: none;
+  border-radius: 0.6em;
+  font-weight: 600;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex: 1;
+
+  ${({ variant }) => {
+    switch (variant) {
+      case 'edit':
+        return `
+          background: linear-gradient(135deg, #004aad, #0066cc);
+          color: white;
+          &:hover {
+            background: linear-gradient(135deg, #0066cc, #004aad);
+            transform: scale(1.05);
+          }
+        `;
+      case 'delete':
+        return `
+          background: linear-gradient(135deg, #ff3131, #cc0000);
+          color: white;
+          &:hover {
+            background: linear-gradient(135deg, #cc0000, #ff3131);
+            transform: scale(1.05);
+          }
+        `;
+      case 'save':
+        return `
+          background: linear-gradient(135deg, #004aad, #ff3131);
+          color: white;
+          grid-column: span 3;
+          width: 100%;
+          padding: 0.9em 2em;
+          font-size: 1.05em;
+          font-weight: 700;
+          &:hover {
+            transform: scale(1.02);
+          }
+        `;
+      case 'cancel':
+        return `
+          background: linear-gradient(135deg, #5a6d90, #7a8da0);
+          color: white;
+          grid-column: span 3;
+          width: 100%;
+          padding: 0.7em 1.5em;
+          font-size: 0.95em;
+          &:hover {
+            background: linear-gradient(135deg, #7a8da0, #5a6d90);
+            transform: scale(1.02);
+          }
+        `;
+      default:
+        return `
+          background: linear-gradient(135deg, #004aad, #ff3131);
+          color: white;
+          &:hover {
+            transform: scale(1.05);
+          }
+        `;
+    }
+  }}
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    &:hover {
+      transform: none;
+    }
+  }
+`;
+
+const EditModeIndicator = styled.div`
+  grid-column: span 2;
+  background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+  border: 2px solid #ffc107;
+  border-radius: 0.6em;
+  padding: 0.8em 1.2em;
+  margin-bottom: 0.5em;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-weight: 600;
+  color: #856404;
+
+  .icon {
+    font-size: 1.2em;
+  }
 `;

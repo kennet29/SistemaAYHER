@@ -560,7 +560,7 @@ export async function generarProformaPDFStreamV2(
 
 // Formato inspirado en la muestra compartida (Ayher, tabla detallada, encabezado con oferta)
 export async function generarProformaPDFStreamV3(
-  { empresa, cliente, detalles, totalCordoba, totalDolar, tipoCambio, pio, incoterm, plazoEntrega, condicionPago }: any,
+  { empresa, cliente, detalles, totalCordoba, totalDolar, tipoCambio, pio, incoterm, plazoEntrega, condicionPago, proformaId, moneda }: any,
   res: Response
 ) {
   const doc = new PDFDocument({ size: "A4", margin: 40 });
@@ -568,13 +568,14 @@ export async function generarProformaPDFStreamV3(
   res.setHeader("Content-Disposition", `attachment; filename="proforma.pdf"`);
   doc.pipe(res);
 
-  const fmtNIO = (n: number) => `C$ ${Number(n || 0).toFixed(2)}`;
+  const esUSD = moneda === "USD";
+  const fmtMoney = (n: number) => esUSD ? `$ ${Number(n || 0).toFixed(2)}` : `C$ ${Number(n || 0).toFixed(2)}`;
   const pageWidth = doc.page.width;
   const pageHeight = doc.page.height;
   const left = doc.page.margins.left;
   const right = pageWidth - doc.page.margins.right;
   const contentWidth = right - left;
-  const displayPio = normalizePio(pio);
+  const numeroOferta = proformaId ? String(proformaId).padStart(6, '0') : normalizePio(pio);
 
   const drawHeader = () => {
     const headerTop = 20;
@@ -583,15 +584,15 @@ export async function generarProformaPDFStreamV3(
 
     doc.font("Helvetica").fontSize(11).fillColor("#111827")
       .text(`Fecha: ${new Date().toLocaleDateString()}`, right - 160, headerTop, { width: 160, align: "right" })
-      .text(`Oferta N°: ${displayPio}`, right - 160, headerTop + 16, { width: 160, align: "right" });
+      .text(`Oferta N°: ${numeroOferta}`, right - 160, headerTop + 16, { width: 160, align: "right" });
   };
 
   const drawAtencion = (startY: number) => {
     doc.font("Helvetica-Bold").fontSize(11).fillColor("#0b2d64").text("Atención a:", left, startY);
     doc.font("Helvetica").fontSize(11).fillColor("#111827");
     const y = startY + 14;
-    const linea1 = cliente?.nombre || cliente?.empresa || "Cliente";
-    const linea2 = cliente?.direccion || cliente?.empresa || "";
+    const linea1 = cliente?.empresa || cliente?.nombre || "Cliente";
+    const linea2 = cliente?.direccion || "";
     const linea3 = cliente?.ciudad || cliente?.pais || "";
     doc.text(linea1, left, y);
     if (linea2) doc.text(linea2, left, doc.y + 2);
@@ -608,7 +609,6 @@ export async function generarProformaPDFStreamV3(
       { k: "PLAZO DE ENTREGA:", v: plazoVal },
       { k: "CONDICION DE PAGO:", v: pagoVal },
       { k: "PRECIO UNITARIO VALIDO UNICAMENTE SI SE CONFIRMA LA TOTALIDAD DE LAS CANTIDADES DE LINEAS SOLICITADAS.", v: "" },
-      { k: "Gracias por su amable solicitud, quedamos a su disposición para cualquier información adicional que pudiera necesitar.", v: "" },
       { k: "Atendiendo a su solicitud de cotización, enviamos el detalle de la lista de precios solicitada:", v: "" },
     ];
     let y = startY;
@@ -622,10 +622,10 @@ export async function generarProformaPDFStreamV3(
 
   const drawTabla = (startY: number) => {
     const cols = [
-      { w: 20, title: "P." },
-      { w: 80, title: "No. De Parte" },
-      { w: contentWidth - (20 + 80 + 60 + 90 + 90), title: "Descripcion" },
-      { w: 60, title: "Car." },
+      { w: 30, title: "Pos" },
+      { w: 85, title: "No. De Parte" },
+      { w: contentWidth - (30 + 85 + 60 + 90 + 90), title: "Descripcion" },
+      { w: 60, title: "Cant." },
       { w: 90, title: "Precio Unitario" },
       { w: 90, title: "Precio Tot." },
     ];
@@ -641,6 +641,13 @@ export async function generarProformaPDFStreamV3(
       cols.forEach((c, idx) => {
         doc.text(c.title, colX[idx] + 4, yHeader + 6, { width: c.w - 8, align: "center" });
       });
+      // Bordes verticales del header
+      doc.save();
+      doc.strokeColor("#ffffff").lineWidth(1);
+      for (let i = 1; i < cols.length; i++) {
+        doc.moveTo(colX[i], yHeader).lineTo(colX[i], yHeader + 22).stroke();
+      }
+      doc.restore();
       doc.font("Helvetica").fillColor("#111827");
     };
 
@@ -649,11 +656,12 @@ export async function generarProformaPDFStreamV3(
     let y = startY + 22;
     const filas = Array.isArray(detalles) ? detalles : [];
     let total = 0;
-    let flaggedRecent = 0;
 
+    const tc = Number(tipoCambio || 36.5);
     filas.forEach((d: any, i) => {
       const cant = Number(d.cantidad || 0);
-      const precio = Number(d.precio ?? d.precioUnitarioCordoba ?? 0);
+      const precioCordoba = Number(d.precio ?? d.precioUnitarioCordoba ?? 0);
+      const precio = esUSD ? (precioCordoba / tc) : precioCordoba;
       const sub = cant * precio;
       total += sub;
       const rowH = 18;
@@ -664,36 +672,38 @@ export async function generarProformaPDFStreamV3(
         y = doc.page.margins.top + 22;
       }
 
+      // Fondo alternado
       if (i % 2 === 0) {
         doc.save().rect(left, y, contentWidth, rowH).fill("#f8fafc").restore();
       }
 
-      const isReciente = Boolean((d as any)?.cotizadoReciente);
-      if (isReciente) flaggedRecent += 1;
+      // Bordes tipo Excel - rectángulo completo de la fila (más gruesos y oscuros)
+      doc.save();
+      doc.strokeColor("#333333").lineWidth(1.2);
+      doc.rect(left, y, contentWidth, rowH).stroke();
+      
+      // Bordes verticales internos
+      for (let j = 1; j < cols.length; j++) {
+        doc.moveTo(colX[j], y).lineTo(colX[j], y + rowH).stroke();
+      }
+      doc.restore();
 
-      doc.text(String(i + 1), colX[0] + 2, y + 4, { width: cols[0].w - 4, align: "center" });
+      // Contenido de las celdas (sin asteriscos) - CENTRADO
+      doc.text(String(i + 1), colX[0] + 4, y + 4, { width: cols[0].w - 8, align: "center" }); // Posición
       const parteTxt = String(d.numeroParte ?? "");
-      const parteWithMark = isReciente ? `${parteTxt} *` : parteTxt;
-      doc.text(parteWithMark, colX[1] + 4, y + 4, { width: cols[1].w - 8 });
-      doc.text(String(d.nombre ?? d.descripcion ?? ""), colX[2] + 4, y + 4, { width: cols[2].w - 8 });
+      doc.text(parteTxt, colX[1] + 4, y + 4, { width: cols[1].w - 8, align: "center" });
+      doc.text(String(d.nombre ?? d.descripcion ?? ""), colX[2] + 4, y + 4, { width: cols[2].w - 8, align: "center" });
       doc.text(String(cant), colX[3], y + 4, { width: cols[3].w - 4, align: "center" });
-      doc.text(fmtNIO(precio), colX[4], y + 4, { width: cols[4].w - 4, align: "right" });
-      doc.text(fmtNIO(sub), colX[5], y + 4, { width: cols[5].w - 4, align: "right" });
+      doc.text(fmtMoney(precio), colX[4], y + 4, { width: cols[4].w - 4, align: "center" });
+      doc.text(fmtMoney(sub), colX[5], y + 4, { width: cols[5].w - 4, align: "center" });
       y += rowH;
     });
-
-    if (flaggedRecent > 0) {
-      doc.font("Helvetica-Oblique").fontSize(9).fillColor("#b91c1c");
-      doc.text("* Cotizado en los ultimos 14 dias", left, y + 2, { width: contentWidth });
-      doc.font("Helvetica").fontSize(10).fillColor("#111827");
-      y = doc.y + 4;
-    }
 
     // Totales
     y += 10;
     doc.font("Helvetica-Bold").fontSize(11);
     doc.text("TOTAL", colX[4], y, { width: cols[4].w - 4, align: "right" });
-    doc.text(fmtNIO(total), colX[5], y, { width: cols[5].w - 4, align: "right" });
+    doc.text(fmtMoney(total), colX[5], y, { width: cols[5].w - 4, align: "right" });
 
     return y + 24;
   };
@@ -704,9 +714,18 @@ export async function generarProformaPDFStreamV3(
   cursorY = drawCondiciones(cursorY + 10);
   cursorY = drawTabla(cursorY + 10);
 
+  // Despedida
+  cursorY += 20;
+  doc.font("Helvetica-Bold").fontSize(11).fillColor("#111827")
+    .text("Atentamente", left, cursorY, { width: contentWidth, align: "center" });
+  cursorY += 18;
+  doc.font("Helvetica-Bold").fontSize(11).fillColor("#111827")
+    .text("SERVICIOS MULTIPLES E IMPORTACIONES AYHER", left, cursorY, { width: contentWidth, align: "center" });
+
   if (empresa?.mensajeFactura) {
+    cursorY += 20;
     doc.font("Helvetica-Oblique").fontSize(9).fillColor("#111827")
-      .text(String(empresa.mensajeFactura), left, cursorY + 6, { width: contentWidth });
+      .text(String(empresa.mensajeFactura), left, cursorY, { width: contentWidth });
   }
 
   doc.end();

@@ -13,6 +13,11 @@ ventaRouter
 // Facturas de crédito no canceladas
 ventaRouter.get('/pendientes', authenticate, ctrl.listPendientes);
 
+// Historial de Proformas
+ventaRouter.get('/proformas', authenticate, ctrl.listProformas);
+ventaRouter.get('/proformas/:id', authenticate, ctrl.getProformaById);
+ventaRouter.get('/proformas/:id/excel', authenticate, ctrl.generarProformaExcel);
+
 ventaRouter
   .route('/:id')
   .get(authenticate, ctrl.getById);
@@ -43,3 +48,4 @@ ventaRouter
   .route('/proforma/pdf')
   .post(setPdfHeaders, logPdfHit, ctrl.proforma)
   .get((_req, res) => res.status(405).json({ message: 'Use POST with JSON payload to generate Proforma PDF.' }));
+

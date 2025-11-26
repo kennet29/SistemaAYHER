@@ -83,7 +83,13 @@ const Proforma: React.FC = () => {
 
   const [cliente, setCliente] = useState<number | "">("");
   const [clientesList, setClientesList] = useState<any[]>([]);
-  const [fecha] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [fecha] = useState<string>(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
 
   const [moneda, setMoneda] = useState<Moneda>("NIO");
   const [tipoCambio, setTipoCambio] = useState<number | null>(null);
@@ -346,7 +352,7 @@ const Proforma: React.FC = () => {
   // ======== Export PDF ========
   async function generarPDF() {
     if (!guardada) {
-      notify.warn("Primero guarda la proforma");
+      notify.warn("⚠️ Primero debes guardar la proforma antes de generar el PDF");
       return;
     }
     const payload = construirPayload({ guardarHistorial: false, soloGuardar: false });
@@ -375,7 +381,7 @@ const Proforma: React.FC = () => {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      notify.ok("PDF generado");
+      notify.ok("PDF generado exitosamente");
     } catch {
       notify.err("Error generando PDF");
     } finally {
@@ -386,7 +392,7 @@ const Proforma: React.FC = () => {
   // ======== Export Excel ========
   function generarExcel() {
     if (!guardada) {
-      notify.warn("Primero guarda la proforma");
+      notify.warn("⚠️ Primero debes guardar la proforma antes de exportar a Excel");
       return;
     }
     const rows = items.map(i => ({
@@ -405,6 +411,7 @@ const Proforma: React.FC = () => {
     a.href = url;
     a.download = `proforma_${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
+    notify.ok("Excel generado exitosamente");
   }
 
   // ========= Remisiones table =========
@@ -512,11 +519,11 @@ const Proforma: React.FC = () => {
         <button className="ghost" onClick={() => navigate("/facturacion")}>
           <FaArrowLeft /> Volver a Facturación
         </button>
+        <button className="ghost" onClick={() => navigate("/proformas/historico")}>
+          Historial de proformas
+        </button>
         <button className="ghost" onClick={() => navigate("/cotizaciones/recientes")}>
           Cotizaciones recientes
-        </button>
-        <button className="ghost" onClick={generarExcel}>
-          Exportar Excel
         </button>
       </div>
 
@@ -672,12 +679,24 @@ const Proforma: React.FC = () => {
 
         <div className="actions">
           <button className="primary" onClick={guardarProforma} disabled={guardando}>
-            <FaSave /> {guardando ? "Guardando..." : "Guardar proforma"}
+            <FaSave /> {guardando ? "Guardando..." : guardada ? "✓ Proforma guardada" : "Guardar proforma"}
           </button>
-          <button className="ghost" onClick={generarPDF} disabled={!guardada || exportandoPdf}>
-            <FaPrint /> PDF
+          <button 
+            className="ghost" 
+            onClick={generarPDF} 
+            disabled={!guardada || exportandoPdf}
+            title={!guardada ? "Primero debes guardar la proforma" : "Generar PDF"}
+            style={{ opacity: !guardada ? 0.5 : 1, cursor: !guardada ? "not-allowed" : "pointer" }}
+          >
+            <FaPrint /> {exportandoPdf ? "Generando..." : "PDF"}
           </button>
-          <button className="ghost" onClick={generarExcel} disabled={!guardada}>
+          <button 
+            className="ghost" 
+            onClick={generarExcel} 
+            disabled={!guardada}
+            title={!guardada ? "Primero debes guardar la proforma" : "Exportar a Excel"}
+            style={{ opacity: !guardada ? 0.5 : 1, cursor: !guardada ? "not-allowed" : "pointer" }}
+          >
             <FaFileExcel /> Excel
           </button>
         </div>

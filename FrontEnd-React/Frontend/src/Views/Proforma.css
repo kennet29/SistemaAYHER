@@ -14,3 +14,82 @@
   gap:6px;
 }
 .proforma-page .delete-btn svg{ margin-right: 6px; }
+
+/* Historial de Proformas: centrar tabla dentro de la card */
+.proformas-table-wrap{
+  justify-content:center;
+}
+.proformas-table{
+  width:min(1100px, 96%);
+  margin:0 auto;
+}
+
+/* Hero/toolbar tweaks for proformas */
+.proformas-hero{
+  display:flex;
+  gap:1rem;
+  align-items:center;
+  background:linear-gradient(135deg,#eef4ff,#f8fbff);
+  border:1px solid #dbe7ff;
+  box-shadow:var(--shadow-sm, 0 6px 16px rgba(0,0,0,.06));
+}
+.proformas-hero .hero-icon{
+  width:62px;height:62px;
+  border-radius:14px;
+  background:#0b58f0;
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:28px;
+}
+.proformas-hero .hero-text h2{
+  margin:0;
+  color:#0b2d64;
+  letter-spacing:.2px;
+}
+.proformas-hero .hero-text .hero-kicker{
+  margin:0;
+  color:#5a6b85;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:1px;
+  font-size:.75rem;
+}
+.proformas-hero .hero-text .hero-sub{
+  margin:.2rem 0 0 0;
+  color:#4b5a78;
+}
+.proformas-hero .hero-stats{
+  display:flex;
+  gap:1rem;
+  margin-left:auto;
+}
+.proformas-hero .stat{
+  min-width:120px;
+  background:#fff;
+  border:1px solid #dbe7ff;
+  border-radius:10px;
+  padding:.6rem .8rem;
+  box-shadow:0 4px 14px rgba(0,0,0,.04);
+}
+.proformas-hero .stat-label{
+  display:block;
+  color:#5a6b85;
+  font-size:.8rem;
+}
+.proformas-hero .stat-value{
+  display:block;
+  font-size:1.1rem;
+  color:#0b2d64;
+}
+
+.empty-state{
+  padding:1.5rem;
+  color:#4b5a78;
+  text-align:center;
+}
+.empty-state .empty-title{
+  font-weight:700;
+  color:#0b2d64;
+}
+.empty-state .empty-desc{
+  margin-top:.25rem;
+}
