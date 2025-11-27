@@ -141,8 +141,13 @@ const Ventas: React.FC = () => {
       // Configurar propiedades del workbook
       workbook.views = [{
         activeTab: 0,
-        visibility: 'visible'
-      }];
+        visibility: 'visible',
+        x: 0,
+        y: 0,
+        width: 10000,
+        height: 20000,
+        firstSheet: 0
+      } as any];
       
       const worksheet = workbook.addWorksheet('Factura');
 
@@ -169,13 +174,12 @@ const Ventas: React.FC = () => {
       
       // Configurar zoom al 93% y vista de diseño de página
       worksheet.views = [{
-        state: 'pageLayout',
+        state: 'normal',
         zoomScale: 93,
         zoomScaleNormal: 93,
         showGridLines: false,
-        showRowColHeaders: true,
-        showRuler: true
-      }];
+        showRowColHeaders: true
+      } as any];
 
       // Configurar anchos de columnas según plantilla
       worksheet.columns = [
@@ -191,7 +195,7 @@ const Ventas: React.FC = () => {
         { width: 8.14 },   // J
       ];
 
-      const clienteNombre = venta.cliente?.empresa || venta.cliente?.nombre || 'N/A';
+      const clienteNombre = (venta.cliente as any)?.empresa || venta.cliente?.nombre || 'N/A';
       const clienteDireccion = (venta.cliente as any)?.direccion || '';
       const clienteRuc = (venta.cliente as any)?.ruc || '';
       const pio = venta.pio || '';

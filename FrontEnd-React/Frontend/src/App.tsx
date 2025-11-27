@@ -20,6 +20,7 @@ import ClienteDetalle from "./Views/ClienteDetalle";
 import FacturasPendientes from "./Views/FacturasPendientes";
 import StockCritico from "./Views/StockCritico";
 import CotizacionesRecientes from "./Views/CotizacionesRecientes";
+import RestaurarDB from "./Views/RestaurarDB";
 function App() {
   return (
     <>
@@ -58,6 +59,7 @@ function App() {
             element={<FacturasPendientes />}
           />
           <Route path="/stock-critico" element={<StockCritico />} />
+          <Route path="/restaurar-db" element={<RestaurarDB />} />
         </Routes>
       </BrowserRouter>
     </>

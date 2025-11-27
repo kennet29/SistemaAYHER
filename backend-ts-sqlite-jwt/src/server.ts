@@ -19,6 +19,7 @@ import { configuracionRouter } from './modules/configuracion/configuracion.route
 import { remisionRouter } from './modules/remision/remision.routes';
 import { cotizacionRouter } from './modules/cotizacion/cotizacion.routes';
 import { metodosPagoRouter } from './modules/configuracion/metodosPago.routes';
+import databaseRouter from './modules/database/database.routes';
 
 const app = express();
 
@@ -54,6 +55,7 @@ app.use('/api/devoluciones', devolucionRouter);
 app.use('/api/cambios', cambioRouter);
 app.use('/api/categorias',categoriaRouter);
 app.use('/api/MovimientoInventario',movimientoInventarioRouter);
+app.use('/api/database', databaseRouter);
 
 app.use((err: any, _req: any, res: any, _next: any) => {
   console.error(err);

@@ -22,6 +22,8 @@ const cambio_routes_1 = require("./modules/cambio/cambio.routes");
 const configuracion_routes_1 = require("./modules/configuracion/configuracion.routes");
 const remision_routes_1 = require("./modules/remision/remision.routes");
 const cotizacion_routes_1 = require("./modules/cotizacion/cotizacion.routes");
+const metodosPago_routes_1 = require("./modules/configuracion/metodosPago.routes");
+const database_routes_1 = __importDefault(require("./modules/database/database.routes"));
 const app = (0, express_1.default)();
 app.use((0, helmet_1.default)());
 app.use((0, cors_1.default)());
@@ -42,6 +44,7 @@ app.use('/api/clientes', cliente_routes_1.clienteRouter);
 app.use('/api/configuracion', configuracion_routes_1.configuracionRouter);
 app.use('/api/remision', remision_routes_1.remisionRouter);
 app.use('/api/cotizaciones', cotizacion_routes_1.cotizacionRouter);
+app.use('/api/metodos-pago', metodosPago_routes_1.metodosPagoRouter);
 // NUEVOS
 app.use('/api/marcas', marca_routes_1.marcaRouter);
 app.use('/api/inventario', inventario_routes_1.inventarioRouter);
@@ -52,6 +55,7 @@ app.use('/api/devoluciones', devolucion_routes_1.devolucionRouter);
 app.use('/api/cambios', cambio_routes_1.cambioRouter);
 app.use('/api/categorias', categoria_routes_1.categoriaRouter);
 app.use('/api/MovimientoInventario', MovimientoInventario_routes_1.movimientoInventarioRouter);
+app.use('/api/database', database_routes_1.default);
 app.use((err, _req, res, _next) => {
     console.error(err);
     res.status(500).json({ message: 'Error interno' });

@@ -263,6 +263,15 @@ const Home = () => {
           <p>Gestión del sistema, usuarios y preferencias.</p>
           <Link to="/configuracion" className="card-link">Entrar</Link>
         </Card>
+
+        <Card color1="#d32f2f" color2="#f44336">
+          <div className="icon-circle">
+            <FaBoxOpen />
+          </div>
+          <h2>Restaurar Base de Datos</h2>
+          <p>Restaura tu base de datos desde un archivo de respaldo.</p>
+          <Link to="/restaurar-db" className="card-link">Restaurar</Link>
+        </Card>
       </MainContent>
 
       <Footer>

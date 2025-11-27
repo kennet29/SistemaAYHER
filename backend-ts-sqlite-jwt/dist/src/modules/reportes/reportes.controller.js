@@ -366,6 +366,17 @@ async function ventasDetalladasClientes(req, res) {
         const ExcelJS = require('exceljs');
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Ventas por Cliente');
+        // Configurar Vista Previa de Salto de Página con zoom al 93%
+        worksheet.views = [
+            {
+                state: 'pageBreakPreview',
+                zoomScale: 93,
+                zoomScaleNormal: 93,
+                zoomScalePageLayoutView: 93
+            }
+        ];
+        // Configurar escala de impresión al 93%
+        worksheet.pageSetup.scale = 93;
         // Estilos
         const headerStyle = {
             font: { bold: true, color: { argb: 'FFFFFFFF' } },
@@ -390,7 +401,7 @@ async function ventasDetalladasClientes(req, res) {
         };
         let currentRow = 1;
         // Título
-        worksheet.mergeCells(currentRow, 1, currentRow, 11);
+        worksheet.mergeCells(currentRow, 1, currentRow, 10);
         const titleCell = worksheet.getCell(currentRow, 1);
         titleCell.value = `Reporte Detallado de Ventas por Cliente (${fechaInicio} - ${fechaFin})`;
         titleCell.font = { bold: true, size: 14 };
@@ -402,13 +413,13 @@ async function ventasDetalladasClientes(req, res) {
         // Por cada cliente
         for (const [, cliente] of porCliente) {
             // Header del cliente
-            worksheet.mergeCells(currentRow, 1, currentRow, 11);
+            worksheet.mergeCells(currentRow, 1, currentRow, 10);
             const clienteCell = worksheet.getCell(currentRow, 1);
             clienteCell.value = `Cliente: ${cliente.clienteNombre}`;
             clienteCell.style = clienteHeaderStyle;
             currentRow++;
             // Headers de columnas
-            const headers = ['Fecha', 'Factura', 'Tipo Pago', 'Producto', 'N° Parte', 'Marca', 'Categoria', 'Cant.', 'Precio Venta', 'Costo Unit.', 'Utilidad'];
+            const headers = ['Fecha', 'Factura', 'Tipo Pago', 'Producto', 'Marca', 'Categoria', 'Cant.', 'Precio Venta', 'Costo Unit.', 'Utilidad'];
             headers.forEach((header, idx) => {
                 const cell = worksheet.getCell(currentRow, idx + 1);
                 cell.value = header;
@@ -422,64 +433,62 @@ async function ventasDetalladasClientes(req, res) {
                     worksheet.getCell(currentRow, 2).value = venta.numeroFactura;
                     worksheet.getCell(currentRow, 3).value = venta.tipoPago;
                     worksheet.getCell(currentRow, 4).value = detalle.producto;
-                    worksheet.getCell(currentRow, 5).value = detalle.numeroParte;
-                    worksheet.getCell(currentRow, 6).value = detalle.marca;
-                    worksheet.getCell(currentRow, 7).value = detalle.categoria;
-                    worksheet.getCell(currentRow, 8).value = detalle.cantidad;
-                    worksheet.getCell(currentRow, 9).value = detalle.precioVenta;
+                    worksheet.getCell(currentRow, 5).value = detalle.marca;
+                    worksheet.getCell(currentRow, 6).value = detalle.categoria;
+                    worksheet.getCell(currentRow, 7).value = detalle.cantidad;
+                    worksheet.getCell(currentRow, 8).value = detalle.precioVenta;
+                    worksheet.getCell(currentRow, 8).numFmt = 'C$#,##0.00';
+                    worksheet.getCell(currentRow, 9).value = detalle.costoUnitario;
                     worksheet.getCell(currentRow, 9).numFmt = 'C$#,##0.00';
-                    worksheet.getCell(currentRow, 10).value = detalle.costoUnitario;
+                    worksheet.getCell(currentRow, 10).value = detalle.utilidad;
                     worksheet.getCell(currentRow, 10).numFmt = 'C$#,##0.00';
-                    worksheet.getCell(currentRow, 11).value = detalle.utilidad;
-                    worksheet.getCell(currentRow, 11).numFmt = 'C$#,##0.00';
                     currentRow++;
                 }
             }
             // Totales del cliente
-            worksheet.mergeCells(currentRow, 1, currentRow, 8);
+            worksheet.mergeCells(currentRow, 1, currentRow, 7);
             const totalClienteCell = worksheet.getCell(currentRow, 1);
             totalClienteCell.value = `Total ${cliente.clienteNombre}:`;
             totalClienteCell.style = totalStyle;
-            worksheet.getCell(currentRow, 9).value = cliente.totalVendido;
+            worksheet.getCell(currentRow, 8).value = cliente.totalVendido;
+            worksheet.getCell(currentRow, 8).numFmt = 'C$#,##0.00';
+            worksheet.getCell(currentRow, 8).style = totalStyle;
+            worksheet.getCell(currentRow, 9).value = cliente.totalCosto;
             worksheet.getCell(currentRow, 9).numFmt = 'C$#,##0.00';
             worksheet.getCell(currentRow, 9).style = totalStyle;
-            worksheet.getCell(currentRow, 10).value = cliente.totalCosto;
+            worksheet.getCell(currentRow, 10).value = cliente.totalUtilidad;
             worksheet.getCell(currentRow, 10).numFmt = 'C$#,##0.00';
             worksheet.getCell(currentRow, 10).style = totalStyle;
-            worksheet.getCell(currentRow, 11).value = cliente.totalUtilidad;
-            worksheet.getCell(currentRow, 11).numFmt = 'C$#,##0.00';
-            worksheet.getCell(currentRow, 11).style = totalStyle;
             currentRow += 2;
             totalGeneralVendido += cliente.totalVendido;
             totalGeneralCosto += cliente.totalCosto;
             totalGeneralUtilidad += cliente.totalUtilidad;
         }
         // Total general
-        worksheet.mergeCells(currentRow, 1, currentRow, 8);
+        worksheet.mergeCells(currentRow, 1, currentRow, 7);
         const totalGeneralCell = worksheet.getCell(currentRow, 1);
         totalGeneralCell.value = 'TOTAL GENERAL:';
         totalGeneralCell.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
         totalGeneralCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF004aad' } };
         totalGeneralCell.alignment = { horizontal: 'right', vertical: 'middle' };
-        worksheet.getCell(currentRow, 9).value = totalGeneralVendido;
+        worksheet.getCell(currentRow, 8).value = totalGeneralVendido;
+        worksheet.getCell(currentRow, 8).numFmt = 'C$#,##0.00';
+        worksheet.getCell(currentRow, 8).font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
+        worksheet.getCell(currentRow, 8).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF004aad' } };
+        worksheet.getCell(currentRow, 9).value = totalGeneralCosto;
         worksheet.getCell(currentRow, 9).numFmt = 'C$#,##0.00';
         worksheet.getCell(currentRow, 9).font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
         worksheet.getCell(currentRow, 9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF004aad' } };
-        worksheet.getCell(currentRow, 10).value = totalGeneralCosto;
+        worksheet.getCell(currentRow, 10).value = totalGeneralUtilidad;
         worksheet.getCell(currentRow, 10).numFmt = 'C$#,##0.00';
         worksheet.getCell(currentRow, 10).font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
         worksheet.getCell(currentRow, 10).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF004aad' } };
-        worksheet.getCell(currentRow, 11).value = totalGeneralUtilidad;
-        worksheet.getCell(currentRow, 11).numFmt = 'C$#,##0.00';
-        worksheet.getCell(currentRow, 11).font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
-        worksheet.getCell(currentRow, 11).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF004aad' } };
         // Ajustar anchos de columna
         worksheet.columns = [
             { width: 12 }, // Fecha
             { width: 15 }, // Factura
             { width: 12 }, // Tipo Pago
             { width: 30 }, // Producto
-            { width: 15 }, // N° Parte
             { width: 15 }, // Marca
             { width: 15 }, // Categoria
             { width: 8 }, // Cant.

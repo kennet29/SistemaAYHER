@@ -32,13 +32,21 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.inventarioRouter = void 0;
 const express_1 = require("express");
 const ctrl = __importStar(require("./inventario.controller"));
+const importar_controller_1 = require("./importar.controller");
+const multer_1 = __importDefault(require("multer"));
+const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage() });
 exports.inventarioRouter = (0, express_1.Router)();
 exports.inventarioRouter.get('/', ctrl.list);
 exports.inventarioRouter.post('/', ctrl.create);
+// Importar desde Excel
+exports.inventarioRouter.post('/importar', upload.single('file'), importar_controller_1.importarExcel);
 // Bajo stock (stockActual <= stockMinimo)
 exports.inventarioRouter.get('/low-stock', ctrl.listLowStock);
 exports.inventarioRouter.get('/:id', ctrl.getById);
