@@ -1,4 +1,3 @@
-version: '3.9'
 services:
   backend:
     build:
@@ -11,6 +10,7 @@ services:
       - DATABASE_URL=file:/app/data/ayher.db
     ports:
       - '4000:4000'
+      - '5555:5555'  # Puerto para Prisma Studio
     volumes:
       - backend-data:/app/data
       - ./respaldo:/app/respaldo

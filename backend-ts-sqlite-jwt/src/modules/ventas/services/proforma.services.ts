@@ -637,6 +637,8 @@ export async function generarProformaPDFStreamV3(
 
     const drawHeaderRow = (yHeader: number) => {
       doc.save().rect(left, yHeader, contentWidth, 22).fill("#0b2d64").restore();
+      // Marco exterior del header para dejar borde visible
+      doc.save().strokeColor("#0b2d64").lineWidth(1.2).rect(left, yHeader, contentWidth, 22).stroke().restore();
       doc.font("Helvetica-Bold").fontSize(10).fillColor("#ffffff");
       cols.forEach((c, idx) => {
         doc.text(c.title, colX[idx] + 4, yHeader + 6, { width: c.w - 8, align: "center" });
@@ -699,11 +701,19 @@ export async function generarProformaPDFStreamV3(
       y += rowH;
     });
 
-    // Totales
+    // Totales (fila con bordes)
     y += 10;
+    const totalRowH = 20;
+    doc.save();
+    doc.strokeColor("#333333").lineWidth(1.2);
+    doc.rect(left, y, contentWidth, totalRowH).stroke();
+    for (let j = 1; j < cols.length; j++) {
+      doc.moveTo(colX[j], y).lineTo(colX[j], y + totalRowH).stroke();
+    }
+    doc.restore();
     doc.font("Helvetica-Bold").fontSize(11);
-    doc.text("TOTAL", colX[4], y, { width: cols[4].w - 4, align: "right" });
-    doc.text(fmtMoney(total), colX[5], y, { width: cols[5].w - 4, align: "right" });
+    doc.text("TOTAL", colX[4], y + 5, { width: cols[4].w - 4, align: "right" });
+    doc.text(fmtMoney(total), colX[5], y + 5, { width: cols[5].w - 4, align: "right" });
 
     return y + 24;
   };

@@ -27,6 +27,8 @@ type Detalle = {
     numeroParte?: string | null;
     nombre?: string | null;
     descripcion?: string | null;
+    precioVentaSugeridoCordoba?: number | null;
+    precioVentaPromedioCordoba?: number | null;
   } | null;
   numeroParte?: string | null;
   nombre?: string | null;
@@ -110,10 +112,17 @@ export async function generarRemisionPDFStreamV2(
   };
 
   const drawItemsTable = (startY: number) => {
+    const codeW = 100;
+    const qtyW = 80;
+    const priceW = 90;
+    const totalW = 100;
+    const descW = Math.max(140, contentWidth - (codeW + qtyW + priceW + totalW));
     const cols = [
-      { title: "CODIGO", w: 120 },
-      { title: "DESCRIPCION PRODUCTO", w: contentWidth - 120 - 90 },
-      { title: "CANTIDAD", w: 90 },
+      { title: "CODIGO", w: codeW },
+      { title: "DESCRIPCION PRODUCTO", w: descW },
+      { title: "CANTIDAD", w: qtyW },
+      { title: "PRECIO", w: priceW },
+      { title: "TOTAL", w: totalW },
     ];
     const colX: number[] = [];
     cols.reduce((acc, c) => { colX.push(acc); return acc + c.w; }, left);
@@ -128,10 +137,14 @@ export async function generarRemisionPDFStreamV2(
     const filas = Array.isArray(detalles) ? detalles : [];
     doc.font("Helvetica").fontSize(10).fillColor("#111827");
 
+    let totalGeneral = 0;
     filas.forEach((d, idx) => {
       const codigo = d.inventario?.numeroParte || d.numeroParte || "-";
       const desc = d.inventario?.nombre || d.inventario?.descripcion || d.nombre || d.descripcion || "";
       const cant = Number(d.cantidad || 0);
+      const precio = pickPrecioCordoba(d.inventario as any);
+      const subtotal = cant * precio;
+      totalGeneral += subtotal;
       const descH = doc.heightOfString(desc, { width: cols[1].w - 10 });
       const rowH = Math.max(32, descH + 12);
 
@@ -158,11 +171,19 @@ export async function generarRemisionPDFStreamV2(
       doc.text(String(codigo), colX[0] + 4, y + 6, { width: cols[0].w - 8, align: "center" });
       doc.text(desc, colX[1] + 4, y + 6, { width: cols[1].w - 8, align: "center" });
       doc.text(String(cant), colX[2] + 4, y + 6, { width: cols[2].w - 8, align: "center" });
+      doc.text(fmtNIO(precio), colX[3] + 4, y + 6, { width: cols[3].w - 8, align: "right" });
+      doc.text(fmtNIO(subtotal), colX[4] + 4, y + 6, { width: cols[4].w - 8, align: "right" });
 
       y += rowH;
     });
 
-    return y + 12;
+    // Total general
+    doc.save().font("Helvetica-Bold").fontSize(11).fillColor("#111827");
+    doc.text("TOTAL", colX[2] + 4, y + 6, { width: cols[2].w + cols[3].w - 8, align: "right" });
+    doc.text(fmtNIO(totalGeneral), colX[4] + 4, y + 6, { width: cols[4].w - 8, align: "right" });
+    doc.restore();
+
+    return y + 28;
   };
 
   const drawFirmas = (startY: number) => {

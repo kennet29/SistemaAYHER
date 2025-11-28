@@ -22,6 +22,9 @@ ventaRouter
   .route('/:id')
   .get(authenticate, ctrl.getById);
 
+// Excel de una venta (historial)
+ventaRouter.get('/:id/excel', authenticate, ctrl.generarVentaExcel);
+
 // Marcar/actualizar cancelada (crédito pagado)
 ventaRouter.patch('/:id/cancelada', authenticate, ctrl.updateCancelada);
 
@@ -48,4 +51,3 @@ ventaRouter
   .route('/proforma/pdf')
   .post(setPdfHeaders, logPdfHit, ctrl.proforma)
   .get((_req, res) => res.status(405).json({ message: 'Use POST with JSON payload to generate Proforma PDF.' }));
-

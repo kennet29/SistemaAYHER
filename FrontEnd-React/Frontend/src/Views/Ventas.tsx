@@ -136,223 +136,30 @@ const Ventas: React.FC = () => {
 
   const descargarFacturaExcel = async (venta: Venta) => {
     try {
-      const workbook = new ExcelJS.Workbook();
-      
-      // Configurar propiedades del workbook
-      workbook.views = [{
-        activeTab: 0,
-        visibility: 'visible',
-        x: 0,
-        y: 0,
-        width: 10000,
-        height: 20000,
-        firstSheet: 0
-      } as any];
-      
-      const worksheet = workbook.addWorksheet('Factura');
-
-      // Configurar tamaño de página A4 con saltos de página
-      worksheet.pageSetup = {
-        paperSize: 9, // A4
-        orientation: 'portrait',
-        fitToPage: true,
-        fitToWidth: 1,
-        fitToHeight: 1, // Una página de alto
-        margins: {
-          left: 0.5 / 2.54,      // Convertir cm a pulgadas: 0.5 cm
-          right: 0.8 / 2.54,     // 0.8 cm
-          top: 0.4 / 2.54,       // 0.4 cm
-          bottom: 0.9 / 2.54,    // 0.9 cm
-          header: 0.8 / 2.54,    // 0.8 cm
-          footer: 0.8 / 2.54     // 0.8 cm
+      // Generar Excel desde el backend para mantener la lógica centralizada
+      const token = getCookie("token");
+      const resp = await fetch(buildApiUrl(`/ventas/${venta.id}/excel`), {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
         },
-        printArea: 'A1:J40',
-        horizontalCentered: false,
-        verticalCentered: false,
-        showGridLines: false
-      };
-      
-      // Configurar zoom al 93% y vista de diseño de página
-      worksheet.views = [{
-        state: 'normal',
-        zoomScale: 93,
-        zoomScaleNormal: 93,
-        showGridLines: false,
-        showRowColHeaders: true
-      } as any];
-
-      // Configurar anchos de columnas según plantilla
-      worksheet.columns = [
-        { width: 3.86 },   // A
-        { width: 9.14 },   // B
-        { width: 18.14 },  // C
-        { width: 29.14 },  // D
-        { width: 9.14 },   // E
-        { width: 17.86 },  // F
-        { width: 14.14 },  // G
-        { width: 8.14 },   // H
-        { width: 8.14 },   // I
-        { width: 8.14 },   // J
-      ];
-
-      const clienteNombre = (venta.cliente as any)?.empresa || venta.cliente?.nombre || 'N/A';
-      const clienteDireccion = (venta.cliente as any)?.direccion || '';
-      const clienteRuc = (venta.cliente as any)?.ruc || '';
-      const pio = venta.pio || '';
-      const moneda = venta.moneda || 'NIO';
-      const simboloMoneda = moneda === 'USD' ? '$' : 'C$';
-      const fecha = venta.fecha ? new Date(venta.fecha).toLocaleDateString() : '';
-      const montoTotal = moneda === 'USD' ? (Number(venta.totalDolar) || 0) : (Number(venta.totalCordoba) || 0);
-      const monto = montoTotal.toFixed(2);
-      const plazo = venta.tipoPago === 'CONTADO' ? 'Contado' : `${venta.plazoDias || 0}`;
-
-
-      // Convertir número a texto
-      const numeroATexto = (num: number): string => {
-        const unidades = ['', 'Uno', 'Dos', 'Tres', 'Cuatro', 'Cinco', 'Seis', 'Siete', 'Ocho', 'Nueve'];
-        const decenas = ['', '', 'Veinte', 'Treinta', 'Cuarenta', 'Cincuenta', 'Sesenta', 'Setenta', 'Ochenta', 'Noventa'];
-        const especiales = ['Diez', 'Once', 'Doce', 'Trece', 'Catorce', 'Quince', 'Dieciséis', 'Diecisiete', 'Dieciocho', 'Diecinueve'];
-        const centenas = ['', 'Ciento', 'Doscientos', 'Trescientos', 'Cuatrocientos', 'Quinientos', 'Seiscientos', 'Setecientos', 'Ochocientos', 'Novecientos'];
-        
-        if (num === 0) return 'Cero';
-        if (num === 100) return 'Cien';
-        
-        let texto = '';
-        const miles = Math.floor(num / 1000);
-        const resto = num % 1000;
-        
-        if (miles > 0) {
-          if (miles === 1) texto += 'Mil ';
-          else texto += numeroATexto(miles) + ' Mil ';
-        }
-        
-        const cent = Math.floor(resto / 100);
-        const dec = Math.floor((resto % 100) / 10);
-        const uni = resto % 10;
-        
-        if (cent > 0) texto += centenas[cent] + ' ';
-        if (dec === 1 && uni > 0) texto += especiales[uni] + ' ';
-        else {
-          if (dec > 0) texto += decenas[dec] + ' ';
-          if (uni > 0 && dec !== 1) texto += unidades[uni] + ' ';
-        }
-        
-        return texto.trim();
-      };
-      
-      const totalEntero = Math.floor(Number(venta.totalCordoba) || 0);
-      const totalDecimal = Math.round(((Number(venta.totalCordoba) || 0) - totalEntero) * 100);
-      const montoEnTexto = `${numeroATexto(totalEntero)}${totalDecimal > 0 ? ` con ${totalDecimal}/100` : ''} Córdobas`;
-
-      // Configurar alturas de filas según plantilla
-      worksheet.getRow(4).height = 74.25;
-      worksheet.getRow(5).height = 12.75;
-      worksheet.getRow(6).height = 12.75;
-      worksheet.getRow(7).height = 11.25;
-      worksheet.getRow(8).height = 12.75;
-      worksheet.getRow(11).height = 15.75;
-
-      // Calcular fecha de vencimiento
-      const fechaVenc = venta.fechaVencimiento ? new Date(venta.fechaVencimiento).toLocaleDateString() : '';
-
-      // Fila 5: Cliente, Code y Fecha
-      worksheet.getCell('C5').value = 'CLIENTE:';
-      worksheet.getCell('D5').value = clienteNombre;
-      worksheet.getCell('E5').value = `Code:${venta.numeroFactura || ''}`;
-      worksheet.getCell('F5').value = 'FECHA:';
-      worksheet.getCell('G5').value = fecha;
-
-      // Fila 6: Dirección y Monto
-      worksheet.getCell('C6').value = 'DIRECCION:';
-      worksheet.getCell('D6').value = clienteDireccion;
-      worksheet.getCell('F6').value = 'MONTO:';
-      worksheet.getCell('G6').value = `${simboloMoneda}${monto}`;
-
-      // Fila 7: Continuación dirección y Plazo
-      worksheet.getCell('F7').value = 'PLAZO:';
-      worksheet.getCell('G7').value = `${plazo} dias`;
-
-      // Fila 8: RUC, Orden de Compra y Vencimiento
-      worksheet.getCell('C8').value = 'RUC:';
-      worksheet.getCell('D8').value = `${clienteRuc}        Orden de Compra:${pio}`;
-      
-      // Solo mostrar vencimiento si es a crédito
-      if (venta.tipoPago === 'CREDITO') {
-        worksheet.getCell('F8').value = 'VENCIMIENTO:';
-        worksheet.getCell('G8').value = fechaVenc;
-      }
-
-      // Fila 11: Inicio de productos
-      let currentRow = 11;
-      const maxProductosPorPagina = 20; // Límite de productos por página
-
-      // Agregar productos (limitado a los que caben en una página)
-      const productosLimitados = (venta.detalles || []).slice(0, maxProductosPorPagina);
-      productosLimitados.forEach((d: any) => {
-        const cantidad = Number(d?.cantidad || 0);
-        const numeroParte = d?.inventario?.numeroParte || '-';
-        const producto = d?.inventario?.nombre || d?.producto?.nombre || '-';
-        const precioUnitario = moneda === 'USD' 
-          ? Number(d?.precioUnitarioDolar || (d?.precioUnitarioCordoba || 0) / (venta.tipoCambioValor || 1))
-          : Number(d?.precioUnitarioCordoba || 0);
-        const subtotal = cantidad * precioUnitario;
-
-        const row = worksheet.getRow(currentRow);
-        row.getCell(2).value = cantidad;
-        row.getCell(3).value = numeroParte;
-        row.getCell(4).value = producto;
-        row.getCell(6).value = `${simboloMoneda}${precioUnitario.toFixed(2)}`;
-        row.getCell(7).value = `${simboloMoneda}${subtotal.toFixed(2)}`;
-
-        // Estilos (sin bordes)
-        row.getCell(2).alignment = { horizontal: 'center', vertical: 'middle' };
-        row.getCell(3).alignment = { horizontal: 'left', vertical: 'middle' };
-        row.getCell(4).alignment = { horizontal: 'left', vertical: 'middle' };
-        row.getCell(6).alignment = { horizontal: 'right', vertical: 'middle' };
-        row.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
-
-        currentRow++;
       });
 
-      // Saltar a la fila 34 para el total
-      currentRow = 34;
-
-      // Fila 34: Total en texto y monto
-      worksheet.getCell('C34').value = 'SON:';
-      worksheet.mergeCells('D34:F34');
-      const nombreMoneda = moneda === 'USD' ? 'Dolares' : 'Cordobas';
-      worksheet.getCell('D34').value = `${montoEnTexto} ${nombreMoneda}`;
-      worksheet.getCell('F34').value = 'Total';
-      worksheet.getCell('G34').value = `${simboloMoneda}${monto}`;
-
-      // Fila 37: Dirección de la empresa
-      worksheet.mergeCells('C37:G37');
-      worksheet.getCell('C37').value = configuracion?.direccion || '';
-      worksheet.getCell('C37').alignment = { horizontal: 'center', vertical: 'middle' };
-
-      // Fila 38: Razón social
-      worksheet.mergeCells('E38:G38');
-      worksheet.getCell('E38').value = configuracion?.razonSocial || '';
-      worksheet.getCell('E38').alignment = { horizontal: 'center', vertical: 'middle' };
-
-      // Fila 40: Método de pago - Solo el primero
-      if (metodosPago.length > 0) {
-        const metodo = metodosPago[0];
-        worksheet.getCell('D40').value = `${metodo.banco || ''} - ${metodo.numeroCuenta || ''} - ${metodo.moneda || ''} - ${metodo.titular || ''}`;
-        worksheet.getCell('D40').alignment = { horizontal: 'center', vertical: 'middle' };
+      if (!resp.ok) {
+        toast.error("Error al generar Excel");
+        return;
       }
 
-      // Generar archivo
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const blob = await resp.blob();
       const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = url;
-      link.download = `Factura_${venta.numeroFactura || venta.id}.xlsx`;
+      link.download = `factura_${venta.numeroFactura || venta.id}.xlsx`;
+      document.body.appendChild(link);
       link.click();
+      link.remove();
       window.URL.revokeObjectURL(url);
 
-      toast.success('✅ Factura descargada');
+      toast.success("Factura descargada");
     } catch (error) {
       console.error('Error al generar Excel:', error);
       toast.error('❌ Error al generar la factura');
@@ -776,6 +583,7 @@ const Ventas: React.FC = () => {
 };
 
 export default Ventas;
+
 
 
 

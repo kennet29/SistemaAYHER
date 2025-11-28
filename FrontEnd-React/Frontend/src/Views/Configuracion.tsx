@@ -43,6 +43,7 @@ const ConfiguracionView = () => {
     sitioWeb: "",
     logoUrl: "",
     mensajeFactura: "",
+    numeroFacturaInicial: 1,
   });
 
   const [user, setUser] = useState<any>(null);
@@ -319,6 +320,20 @@ const ConfiguracionView = () => {
               setConfig({ ...config, mensajeFactura: e.target.value })
             }
           />
+
+          <label>Número de Factura Inicial</label>
+          <input
+            type="number"
+            placeholder="Ej: 875"
+            min="1"
+            value={config.numeroFacturaInicial}
+            onChange={(e) =>
+              setConfig({ ...config, numeroFacturaInicial: parseInt(e.target.value) || 1 })
+            }
+          />
+          <small style={{ gridColumn: 'span 2', color: '#5a6d90', fontSize: '0.85em', marginTop: '-0.5em' }}>
+            Este será el número inicial para las facturas. Las siguientes facturas serán consecutivas.
+          </small>
         </InputGrid>
 
         <SaveButton type="submit" disabled={saving}>

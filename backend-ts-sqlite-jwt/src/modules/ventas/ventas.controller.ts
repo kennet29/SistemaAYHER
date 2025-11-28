@@ -9,6 +9,7 @@ import fs from "fs";
 import { resolveLogoPath } from "../../utils/logo";
 
 const round4 = (n: number) => Number((n ?? 0).toFixed(4));
+const fmtCurrency = (n: any) => Number(n || 0);
 
 /* ===== Zod ===== */
 const DetalleSchema = z.object({
@@ -37,6 +38,263 @@ export async function list(_req: Request, res: Response) {
     orderBy: { id: "desc" },
   });
   res.json({ ventas });
+}
+
+// Excel de una venta (historial) generado en backend
+export async function generarVentaExcel(req: Request, res: Response) {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+
+    const venta = await prisma.venta.findUnique({
+      where: { id },
+      include: {
+        cliente: true,
+        detalles: { include: { inventario: true } },
+      },
+    });
+
+    if (!venta) return res.status(404).json({ message: "Venta no encontrada" });
+
+    // Obtener configuración de la empresa
+    const configuracion = await prisma.configuracion.findFirst();
+    
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Factura", {
+      pageSetup: { 
+        paperSize: 1 as any, // Tamaño carta (Letter)
+        orientation: "portrait", 
+        scale: 97, // Zoom de impresión al 97%
+        fitToPage: false,
+        margins: { 
+          left: 0.197,    // 0.5 cm
+          right: 0.315,   // 0.8 cm
+          top: 0.157,     // 0.4 cm
+          bottom: 0.354,  // 0.9 cm
+          header: 0.315,  // 0.8 cm
+          footer: 0.315   // 0.8 cm
+        } as any 
+      },
+      views: [{ zoomScale: 97 }]
+    });
+
+    // Configurar anchos de columnas
+    ws.columns = [
+      { width: 3.86 },   // A
+      { width: 9.14 },   // B - Cantidad
+      { width: 18.14 },  // C - No. Parte
+      { width: 29.14 },  // D - Descripción
+      { width: 9.14 },   // E
+      { width: 17.86 },  // F - Precio
+      { width: 14.14 },  // G - Subtotal
+      { width: 8.14 },   // H
+    ];
+
+    // Datos de la venta
+    const clienteNombre = (venta.cliente as any)?.empresa || venta.cliente?.nombre || 'N/A';
+    const clienteDireccion = (venta.cliente as any)?.direccion || '';
+    const clienteRuc = (venta.cliente as any)?.ruc || '';
+    const pio = venta.pio || '';
+    
+    // Determinar moneda basado en qué total tiene valor
+    const totalC = Number(venta.totalCordoba || 0);
+    const totalD = Number(venta.totalDolar || 0);
+    const usarDolares = totalD > 0 && totalC === 0;
+    const simboloMoneda = usarDolares ? '$' : 'C$';
+    const montoTotal = usarDolares ? totalD : totalC;
+    const nombreMoneda = usarDolares ? 'Dólares' : 'Córdobas';
+    
+    const fecha = venta.fecha ? new Date(venta.fecha).toLocaleDateString() : '';
+    const plazo = venta.tipoPago === 'CONTADO' ? 'Contado' : `${venta.plazoDias || 0}`;
+    const fechaVenc = venta.fechaVencimiento ? new Date(venta.fechaVencimiento).toLocaleDateString() : '';
+
+    // Función para convertir número a texto
+    const numeroATexto = (num: number): string => {
+      const unidades = ['', 'Uno', 'Dos', 'Tres', 'Cuatro', 'Cinco', 'Seis', 'Siete', 'Ocho', 'Nueve'];
+      const decenas = ['', '', 'Veinte', 'Treinta', 'Cuarenta', 'Cincuenta', 'Sesenta', 'Setenta', 'Ochenta', 'Noventa'];
+      const especiales = ['Diez', 'Once', 'Doce', 'Trece', 'Catorce', 'Quince', 'Dieciséis', 'Diecisiete', 'Dieciocho', 'Diecinueve'];
+      const centenas = ['', 'Ciento', 'Doscientos', 'Trescientos', 'Cuatrocientos', 'Quinientos', 'Seiscientos', 'Setecientos', 'Ochocientos', 'Novecientos'];
+      
+      if (num === 0) return 'Cero';
+      if (num === 100) return 'Cien';
+      
+      let texto = '';
+      const miles = Math.floor(num / 1000);
+      const resto = num % 1000;
+      
+      if (miles > 0) {
+        if (miles === 1) texto += 'Mil ';
+        else texto += numeroATexto(miles) + ' Mil ';
+      }
+      
+      const cent = Math.floor(resto / 100);
+      const dec = Math.floor((resto % 100) / 10);
+      const uni = resto % 10;
+      
+      if (cent > 0) texto += centenas[cent] + ' ';
+      if (dec === 1 && uni > 0) texto += especiales[uni] + ' ';
+      else {
+        if (dec > 0) texto += decenas[dec] + ' ';
+        if (uni > 0 && dec !== 1) texto += unidades[uni] + ' ';
+      }
+      
+      return texto.trim();
+    };
+    
+    const totalEntero = Math.floor(montoTotal);
+    const totalDecimal = Math.round((montoTotal - totalEntero) * 100);
+    const montoEnTexto = `${numeroATexto(totalEntero)}${totalDecimal > 0 ? ` con ${totalDecimal}/100` : ''} ${nombreMoneda}`;
+
+    // Fila 1-3: Espacio para logo/encabezado
+    ws.getRow(1).height = 15;
+    ws.getRow(2).height = 15;
+    ws.getRow(3).height = 15;
+
+    // Fila 4: Título
+    ws.mergeCells('A4:H4');
+    ws.getCell('A4').value = 'FACTURA';
+    ws.getCell('A4').font = { size: 16, bold: true };
+    ws.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(4).height = 25;
+
+    // Fila 5: Cliente y Code/Fecha
+    ws.getCell('B5').value = 'CLIENTE:';
+    ws.getCell('B5').font = { bold: true };
+    ws.mergeCells('C5:D5');
+    ws.getCell('C5').value = clienteNombre;
+    ws.getCell('F5').value = `Code: ${venta.numeroFactura || ''}`;
+    ws.getCell('F5').font = { bold: true };
+    ws.getCell('G5').value = 'FECHA:';
+    ws.getCell('G5').font = { bold: true };
+    ws.getCell('H5').value = fecha;
+
+    // Fila 6: Dirección y Monto
+    ws.getCell('B6').value = 'DIRECCION:';
+    ws.getCell('B6').font = { bold: true };
+    ws.mergeCells('C6:E6');
+    ws.getCell('C6').value = clienteDireccion;
+    ws.getCell('G6').value = 'MONTO:';
+    ws.getCell('G6').font = { bold: true };
+    ws.getCell('H6').value = `${simboloMoneda}${montoTotal.toFixed(2)}`;
+
+    // Fila 7: Plazo
+    ws.getCell('G7').value = 'PLAZO:';
+    ws.getCell('G7').font = { bold: true };
+    ws.getCell('H7').value = `${plazo} días`;
+
+    // Fila 8: RUC y Orden de Compra / Vencimiento
+    ws.getCell('B8').value = 'RUC:';
+    ws.getCell('B8').font = { bold: true };
+    ws.mergeCells('C8:E8');
+    ws.getCell('C8').value = `${clienteRuc}        Orden de Compra: ${pio}`;
+    
+    if (venta.tipoPago === 'CREDITO') {
+      ws.getCell('G8').value = 'VENCIMIENTO:';
+      ws.getCell('G8').font = { bold: true };
+      ws.getCell('H8').value = fechaVenc;
+    }
+
+    // Fila 9: Espacio
+    ws.getRow(9).height = 5;
+
+    // Fila 10: Encabezados de tabla
+    const headerRow = 10;
+    ws.getCell('B10').value = 'Cant';
+    ws.getCell('C10').value = 'No. Parte';
+    ws.getCell('D10').value = 'Descripción';
+    ws.getCell('F10').value = 'Precio Unit.';
+    ws.getCell('G10').value = 'Subtotal';
+    
+    ws.getRow(headerRow).font = { bold: true };
+    ws.getRow(headerRow).alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(headerRow).height = 18;
+
+    // Agregar productos
+    let currentRow = 11;
+    const tipoCambio = Number(venta.tipoCambioValor || 1);
+    
+    (venta.detalles || []).forEach((d: any) => {
+      const cantidad = Number(d.cantidad || 0);
+      const numeroParte = d.inventario?.numeroParte || '-';
+      const producto = d.inventario?.nombre || d.inventario?.descripcion || '-';
+      
+      let precioUnitario = 0;
+      if (usarDolares) {
+        precioUnitario = Number(d.precioUnitarioDolar || (d.precioUnitarioCordoba || 0) / tipoCambio);
+      } else {
+        precioUnitario = Number(d.precioUnitarioCordoba || 0);
+      }
+      
+      const subtotal = cantidad * precioUnitario;
+
+      const row = ws.getRow(currentRow);
+      row.getCell(2).value = cantidad;
+      row.getCell(3).value = numeroParte;
+      row.getCell(4).value = producto;
+      row.getCell(6).value = precioUnitario;
+      row.getCell(6).numFmt = `"${simboloMoneda}"#,##0.00`;
+      row.getCell(7).value = subtotal;
+      row.getCell(7).numFmt = `"${simboloMoneda}"#,##0.00`;
+
+      row.getCell(2).alignment = { horizontal: 'center', vertical: 'middle' };
+      row.getCell(3).alignment = { horizontal: 'left', vertical: 'middle' };
+      row.getCell(4).alignment = { horizontal: 'left', vertical: 'middle' };
+      row.getCell(6).alignment = { horizontal: 'right', vertical: 'middle' };
+      row.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+
+      currentRow++;
+    });
+
+    // Saltar a fila para total (dejar espacio)
+    currentRow = Math.max(currentRow, 30);
+
+    // Fila de total en texto
+    ws.getCell(`B${currentRow}`).value = 'SON:';
+    ws.getCell(`B${currentRow}`).font = { bold: true };
+    ws.mergeCells(`C${currentRow}:F${currentRow}`);
+    ws.getCell(`C${currentRow}`).value = montoEnTexto;
+    ws.getCell(`G${currentRow}`).value = 'Total';
+    ws.getCell(`G${currentRow}`).font = { bold: true };
+    ws.getCell(`G${currentRow}`).alignment = { horizontal: 'right' };
+    ws.getCell(`H${currentRow}`).value = montoTotal;
+    ws.getCell(`H${currentRow}`).numFmt = `"${simboloMoneda}"#,##0.00`;
+    ws.getCell(`H${currentRow}`).font = { bold: true };
+
+    // Pie de página (3 filas más abajo)
+    currentRow += 3;
+    
+    if (configuracion) {
+      ws.mergeCells(`B${currentRow}:H${currentRow}`);
+      ws.getCell(`B${currentRow}`).value = configuracion.direccion || '';
+      ws.getCell(`B${currentRow}`).alignment = { horizontal: 'center', vertical: 'middle' };
+      
+      currentRow++;
+      ws.mergeCells(`B${currentRow}:H${currentRow}`);
+      ws.getCell(`B${currentRow}`).value = configuracion.razonSocial || '';
+      ws.getCell(`B${currentRow}`).alignment = { horizontal: 'center', vertical: 'middle' };
+    }
+
+    // Aplicar bordes a la tabla de productos
+    for (let r = headerRow; r < currentRow - 3; r++) {
+      for (let col = 2; col <= 7; col++) {
+        const cell = ws.getRow(r).getCell(col);
+        cell.border = {
+          top: { style: 'thin' },
+          bottom: { style: 'thin' },
+          left: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      }
+    }
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename=factura_${venta.numeroFactura || id}.xlsx`);
+    await wb.xlsx.write(res);
+    res.status(200).end();
+  } catch (err) {
+    console.error("[ventas] Error generando Excel", err);
+    res.status(500).json({ message: "Error generando Excel" });
+  }
 }
 
 /* ===== Obtener ===== */
@@ -70,15 +328,23 @@ export async function create(req: Request, res: Response) {
         fechaVencimiento.setDate(fechaVencimiento.getDate() + data.plazoDias);
       }
       // Generar consecutivo de factura si no viene especificado
-      const genNextNumero = (prev?: string | null) => {
+      const genNextNumero = async (prev?: string | null) => {
         const digits = String(prev || "").replace(/\D+/g, "");
-        const n = Number(digits || 0) + 1;
-        return `F${String(n).padStart(6, "0")}`;
+        let n = Number(digits || 0);
+        
+        // Si no hay facturas previas, usar el número inicial de configuración
+        if (n === 0) {
+          const config = await tx.configuracion.findFirst();
+          n = (config?.numeroFacturaInicial || 1) - 1;
+        }
+        
+        n = n + 1;
+        return String(n);
       };
       let numeroFacturaFinal: string | null = (data.numeroFactura || "").trim() || null;
       if (!numeroFacturaFinal) {
         const last = await tx.venta.findFirst({ orderBy: { id: "desc" }, select: { numeroFactura: true } });
-        numeroFacturaFinal = genNextNumero(last?.numeroFactura || null);
+        numeroFacturaFinal = await genNextNumero(last?.numeroFactura || null);
       }
 
       const ventaData: any = {

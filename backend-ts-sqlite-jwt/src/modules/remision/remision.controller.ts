@@ -274,7 +274,7 @@ export const imprimirRemisionExcel = async (req: Request, res: Response) => {
 
     // Tabla de items
     const headerRow = startMeta + meta.length + 2;
-    const cols = ["P.", "No. De Parte", "Descripcion", "Cant", "Precio Unitario", "Precio Tot."];
+    const cols = ["P.", "No. De Parte", "Descripcion", "Cant", "Precio C$", "Total C$"];
     ws.getRow(headerRow).values = cols;
     ws.getRow(headerRow).font = { bold: true, size: 10 };
     ws.getRow(headerRow).alignment = { horizontal: "center" };

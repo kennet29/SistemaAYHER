@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { FaExchangeAlt, FaPlus, FaSearch, FaTrash, FaHome } from "react-icons/fa";
 import DataTable from "react-data-table-component";
 import { ToastContainer, toast } from "react-toastify";
@@ -11,28 +11,32 @@ import { useNavigate } from "react-router-dom";
 const API_MOVIMIENTOS = buildApiUrl("/MovimientoInventario");
 const API_TIPOS = buildApiUrl("/tipos-movimiento");
 const API_PRODUCTOS = buildApiUrl("/inventario");
+const TC_DEFAULT = 36.62;
 
 function getCookie(name: string) {
   const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
   return match ? decodeURIComponent(match[2]) : null;
 }
 
+type ItemSel = { id: number; nombre: string; cantidad: number; costoUsd?: number };
+
+type TipoMov = { id: number; nombre: string; afectaStock?: boolean; esEntrada?: boolean };
+
+type MovimientoRow = any;
+
+type Producto = { id: number; nombre: string; numeroParte?: string; descripcion?: string; stockActual?: number; marca?: { nombre?: string } };
+
 const MovimientosView = () => {
   const navigate = useNavigate();
-  const [movimientos, setMovimientos] = useState<any[]>([]);
-  const [productos, setProductos] = useState<any[]>([]);
-  const [tipos, setTipos] = useState<any[]>([]);
+  const [movimientos, setMovimientos] = useState<MovimientoRow[]>([]);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [tipos, setTipos] = useState<TipoMov[]>([]);
   const [busqueda, setBusqueda] = useState("");
-  const [itemsSeleccionados, setItemsSeleccionados] = useState<
-    { id: number; nombre: string; cantidad: number }[]
-  >([]);
-  const [form, setForm] = useState({
-    tipoMovimientoId: "",
-    observacion: "",
-  });
+  const [itemsSeleccionados, setItemsSeleccionados] = useState<ItemSel[]>([]);
+  const [form, setForm] = useState({ tipoMovimientoId: "", observacion: "", tipoCambioValor: TC_DEFAULT });
   const [detalle, setDetalle] = useState<any | null>(null);
 
-  // 🔹 Cargar datos
+  // Cargar datos
   useEffect(() => {
     const headers = { Authorization: `Bearer ${getCookie("token")}` };
     fetch(API_TIPOS, { headers })
@@ -51,51 +55,59 @@ const MovimientosView = () => {
       .catch(() => toast.error("Error al cargar movimientos"));
   }, []);
 
-  // 🔍 Filtrar productos
-  const productosFiltrados = productos.filter(
-    (p) =>
-      p.nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
-      p.numeroParte?.toLowerCase().includes(busqueda.toLowerCase()) ||
-      p.descripcion?.toLowerCase().includes(busqueda.toLowerCase())
+  const selectedTipo = useMemo(() => tipos.find((t) => t.id === Number(form.tipoMovimientoId)), [tipos, form.tipoMovimientoId]);
+  const esEntradaCompra = useMemo(
+    () => (selectedTipo?.nombre || "").toLowerCase().includes("entrada compra"),
+    [selectedTipo]
   );
 
-  // ➕ Agregar producto
-  const agregarItem = (producto: any) => {
+  const productosFiltrados = useMemo(
+    () =>
+      productos.filter(
+        (p) =>
+          p.nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
+          p.numeroParte?.toLowerCase().includes(busqueda.toLowerCase()) ||
+          p.descripcion?.toLowerCase().includes(busqueda.toLowerCase())
+      ),
+    [productos, busqueda]
+  );
+
+  const agregarItem = (producto: Producto) => {
     if (itemsSeleccionados.some((i) => i.id === producto.id)) {
       return toast.warn("Este producto ya fue agregado");
     }
-    setItemsSeleccionados([
-      ...itemsSeleccionados,
-      { id: producto.id, nombre: producto.nombre, cantidad: 1 },
-    ]);
+    setItemsSeleccionados((prev) => [...prev, { id: producto.id, nombre: producto.nombre, cantidad: 1, costoUsd: esEntradaCompra ? 0 : undefined }]);
   };
 
-  // 🔢 Cambiar cantidad
-  const actualizarCantidad = (id: number, nuevaCantidad: number) => {
-    setItemsSeleccionados((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, cantidad: nuevaCantidad } : i))
-    );
+  const actualizarCantidad = (id: number, cantidad: number) => {
+    setItemsSeleccionados((prev) => prev.map((i) => (i.id === id ? { ...i, cantidad } : i)));
   };
 
-  // ❌ Eliminar producto
-  const eliminarItem = (id: number) => {
-    setItemsSeleccionados((prev) => prev.filter((i) => i.id !== id));
+  const actualizarCostoUsd = (id: number, costoUsd: number) => {
+    setItemsSeleccionados((prev) => prev.map((i) => (i.id === id ? { ...i, costoUsd } : i)));
   };
 
-  // 💾 Enviar movimiento
+  const eliminarItem = (id: number) => setItemsSeleccionados((prev) => prev.filter((i) => i.id !== id));
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.tipoMovimientoId || itemsSeleccionados.length === 0) {
       return toast.warn("Selecciona un tipo y al menos un producto");
     }
+    if (esEntradaCompra) {
+      const faltanCostos = itemsSeleccionados.some((i) => i.costoUsd == null || isNaN(Number(i.costoUsd)));
+      if (faltanCostos) return toast.warn("Ingresa costo USD para cada producto (Entrada Compra)");
+    }
 
     const body = {
       tipoMovimientoId: Number(form.tipoMovimientoId),
       observacion: form.observacion,
-      usuario: "Kenneth",
+      usuario: "seed-user",
+      tipoCambioValor: form.tipoCambioValor,
       detalles: itemsSeleccionados.map((i) => ({
         inventarioId: i.id,
         cantidad: i.cantidad,
+        costoUnitarioDolar: esEntradaCompra ? Number(i.costoUsd || 0) : undefined,
       })),
     };
 
@@ -110,32 +122,32 @@ const MovimientosView = () => {
       });
 
       if (!res.ok) throw new Error("Error en la respuesta del servidor");
-      toast.success("Movimiento registrado correctamente ✅");
+      toast.success("Movimiento registrado correctamente");
 
       setItemsSeleccionados([]);
-      setForm({ tipoMovimientoId: "", observacion: "" });
+      setForm({ tipoMovimientoId: "", observacion: "", tipoCambioValor: TC_DEFAULT });
 
-      const authHeaders = { Authorization: `Bearer ${getCookie("token")}` };
+      const headers = { Authorization: `Bearer ${getCookie("token")}` };
       const [nuevosMovimientos, inventarioActualizado] = await Promise.all([
-        fetch(API_MOVIMIENTOS, { headers: authHeaders }).then((r) => r.json()),
-        fetch(API_PRODUCTOS, { headers: authHeaders }).then((r) => r.json()),
+        fetch(API_MOVIMIENTOS, { headers }).then((r) => r.json()),
+        fetch(API_PRODUCTOS, { headers }).then((r) => r.json()),
       ]);
       setMovimientos(nuevosMovimientos);
       setProductos(inventarioActualizado.items || inventarioActualizado);
-    } catch {
+    } catch (err) {
+      console.error(err);
       toast.error("Error al registrar movimiento");
     }
   };
 
-  // 🧾 Columnas para DataTable productos
   const columnasProductos = [
-    { name: "Nombre", selector: (r: any) => r.nombre, sortable: true },
-    { name: "N° Parte", selector: (r: any) => r.numeroParte || "—",sortable: true },
-    { name: "Descripción", selector: (r: any) => r.descripcion || "—",sortable: true },
-    { name: "Stock", selector:(r: any)=> r.stockActual ?? "—", sortable: true},
+    { name: "Nombre", selector: (r: Producto) => r.nombre, sortable: true },
+    { name: "No. Parte", selector: (r: Producto) => r.numeroParte || "-", sortable: true },
+    { name: "Descripción", selector: (r: Producto) => r.descripcion || "-", sortable: true },
+    { name: "Stock", selector: (r: Producto) => r.stockActual ?? "-", sortable: true },
     {
       name: "Acción",
-      cell: (row: any) => (
+      cell: (row: Producto) => (
         <button type="button" className="btn-agregar" onClick={() => agregarItem(row)}>
           <FaPlus /> Agregar
         </button>
@@ -143,34 +155,48 @@ const MovimientosView = () => {
     },
   ];
 
-  // 🧾 Columnas para DataTable historial
   const columnasMovimientos = [
     { name: "ID", selector: (r: any) => r.id, sortable: true, width: "70px" },
-    { name: "Producto", selector: (r: any) => r.inventario?.nombre || "—" },
-    { name: "N° Parte", selector: (r: any) => r.inventario?.numeroParte || "—", sortable: true },
-    { name: "Marca", selector: (r: any) => {
+    { name: "Producto", selector: (r: any) => r.inventario?.nombre || "-" },
+    { name: "No. Parte", selector: (r: any) => r.inventario?.numeroParte || "-", sortable: true },
+    {
+      name: "Marca",
+      selector: (r: any) => {
         const prod = productos.find((p: any) => p.id === (r.inventario?.id ?? r.inventarioId));
-        return prod?.marca?.nombre || "—";
-      }
+        return prod?.marca?.nombre || "-";
+      },
     },
-    { name: "Tipo", selector: (r: any) => r.tipoMovimiento?.nombre || "—" },
-    { name: "Cantidad", selector: (r: any) => r.cantidad },
-    { name: "Observación", selector: (r: any) => r.observacion || "—" },
+    { name: "Tipo", selector: (r: any) => r.tipoMovimiento?.nombre || "-" },
+    { name: "Cantidad", selector: (r: any) => r.cantidad, right: true },
+    {
+      name: "Costo $",
+      selector: (r: any) => r.costoUnitarioDolar ?? r.precioVentaUnitarioDolar ?? null,
+      right: true,
+      cell: (r: any) => (r.costoUnitarioDolar != null ? `$ ${Number(r.costoUnitarioDolar).toFixed(2)}` : "-"),
+    },
+    {
+      name: "Costo C$",
+      selector: (r: any) => r.costoUnitarioCordoba ?? r.precioVentaUnitarioCordoba ?? null,
+      right: true,
+      cell: (r: any) => (r.costoUnitarioCordoba != null ? `C$ ${Number(r.costoUnitarioCordoba).toFixed(2)}` : "-"),
+    },
+    {
+      name: "TC",
+      selector: (r: any) => r.tipoCambioValor ?? null,
+      right: true,
+      cell: (r: any) => (r.tipoCambioValor ? Number(r.tipoCambioValor).toFixed(4) : "-"),
+    },
+    { name: "Observación", selector: (r: any) => r.observacion || "-" },
     {
       name: "Fecha",
       selector: (r: any) => r.createdAt,
-      sortable:true,
-      cell: (r: any) => <span>{fmtDateTime(r.createdAt)}</span>
+      sortable: true,
+      cell: (r: any) => <span>{fmtDateTime(r.createdAt)}</span>,
     },
     {
       name: "Acciones",
       cell: (r: any) => (
-        <button
-          type="button"
-          className="btn-agregar"
-          onClick={() => setDetalle(r)}
-          title="Ver detalle"
-        >
+        <button type="button" className="btn-agregar" onClick={() => setDetalle(r)} title="Ver detalle">
           Ver
         </button>
       ),
@@ -181,12 +207,12 @@ const MovimientosView = () => {
   return (
     <div className="movimientos-container">
       <ToastContainer />
-      <button 
-        type="button" 
+      <button
+        type="button"
         onClick={() => navigate('/home')}
-        style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        style={{
+          display: 'flex',
+          alignItems: 'center',
           gap: '0.5rem',
           backgroundColor: '#007bff',
           color: 'white',
@@ -209,9 +235,7 @@ const MovimientosView = () => {
           <label>Tipo de movimiento:</label>
           <select
             value={form.tipoMovimientoId}
-            onChange={(e) =>
-              setForm({ ...form, tipoMovimientoId: e.target.value })
-            }
+            onChange={(e) => setForm({ ...form, tipoMovimientoId: e.target.value })}
           >
             <option value="">Seleccionar...</option>
             {tipos.map((t) => (
@@ -232,6 +256,19 @@ const MovimientosView = () => {
           />
         </div>
 
+        <div className="form-group">
+          <label>Tipo de cambio (USD a C$):</label>
+          <input
+            type="number"
+            step="0.0001"
+            value={form.tipoCambioValor}
+            onChange={(e) => setForm({ ...form, tipoCambioValor: Number(e.target.value) })}
+            readOnly
+            disabled
+            style={{ backgroundColor: '#f0f0f0', cursor: 'not-allowed' }}
+          />
+        </div>
+
         <div className="buscador">
           <FaSearch className="icono-buscar" />
           <input
@@ -243,7 +280,7 @@ const MovimientosView = () => {
         </div>
 
         <DataTable
-          title="📦 Productos disponibles"
+          title="Productos disponibles"
           columns={columnasProductos}
           data={productosFiltrados}
           pagination
@@ -259,39 +296,54 @@ const MovimientosView = () => {
                 <tr>
                   <th>Producto</th>
                   <th>Cantidad</th>
+                  {esEntradaCompra && <th>Costo USD</th>}
+                  {esEntradaCompra && <th>Costo C$ (tc)</th>}
                   <th>Acción</th>
                 </tr>
               </thead>
               <tbody>
-                {itemsSeleccionados.map((i) => (
-                  <tr key={i.id}>
-                    <td>{i.nombre}</td>
-                    <td>
-  <input
-    type="number"
-    min={1}
-    step={1}
-    value={i.cantidad}
-    onChange={(e) => {
-      const valor = parseInt(e.target.value);
-      if (!isNaN(valor) && valor >= 1) {
-        actualizarCantidad(i.id, valor);
-      }
-    }}
-  />
-</td>
-
-                    <td>
-                      <button
-                        type="button"
-                        className="btn-eliminar"
-                        onClick={() => eliminarItem(i.id)}
-                      >
-                        <FaTrash />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {itemsSeleccionados.map((i) => {
+                  const costoCordoba = esEntradaCompra && i.costoUsd != null
+                    ? Number(i.costoUsd) * Number(form.tipoCambioValor || TC_DEFAULT)
+                    : null;
+                  return (
+                    <tr key={i.id}>
+                      <td>{i.nombre}</td>
+                      <td>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={i.cantidad}
+                          onChange={(e) => {
+                            const valor = parseInt(e.target.value, 10);
+                            if (!isNaN(valor) && valor >= 1) actualizarCantidad(i.id, valor);
+                          }}
+                        />
+                      </td>
+                      {esEntradaCompra && (
+                        <>
+                          <td>
+                            <input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              value={i.costoUsd ?? 0}
+                              onChange={(e) => actualizarCostoUsd(i.id, Number(e.target.value))}
+                              placeholder="USD"
+                            />
+                          </td>
+                          <td>{costoCordoba != null ? `C$ ${costoCordoba.toFixed(2)}` : "-"}</td>
+                        </>
+                      )}
+                      <td>
+                        <button type="button" className="btn-eliminar" onClick={() => eliminarItem(i.id)}>
+                          <FaTrash />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -302,14 +354,8 @@ const MovimientosView = () => {
         </button>
       </form>
 
-      <h2>📋 Historial de Movimientos</h2>
-      <DataTable
-        columns={columnasMovimientos}
-        data={movimientos}
-        pagination
-        highlightOnHover
-        dense
-      />
+      <h2>Historial de Movimientos</h2>
+      <DataTable columns={columnasMovimientos} data={movimientos} pagination highlightOnHover dense />
 
       {detalle && (
         <div className="mov-modal-overlay" onClick={() => setDetalle(null)}>
@@ -319,9 +365,7 @@ const MovimientosView = () => {
               <button className="modal-close" onClick={() => setDetalle(null)}>×</button>
             </header>
             <div className="modal-body">
-              <div style={{ whiteSpace: 'pre-wrap' }}>
-                {detalle.observacion || '—'}
-              </div>
+              <div style={{ whiteSpace: 'pre-wrap' }}>{detalle.observacion || '-'}</div>
             </div>
           </div>
         </div>
