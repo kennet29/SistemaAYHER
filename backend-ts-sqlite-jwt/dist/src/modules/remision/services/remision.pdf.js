@@ -16,7 +16,7 @@ const fmtDate = (val) => {
 };
 const fmtNIO = (n) => `C$ ${Number(n || 0).toFixed(2)}`;
 const pickPrecioCordoba = (inv) => Number(inv?.precioVentaSugeridoCordoba ?? inv?.precioVentaPromedioCordoba ?? 0) || 0;
-async function generarRemisionPDFStreamV2({ empresa, cliente, detalles, numero, fecha, observacion, pio, }, res) {
+async function generarRemisionPDFStreamV2({ empresa, cliente, detalles, numero, fecha, observacion, pio, entregadoA, }, res) {
     const doc = new pdfkit_1.default({ size: "A4", margin: 36 });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="remision_${numero}.pdf"`);
@@ -40,7 +40,7 @@ async function generarRemisionPDFStreamV2({ empresa, cliente, detalles, numero, 
     };
     const drawDatosGenerales = (startY) => {
         const rows = [
-            ["Entregado a:", cliente?.nombre || cliente?.empresa || "N/A", "Fecha:", fmtDate(fecha)],
+            ["Entregado a:", entregadoA || cliente?.nombre || cliente?.empresa || "N/A", "Fecha:", fmtDate(fecha)],
             ["Empresa:", cliente?.empresa || cliente?.nombre || "N/A", "Ruc:", cliente?.ruc || empresa?.ruc || ""],
             ["Dirección:", cliente?.direccion || empresa?.direccion || "", "Pedido N°:", pio || "-"],
         ];
@@ -61,25 +61,43 @@ async function generarRemisionPDFStreamV2({ empresa, cliente, detalles, numero, 
         return startY + rows.length * rowH + 10;
     };
     const drawItemsTable = (startY) => {
+        const codeW = 100;
+        const qtyW = 80;
+        const priceW = 90;
+        const totalW = 100;
+        const descW = Math.max(140, contentWidth - (codeW + qtyW + priceW + totalW));
         const cols = [
-            { title: "CODIGO", w: 120 },
-            { title: "DESCRIPCION PRODUCTO", w: contentWidth - 120 - 90 },
-            { title: "CANTIDAD", w: 90 },
+            { title: "CODIGO", w: codeW },
+            { title: "DESCRIPCION PRODUCTO", w: descW },
+            { title: "CANTIDAD", w: qtyW },
+            { title: "PRECIO", w: priceW },
+            { title: "TOTAL", w: totalW },
         ];
         const colX = [];
         cols.reduce((acc, c) => { colX.push(acc); return acc + c.w; }, left);
         const headerH = 22;
         doc.save().rect(left, startY, contentWidth, headerH).fill("#cbd5e1").restore();
+        doc.save().lineWidth(1).strokeColor("#111827");
+        doc.rect(left, startY, contentWidth, headerH).stroke();
+        doc.moveTo(colX[1], startY).lineTo(colX[1], startY + headerH).stroke();
+        doc.moveTo(colX[2], startY).lineTo(colX[2], startY + headerH).stroke();
+        doc.moveTo(colX[3], startY).lineTo(colX[3], startY + headerH).stroke();
+        doc.moveTo(colX[4], startY).lineTo(colX[4], startY + headerH).stroke();
+        doc.restore();
         doc.font("Helvetica-Bold").fontSize(10).fillColor("#111827");
         cols.forEach((c, idx) => doc.text(c.title, colX[idx] + 4, startY + 6, { width: c.w - 8, align: "center" }));
         let y = startY + headerH;
         const bottomLimit = pageHeight - doc.page.margins.bottom - 140;
         const filas = Array.isArray(detalles) ? detalles : [];
         doc.font("Helvetica").fontSize(10).fillColor("#111827");
+        let totalGeneral = 0;
         filas.forEach((d, idx) => {
             const codigo = d.inventario?.numeroParte || d.numeroParte || "-";
             const desc = d.inventario?.nombre || d.inventario?.descripcion || d.nombre || d.descripcion || "";
             const cant = Number(d.cantidad || 0);
+            const precio = pickPrecioCordoba(d.inventario);
+            const subtotal = cant * precio;
+            totalGeneral += subtotal;
             const descH = doc.heightOfString(desc, { width: cols[1].w - 10 });
             const rowH = Math.max(32, descH + 12);
             if (y + rowH > bottomLimit) {
@@ -87,6 +105,13 @@ async function generarRemisionPDFStreamV2({ empresa, cliente, detalles, numero, 
                 drawHeader();
                 y = 120;
                 doc.save().rect(left, y, contentWidth, headerH).fill("#cbd5e1").restore();
+                doc.save().lineWidth(1).strokeColor("#111827");
+                doc.rect(left, y, contentWidth, headerH).stroke();
+                doc.moveTo(colX[1], y).lineTo(colX[1], y + headerH).stroke();
+                doc.moveTo(colX[2], y).lineTo(colX[2], y + headerH).stroke();
+                doc.moveTo(colX[3], y).lineTo(colX[3], y + headerH).stroke();
+                doc.moveTo(colX[4], y).lineTo(colX[4], y + headerH).stroke();
+                doc.restore();
                 doc.font("Helvetica-Bold").fontSize(10).fillColor("#111827");
                 cols.forEach((c, idx2) => doc.text(c.title, colX[idx2] + 4, y + 6, { width: c.w - 8, align: "center" }));
                 doc.font("Helvetica").fontSize(10).fillColor("#111827");
@@ -99,13 +124,37 @@ async function generarRemisionPDFStreamV2({ empresa, cliente, detalles, numero, 
             doc.rect(left, y, contentWidth, rowH).stroke();
             doc.moveTo(colX[1], y).lineTo(colX[1], y + rowH).stroke();
             doc.moveTo(colX[2], y).lineTo(colX[2], y + rowH).stroke();
+            doc.moveTo(colX[3], y).lineTo(colX[3], y + rowH).stroke();
+            doc.moveTo(colX[4], y).lineTo(colX[4], y + rowH).stroke();
             doc.restore();
             doc.text(String(codigo), colX[0] + 4, y + 6, { width: cols[0].w - 8, align: "center" });
             doc.text(desc, colX[1] + 4, y + 6, { width: cols[1].w - 8, align: "center" });
             doc.text(String(cant), colX[2] + 4, y + 6, { width: cols[2].w - 8, align: "center" });
+            doc.text(fmtNIO(precio), colX[3] + 4, y + 6, { width: cols[3].w - 8, align: "right" });
+            doc.text(fmtNIO(subtotal), colX[4] + 4, y + 6, { width: cols[4].w - 8, align: "right" });
             y += rowH;
         });
-        return y + 12;
+        // Total general
+        const totalRowH = 28;
+        // Verificar si hay espacio para el total, si no, crear nueva página
+        if (y + totalRowH > bottomLimit) {
+            doc.addPage();
+            drawHeader();
+            y = 120;
+        }
+        // Dibujar fila de TOTAL con bordes
+        doc.save().lineWidth(1).strokeColor("#111827");
+        doc.rect(left, y, contentWidth, totalRowH).stroke();
+        doc.moveTo(colX[1], y).lineTo(colX[1], y + totalRowH).stroke();
+        doc.moveTo(colX[2], y).lineTo(colX[2], y + totalRowH).stroke();
+        doc.moveTo(colX[3], y).lineTo(colX[3], y + totalRowH).stroke();
+        doc.moveTo(colX[4], y).lineTo(colX[4], y + totalRowH).stroke();
+        doc.restore();
+        doc.save().font("Helvetica-Bold").fontSize(11).fillColor("#111827");
+        doc.text("TOTAL", colX[2] + 4, y + 8, { width: cols[2].w + cols[3].w - 8, align: "right" });
+        doc.text(fmtNIO(totalGeneral), colX[4] + 4, y + 8, { width: cols[4].w - 8, align: "right" });
+        doc.restore();
+        return y + totalRowH + 10;
     };
     const drawFirmas = (startY) => {
         const rowH = 28; // más alto para facilitar firma

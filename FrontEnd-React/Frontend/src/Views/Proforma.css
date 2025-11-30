@@ -81,6 +81,29 @@
   color:#0b2d64;
 }
 
+/* Picker modal (selección de productos) - más bajo y con buscador fijo */
+.picker-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.55);
+  display:flex;justify-content:center;align-items:flex-start;
+  padding:40px 12px;overflow-y:auto;z-index:9999;
+}
+.picker-card{
+  width:min(900px,95%);max-height:80vh;overflow:auto;
+  background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.22);
+  padding:1.2rem;position:relative;
+}
+.picker-top{
+  position:sticky;top:0;background:#fff;padding-bottom:.5rem;margin-bottom:.6rem;
+  z-index:2;display:flex;align-items:center;justify-content:space-between;
+}
+.picker-search{
+  position:sticky;top:52px;background:#fff;z-index:2;
+  display:flex;align-items:center;gap:12px;padding:0 0 8px 0;margin:0 0 6px 0;
+}
+.picker-card input[type="text"], .picker-card input[type="search"]{
+  width:100%;
+}
+
 .empty-state{
   padding:1.5rem;
   color:#4b5a78;

@@ -708,7 +708,7 @@ const Proforma: React.FC = () => {
                 <h3><FaSearch /> Productos</h3>
                 <button className="picker-close" onClick={() => setPickerAbierto(false)}><FaTimes /></button>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+              <div className="picker-search">
                 <input placeholder="Buscar..." value={busqueda} onChange={e => setBusqueda(e.target.value)} />
                 <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: ".9rem" }}>
                   <input

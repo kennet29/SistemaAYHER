@@ -51,7 +51,10 @@ exports.ventaRouter.get('/proformas/:id', auth_1.authenticate, ctrl.getProformaB
 exports.ventaRouter.get('/proformas/:id/excel', auth_1.authenticate, ctrl.generarProformaExcel);
 exports.ventaRouter
     .route('/:id')
-    .get(auth_1.authenticate, ctrl.getById);
+    .get(auth_1.authenticate, ctrl.getById)
+    .patch(auth_1.authenticate, ctrl.update);
+// Excel de una venta (historial)
+exports.ventaRouter.get('/:id/excel', auth_1.authenticate, ctrl.generarVentaExcel);
 // Marcar/actualizar cancelada (crédito pagado)
 exports.ventaRouter.patch('/:id/cancelada', auth_1.authenticate, ctrl.updateCancelada);
 // PDF Proforma endpoint

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteConfiguracion = exports.upsertConfiguracion = exports.getConfiguracion = void 0;
+exports.actualizarUltimoNumeroFactura = exports.getSiguienteNumeroFactura = exports.deleteConfiguracion = exports.upsertConfiguracion = exports.getConfiguracion = void 0;
 const prisma_1 = require("../../db/prisma");
 /**
  * 📌 Obtener la configuración actual
@@ -82,3 +82,46 @@ const deleteConfiguracion = async (req, res) => {
     }
 };
 exports.deleteConfiguracion = deleteConfiguracion;
+/**
+ * 📌 Obtener el siguiente número de factura disponible
+ */
+const getSiguienteNumeroFactura = async (req, res) => {
+    try {
+        const config = await prisma_1.prisma.configuracion.findFirst();
+        if (!config) {
+            return res.status(404).json({ message: 'No hay configuración registrada' });
+        }
+        const siguienteNumero = (config.ultimoNumeroFactura || 0) + 1;
+        res.json({ siguienteNumero, ultimoNumero: config.ultimoNumeroFactura });
+    }
+    catch (error) {
+        console.error('Error al obtener siguiente número de factura:', error);
+        res.status(500).json({ message: 'Error al obtener siguiente número de factura', error });
+    }
+};
+exports.getSiguienteNumeroFactura = getSiguienteNumeroFactura;
+/**
+ * 📌 Actualizar el último número de factura usado
+ */
+const actualizarUltimoNumeroFactura = async (req, res) => {
+    try {
+        const { ultimoNumero } = req.body;
+        if (!ultimoNumero || isNaN(ultimoNumero)) {
+            return res.status(400).json({ message: 'Número de factura inválido' });
+        }
+        const config = await prisma_1.prisma.configuracion.findFirst();
+        if (!config) {
+            return res.status(404).json({ message: 'No hay configuración registrada' });
+        }
+        const updated = await prisma_1.prisma.configuracion.update({
+            where: { id: config.id },
+            data: { ultimoNumeroFactura: parseInt(ultimoNumero) },
+        });
+        res.json({ ultimoNumeroFactura: updated.ultimoNumeroFactura });
+    }
+    catch (error) {
+        console.error('Error al actualizar último número de factura:', error);
+        res.status(500).json({ message: 'Error al actualizar último número de factura', error });
+    }
+};
+exports.actualizarUltimoNumeroFactura = actualizarUltimoNumeroFactura;

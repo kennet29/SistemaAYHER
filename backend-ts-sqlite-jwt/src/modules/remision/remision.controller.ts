@@ -11,6 +11,7 @@ const remisionSchema = z.object({
   usuario: z.string().optional(),
   observacion: z.string().optional(),
   pio: z.string().nullable().optional(),
+  entregadoA: z.string().nullable().optional(),
   items: z.array(
     z.object({
       inventarioId: z.preprocess((v) => Number(v), z.number().int()),
@@ -31,7 +32,7 @@ export const crearRemision = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Datos inválidos", errors: parsed.error.errors });
     }
 
-    const { clienteId, usuario, observacion, items, pio } = parsed.data;
+    const { clienteId, usuario, observacion, items, pio, entregadoA } = parsed.data;
     const numero = await generarNumeroRemision();
 
     const remision = await prisma.$transaction(async (tx) => {
@@ -41,6 +42,7 @@ export const crearRemision = async (req: Request, res: Response) => {
         observacion,
         facturada: false,
         pio: pio && typeof pio === "string" && pio.trim().length > 0 ? pio.trim() : null,
+        entregadoA: entregadoA && typeof entregadoA === "string" && entregadoA.trim().length > 0 ? entregadoA.trim() : null,
       };
       if (typeof clienteId === 'number') dataCreate.clienteId = clienteId;
       const nuevaRemision = await tx.remision.create({ data: dataCreate });
@@ -456,6 +458,7 @@ export const imprimirRemisionPDF = async (req: Request, res: Response) => {
         fecha: remision.fecha,
         observacion: remision.observacion || null,
         pio: remision.pio || null,
+        entregadoA: remision.entregadoA || null,
       },
       res
     );

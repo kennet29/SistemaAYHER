@@ -15,6 +15,7 @@ const remisionSchema = zod_1.z.object({
     usuario: zod_1.z.string().optional(),
     observacion: zod_1.z.string().optional(),
     pio: zod_1.z.string().nullable().optional(),
+    entregadoA: zod_1.z.string().nullable().optional(),
     items: zod_1.z.array(zod_1.z.object({
         inventarioId: zod_1.z.preprocess((v) => Number(v), zod_1.z.number().int()),
         cantidad: zod_1.z.preprocess((v) => Number(v), zod_1.z.number().min(1)),
@@ -30,7 +31,7 @@ const crearRemision = async (req, res) => {
             console.error("❌ Error validación ZOD:", parsed.error.errors);
             return res.status(400).json({ message: "Datos inválidos", errors: parsed.error.errors });
         }
-        const { clienteId, usuario, observacion, items, pio } = parsed.data;
+        const { clienteId, usuario, observacion, items, pio, entregadoA } = parsed.data;
         const numero = await (0, numeroRemision_service_1.generarNumeroRemision)();
         const remision = await prisma_1.prisma.$transaction(async (tx) => {
             const dataCreate = {
@@ -39,6 +40,7 @@ const crearRemision = async (req, res) => {
                 observacion,
                 facturada: false,
                 pio: pio && typeof pio === "string" && pio.trim().length > 0 ? pio.trim() : null,
+                entregadoA: entregadoA && typeof entregadoA === "string" && entregadoA.trim().length > 0 ? entregadoA.trim() : null,
             };
             if (typeof clienteId === 'number')
                 dataCreate.clienteId = clienteId;
@@ -246,7 +248,7 @@ const imprimirRemisionExcel = async (req, res) => {
         });
         // Tabla de items
         const headerRow = startMeta + meta.length + 2;
-        const cols = ["P.", "No. De Parte", "Descripcion", "Cant", "Precio Unitario", "Precio Tot."];
+        const cols = ["P.", "No. De Parte", "Descripcion", "Cant", "Precio C$", "Total C$"];
         ws.getRow(headerRow).values = cols;
         ws.getRow(headerRow).font = { bold: true, size: 10 };
         ws.getRow(headerRow).alignment = { horizontal: "center" };
@@ -418,6 +420,7 @@ const imprimirRemisionPDF = async (req, res) => {
             fecha: remision.fecha,
             observacion: remision.observacion || null,
             pio: remision.pio || null,
+            entregadoA: remision.entregadoA || null,
         }, res);
         return;
         res.setHeader("Content-Type", "application/pdf");

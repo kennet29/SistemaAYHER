@@ -17,7 +17,6 @@ export default defineConfig({
         '**/*.config.*',
         '**/mockData',
         'dist/',
-        'dist-electron/',
       ],
     },
   },

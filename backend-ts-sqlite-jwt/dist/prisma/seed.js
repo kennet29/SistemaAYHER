@@ -1,22 +1,35 @@
 "use strict";
 require('dotenv/config');
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient, Prisma } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 async function seedAdmin() {
-    const name = process.env.ADMIN_NAME || 'Admin';
-    const email = process.env.ADMIN_EMAIL || 'admin@local.test';
-    const password = process.env.ADMIN_PASSWORD || 'admin123';
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (!existing) {
-        const passwordHash = await bcrypt.hash(password, 10);
-        await prisma.user.create({
-            data: { name, email, passwordHash, role: 'ADMIN' }
-        });
-        console.log('✅ Admin creado:', email);
-    }
-    else {
-        console.log('ℹ️ Admin ya existe:', email);
+    const users = [
+        {
+            name: process.env.ADMIN_NAME || 'Admin',
+            email: process.env.ADMIN_EMAIL || 'admin@local.test',
+            password: process.env.ADMIN_PASSWORD || 'admin123',
+            role: 'ADMIN'
+        },
+        {
+            name: 'Cramber',
+            email: 'cramber83@gmail.com',
+            password: 'ayher123',
+            role: 'ADMIN'
+        }
+    ];
+    for (const user of users) {
+        const existing = await prisma.user.findUnique({ where: { email: user.email } });
+        if (!existing) {
+            const passwordHash = await bcrypt.hash(user.password, 10);
+            await prisma.user.create({
+                data: { name: user.name, email: user.email, passwordHash, role: user.role }
+            });
+            console.log('✅ Usuario creado:', user.email);
+        }
+        else {
+            console.log('ℹ️ Usuario ya existe:', user.email);
+        }
     }
 }
 async function seedTipoMovimiento() {
@@ -32,6 +45,7 @@ async function seedTipoMovimiento() {
         { nombre: 'Armado - Entrada', afectaStock: true, esEntrada: true, descripcion: 'Entrada del producto armado' },
         { nombre: 'Desarmado - Salida', afectaStock: true, esEntrada: false, descripcion: 'Salida del producto a desarmar' },
         { nombre: 'Desarmado - Entrada', afectaStock: true, esEntrada: true, descripcion: 'Entrada de componentes del desarmado' },
+        { nombre: 'Entrada Compra', afectaStock: true, esEntrada: true, descripcion: 'Entrada por compra con costo unitario' },
     ];
     for (const tm of data) {
         await prisma.tipoMovimiento.upsert({
@@ -41,6 +55,49 @@ async function seedTipoMovimiento() {
         });
     }
     console.log('✅ Tipos de Movimiento listos.');
+}
+async function seedTipoCambioBase() {
+    const existing = await prisma.tipoCambio.findFirst({ orderBy: { createdAt: 'desc' } });
+    if (existing)
+        return existing;
+    const tc = await prisma.tipoCambio.create({
+        data: { valor: new Prisma.Decimal(36.62) },
+    });
+    console.log('✅ Tipo de cambio base creado:', tc.valor.toString());
+    return tc;
+}
+async function seedCategoriasYMarcas() {
+    // Categorías
+    const categorias = [
+        { nombre: 'Mecánica', descripcion: 'Productos y repuestos mecánicos' },
+        { nombre: 'Eléctrica', descripcion: 'Productos y componentes eléctricos' },
+        { nombre: 'Electrónica', descripcion: 'Productos y componentes electrónicos' }
+    ];
+    for (const cat of categorias) {
+        await prisma.categoria.upsert({
+            where: { nombre: cat.nombre },
+            update: cat,
+            create: cat
+        });
+    }
+    console.log('✅ Categorías creadas: Mecánica, Eléctrica, Electrónica');
+    // Marcas
+    const marcas = [
+        { nombre: 'Jinzen', descripcion: 'Marca Jinzen' },
+        { nombre: 'Shifeng', descripcion: 'Marca Shifeng' },
+        { nombre: 'StrongH', descripcion: 'Marca StrongH' },
+        { nombre: 'YESO', descripcion: 'Marca YESO' },
+        { nombre: 'Siruba', descripcion: 'Marca Siruba' },
+        { nombre: 'Nistar', descripcion: 'Marca Nistar' }
+    ];
+    for (const marca of marcas) {
+        await prisma.marca.upsert({
+            where: { nombre: marca.nombre },
+            update: marca,
+            create: marca
+        });
+    }
+    console.log('✅ Marcas creadas: Jinzen, Shifeng, StrongH, YESO, Siruba, Nistar');
 }
 async function seedClientes() {
     const clientes = [
@@ -189,10 +246,34 @@ async function seedClientes() {
     }
     console.log('✅ Clientes iniciales creados.');
 }
+async function seedConfiguracion() {
+    const existing = await prisma.configuracion.findFirst();
+    if (existing) {
+        console.log('ℹ️ Configuración ya existe, omitiendo...');
+        return;
+    }
+    const config = await prisma.configuracion.create({
+        data: {
+            razonSocial: 'Servicios Multiples e importaciones AYHER',
+            ruc: '0411301830006D',
+            direccion: 'Gasolinera Puma 3. al Sur 1/2 arriba',
+            telefono1: '8972-8438',
+            telefono2: null,
+            correo: 'cramber83@gmail.com',
+            sitioWeb: null,
+            logoUrl: null,
+            mensajeFactura: 'Gracias por su preferencia. Precios sujetos a cambio sin previo aviso.',
+        }
+    });
+    console.log('✅ Configuración de empresa creada:', config.razonSocial);
+}
 async function main() {
     await seedAdmin();
     await seedTipoMovimiento();
+    await seedTipoCambioBase();
+    await seedCategoriasYMarcas();
     await seedClientes();
+    await seedConfiguracion();
 }
 main()
     .catch((e) => {

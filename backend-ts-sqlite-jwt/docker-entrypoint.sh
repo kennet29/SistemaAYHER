@@ -32,6 +32,16 @@ if [ -f "$DB_FILE" ]; then
 else
   echo "Desktop DB path: $DB_FILE missing, skip."
 fi
+# Apply pending migrations against the runtime DB so the schema is always up to date.
+# We point DATABASE_URL to the runtime file before running Prisma.
+export DATABASE_URL="file:$DB_FILE"
+if npx prisma migrate deploy --schema /app/prisma/schema.prisma; then
+  echo "Database migrations applied."
+else
+  echo "Failed to apply database migrations; aborting startup."
+  exit 1
+fi
+
 # Run the pre-built seed script so we don't need TypeScript tooling in the runtime image.
 if [ -f /app/dist/seed.js ]; then
   node /app/dist/seed.js || true

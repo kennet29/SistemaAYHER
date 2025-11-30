@@ -11,5 +11,6 @@
     "resolveJsonModule": true,
     "types": ["node", "express"]
   },
-  "include": ["src", "prisma"]
+  "include": ["src", "prisma"],
+  "exclude": ["prisma/clean-seed-data.ts"]
 }

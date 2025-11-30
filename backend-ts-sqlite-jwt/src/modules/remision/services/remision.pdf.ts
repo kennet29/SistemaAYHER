@@ -56,6 +56,7 @@ export async function generarRemisionPDFStreamV2(
     fecha,
     observacion,
     pio,
+    entregadoA,
   }: {
     empresa: Empresa;
     cliente: Cliente;
@@ -64,6 +65,7 @@ export async function generarRemisionPDFStreamV2(
     fecha: Date | string;
     observacion?: string | null;
     pio?: string | null;
+    entregadoA?: string | null;
   },
   res: Response
 ) {
@@ -90,7 +92,7 @@ export async function generarRemisionPDFStreamV2(
 
   const drawDatosGenerales = (startY: number) => {
     const rows = [
-      ["Entregado a:", cliente?.nombre || cliente?.empresa || "N/A", "Fecha:", fmtDate(fecha)],
+      ["Entregado a:", entregadoA || cliente?.nombre || cliente?.empresa || "N/A", "Fecha:", fmtDate(fecha)],
       ["Empresa:", cliente?.empresa || cliente?.nombre || "N/A", "Ruc:", cliente?.ruc || empresa?.ruc || ""],
       ["Dirección:", cliente?.direccion || empresa?.direccion || "", "Pedido N°:", pio || "-"],
     ];
@@ -129,6 +131,13 @@ export async function generarRemisionPDFStreamV2(
 
     const headerH = 22;
     doc.save().rect(left, startY, contentWidth, headerH).fill("#cbd5e1").restore();
+    doc.save().lineWidth(1).strokeColor("#111827");
+    doc.rect(left, startY, contentWidth, headerH).stroke();
+    doc.moveTo(colX[1], startY).lineTo(colX[1], startY + headerH).stroke();
+    doc.moveTo(colX[2], startY).lineTo(colX[2], startY + headerH).stroke();
+    doc.moveTo(colX[3], startY).lineTo(colX[3], startY + headerH).stroke();
+    doc.moveTo(colX[4], startY).lineTo(colX[4], startY + headerH).stroke();
+    doc.restore();
     doc.font("Helvetica-Bold").fontSize(10).fillColor("#111827");
     cols.forEach((c, idx) => doc.text(c.title, colX[idx] + 4, startY + 6, { width: c.w - 8, align: "center" }));
 
@@ -153,6 +162,13 @@ export async function generarRemisionPDFStreamV2(
         drawHeader();
         y = 120;
         doc.save().rect(left, y, contentWidth, headerH).fill("#cbd5e1").restore();
+        doc.save().lineWidth(1).strokeColor("#111827");
+        doc.rect(left, y, contentWidth, headerH).stroke();
+        doc.moveTo(colX[1], y).lineTo(colX[1], y + headerH).stroke();
+        doc.moveTo(colX[2], y).lineTo(colX[2], y + headerH).stroke();
+        doc.moveTo(colX[3], y).lineTo(colX[3], y + headerH).stroke();
+        doc.moveTo(colX[4], y).lineTo(colX[4], y + headerH).stroke();
+        doc.restore();
         doc.font("Helvetica-Bold").fontSize(10).fillColor("#111827");
         cols.forEach((c, idx2) => doc.text(c.title, colX[idx2] + 4, y + 6, { width: c.w - 8, align: "center" }));
         doc.font("Helvetica").fontSize(10).fillColor("#111827");
@@ -166,6 +182,8 @@ export async function generarRemisionPDFStreamV2(
       doc.rect(left, y, contentWidth, rowH).stroke();
       doc.moveTo(colX[1], y).lineTo(colX[1], y + rowH).stroke();
       doc.moveTo(colX[2], y).lineTo(colX[2], y + rowH).stroke();
+      doc.moveTo(colX[3], y).lineTo(colX[3], y + rowH).stroke();
+      doc.moveTo(colX[4], y).lineTo(colX[4], y + rowH).stroke();
       doc.restore();
 
       doc.text(String(codigo), colX[0] + 4, y + 6, { width: cols[0].w - 8, align: "center" });
@@ -178,12 +196,29 @@ export async function generarRemisionPDFStreamV2(
     });
 
     // Total general
+    const totalRowH = 28;
+    // Verificar si hay espacio para el total, si no, crear nueva página
+    if (y + totalRowH > bottomLimit) {
+      doc.addPage();
+      drawHeader();
+      y = 120;
+    }
+    
+    // Dibujar fila de TOTAL con bordes
+    doc.save().lineWidth(1).strokeColor("#111827");
+    doc.rect(left, y, contentWidth, totalRowH).stroke();
+    doc.moveTo(colX[1], y).lineTo(colX[1], y + totalRowH).stroke();
+    doc.moveTo(colX[2], y).lineTo(colX[2], y + totalRowH).stroke();
+    doc.moveTo(colX[3], y).lineTo(colX[3], y + totalRowH).stroke();
+    doc.moveTo(colX[4], y).lineTo(colX[4], y + totalRowH).stroke();
+    doc.restore();
+    
     doc.save().font("Helvetica-Bold").fontSize(11).fillColor("#111827");
-    doc.text("TOTAL", colX[2] + 4, y + 6, { width: cols[2].w + cols[3].w - 8, align: "right" });
-    doc.text(fmtNIO(totalGeneral), colX[4] + 4, y + 6, { width: cols[4].w - 8, align: "right" });
+    doc.text("TOTAL", colX[2] + 4, y + 8, { width: cols[2].w + cols[3].w - 8, align: "right" });
+    doc.text(fmtNIO(totalGeneral), colX[4] + 4, y + 8, { width: cols[4].w - 8, align: "right" });
     doc.restore();
 
-    return y + 28;
+    return y + totalRowH + 10;
   };
 
   const drawFirmas = (startY: number) => {

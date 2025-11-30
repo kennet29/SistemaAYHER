@@ -20,7 +20,8 @@ ventaRouter.get('/proformas/:id/excel', authenticate, ctrl.generarProformaExcel)
 
 ventaRouter
   .route('/:id')
-  .get(authenticate, ctrl.getById);
+  .get(authenticate, ctrl.getById)
+  .patch(authenticate, ctrl.update);
 
 // Excel de una venta (historial)
 ventaRouter.get('/:id/excel', authenticate, ctrl.generarVentaExcel);

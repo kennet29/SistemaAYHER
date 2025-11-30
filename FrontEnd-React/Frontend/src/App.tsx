@@ -21,6 +21,10 @@ import FacturasPendientes from "./Views/FacturasPendientes";
 import StockCritico from "./Views/StockCritico";
 import CotizacionesRecientes from "./Views/CotizacionesRecientes";
 import RestaurarDB from "./Views/RestaurarDB";
+import GenerateInvoiceExcel from "./Views/GenerateInvoiceExcel";
+import EntradaCompra from "./Views/EntradaCompra";
+import HistorialCompras from "./Views/HistorialCompras";
+
 function App() {
   return (
     <>
@@ -60,6 +64,9 @@ function App() {
           />
           <Route path="/stock-critico" element={<StockCritico />} />
           <Route path="/restaurar-db" element={<RestaurarDB />} />
+          <Route path="/generate-invoice" element={<GenerateInvoiceExcel />} />
+          <Route path="/entrada-compra" element={<EntradaCompra />} />
+          <Route path="/historial-compras" element={<HistorialCompras />} />
         </Routes>
       </BrowserRouter>
     </>

@@ -86,3 +86,52 @@ export const deleteConfiguracion = async (req: Request, res: Response) => {
     res.status(500).json({ message: 'Error al eliminar configuración', error });
   }
 };
+
+/**
+ * 📌 Obtener el siguiente número de factura disponible
+ */
+export const getSiguienteNumeroFactura = async (req: Request, res: Response) => {
+  try {
+    const config = await prisma.configuracion.findFirst();
+
+    if (!config) {
+      return res.status(404).json({ message: 'No hay configuración registrada' });
+    }
+
+    const siguienteNumero = (config.ultimoNumeroFactura || 0) + 1;
+
+    res.json({ siguienteNumero, ultimoNumero: config.ultimoNumeroFactura });
+  } catch (error) {
+    console.error('Error al obtener siguiente número de factura:', error);
+    res.status(500).json({ message: 'Error al obtener siguiente número de factura', error });
+  }
+};
+
+/**
+ * 📌 Actualizar el último número de factura usado
+ */
+export const actualizarUltimoNumeroFactura = async (req: Request, res: Response) => {
+  try {
+    const { ultimoNumero } = req.body;
+
+    if (!ultimoNumero || isNaN(ultimoNumero)) {
+      return res.status(400).json({ message: 'Número de factura inválido' });
+    }
+
+    const config = await prisma.configuracion.findFirst();
+
+    if (!config) {
+      return res.status(404).json({ message: 'No hay configuración registrada' });
+    }
+
+    const updated = await prisma.configuracion.update({
+      where: { id: config.id },
+      data: { ultimoNumeroFactura: parseInt(ultimoNumero) },
+    });
+
+    res.json({ ultimoNumeroFactura: updated.ultimoNumeroFactura });
+  } catch (error) {
+    console.error('Error al actualizar último número de factura:', error);
+    res.status(500).json({ message: 'Error al actualizar último número de factura', error });
+  }
+};

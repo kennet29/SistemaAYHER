@@ -44,6 +44,7 @@ const ConfiguracionView = () => {
     logoUrl: "",
     mensajeFactura: "",
     numeroFacturaInicial: 1,
+    ultimoNumeroFactura: 0,
   });
 
   const [user, setUser] = useState<any>(null);
@@ -333,6 +334,20 @@ const ConfiguracionView = () => {
           />
           <small style={{ gridColumn: 'span 2', color: '#5a6d90', fontSize: '0.85em', marginTop: '-0.5em' }}>
             Este será el número inicial para las facturas. Las siguientes facturas serán consecutivas.
+          </small>
+
+          <label style={{ marginTop: '1em' }}>Último Número de Factura Usado</label>
+          <input
+            type="number"
+            placeholder="Ej: 1234"
+            min="0"
+            value={config.ultimoNumeroFactura}
+            onChange={(e) =>
+              setConfig({ ...config, ultimoNumeroFactura: parseInt(e.target.value) || 0 })
+            }
+          />
+          <small style={{ gridColumn: 'span 2', color: '#ff3131', fontSize: '0.85em', marginTop: '-0.5em', fontWeight: 600 }}>
+            ⚠️ Este es el último número de factura usado. El siguiente número sugerido será: <strong>{(config.ultimoNumeroFactura + 1).toString().padStart(6, '0')}</strong>
           </small>
         </InputGrid>
 

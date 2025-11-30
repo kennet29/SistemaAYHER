@@ -43,3 +43,7 @@ exports.configuracionRouter.get('/', ctrl.getConfiguracion);
 exports.configuracionRouter.post('/', ctrl.upsertConfiguracion);
 // 📌 Eliminar configuración (opcional)
 exports.configuracionRouter.delete('/', ctrl.deleteConfiguracion);
+// 📌 Obtener siguiente número de factura
+exports.configuracionRouter.get('/siguiente-numero-factura', ctrl.getSiguienteNumeroFactura);
+// 📌 Actualizar último número de factura
+exports.configuracionRouter.post('/actualizar-numero-factura', ctrl.actualizarUltimoNumeroFactura);

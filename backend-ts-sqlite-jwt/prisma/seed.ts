@@ -260,11 +260,42 @@ async function seedClientes() {
   console.log('✅ Clientes iniciales creados.');
 }
 
+async function seedConfiguracion() {
+  const existing = await prisma.configuracion.findFirst();
+  
+  const configData = {
+    razonSocial: 'Servicios Multiples e importaciones AYHER',
+    ruc: '0411301830006D',
+    direccion: 'Gasolinera Puma 3. al Sur 1/2 arriba',
+    telefono1: '8972-8438',
+    telefono2: null,
+    correo: 'cramber83@gmail.com',
+    sitioWeb: null,
+    logoUrl: null,
+    mensajeFactura: 'Gracias por su preferencia. Precios sujetos a cambio sin previo aviso.',
+  };
+
+  if (existing) {
+    const config = await prisma.configuracion.update({
+      where: { id: existing.id },
+      data: configData
+    });
+    console.log('✅ Configuración de empresa actualizada:', config.razonSocial);
+  } else {
+    const config = await prisma.configuracion.create({
+      data: configData
+    });
+    console.log('✅ Configuración de empresa creada:', config.razonSocial);
+  }
+}
+
 async function main() {
   await seedAdmin();
   await seedTipoMovimiento();
+  await seedTipoCambioBase();
   await seedCategoriasYMarcas();
   await seedClientes();
+  await seedConfiguracion();
 }
 
 main()

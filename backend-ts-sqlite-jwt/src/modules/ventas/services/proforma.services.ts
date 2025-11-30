@@ -704,6 +704,14 @@ export async function generarProformaPDFStreamV3(
     // Totales (fila con bordes)
     y += 10;
     const totalRowH = 20;
+    
+    // Verificar si hay espacio para el total, si no, crear nueva página
+    if (y + totalRowH > bottomLimit) {
+      doc.addPage();
+      drawHeaderRow(doc.page.margins.top);
+      y = doc.page.margins.top + 22;
+    }
+    
     doc.save();
     doc.strokeColor("#333333").lineWidth(1.2);
     doc.rect(left, y, contentWidth, totalRowH).stroke();

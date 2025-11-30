@@ -14,7 +14,9 @@
     "seed": "npm run seed:build && node dist/seed.js",
     "copy:logo": "node scripts/copy-logo.js",
     "test": "jest --coverage",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "create-test-invoice": "ts-node scripts/create-test-invoice.ts",
+    "delete-test-invoice": "ts-node scripts/delete-test-invoice.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.18.0",

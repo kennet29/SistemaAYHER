@@ -58,6 +58,7 @@ export default function Remisiones() {
   });
   const [observacion, setObservacion] = useState("");
   const [pio, setPio] = useState("");
+  const [entregadoA, setEntregadoA] = useState("");
   const [items, setItems] = useState<DetalleItem[]>([{ inventarioId: 0, cantidad: 1, stock: 0, query: "" }]);
   const [tipoCambio, setTipoCambio] = useState<number | null>(null);
   const itemsTableRef = useRef<HTMLTableElement | null>(null);
@@ -213,6 +214,7 @@ export default function Remisiones() {
           fecha,
           items: detalles,
           pio: sanitizedPio ? sanitizedPio : null,
+          entregadoA: entregadoA.trim() || null,
         })
       });
 
@@ -223,6 +225,7 @@ export default function Remisiones() {
       setClienteId("");
       setObservacion("");
       setPio("");
+      setEntregadoA("");
     };
 
     setConfirmCfg({
@@ -326,6 +329,14 @@ export default function Remisiones() {
             value={pio}
             placeholder="PIO"
             onChange={(e) => setPio(e.target.value)}
+          />
+          <label>Entregado a</label>
+          <input
+            className="rem-input"
+            type="text"
+            value={entregadoA}
+            placeholder="Nombre de la persona que recibe"
+            onChange={(e) => setEntregadoA(e.target.value)}
           />
 
           <div style={{ overflowX: "auto" }}>

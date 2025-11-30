@@ -7,6 +7,7 @@ import { generarProformaPDF, generarProformaPDFStreamV3 as generarProformaPDFStr
 import ExcelJS from "exceljs";
 import fs from "fs";
 import { resolveLogoPath } from "../../utils/logo";
+import { generateInvoiceExcel, type InvoiceExcelData } from "../../utils/excelInvoice";
 
 const round4 = (n: number) => Number((n ?? 0).toFixed(4));
 const fmtCurrency = (n: any) => Number(n || 0);
@@ -1189,5 +1190,33 @@ export async function generarProformaExcel(req: Request, res: Response) {
   } catch (error) {
     console.error("Error generando Excel de proforma:", error);
     res.status(500).json({ message: "Error generando Excel de proforma" });
+  }
+}
+
+
+/* ===== Actualizar Venta ===== */
+export async function update(req: Request, res: Response) {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "ID inválido" });
+
+    const { numeroFactura, cancelada, estadoPago, montoPendiente } = req.body;
+
+    const updateData: any = {};
+    if (numeroFactura !== undefined) updateData.numeroFactura = numeroFactura;
+    if (cancelada !== undefined) updateData.cancelada = cancelada;
+    if (estadoPago !== undefined) updateData.estadoPago = estadoPago;
+    if (montoPendiente !== undefined) updateData.montoPendiente = montoPendiente;
+
+    const venta = await prisma.venta.update({
+      where: { id },
+      data: updateData,
+      include: { cliente: true, detalles: { include: { inventario: true } } },
+    });
+
+    res.json({ venta });
+  } catch (error) {
+    console.error("Error al actualizar venta:", error);
+    res.status(500).json({ message: "Error al actualizar venta" });
   }
 }

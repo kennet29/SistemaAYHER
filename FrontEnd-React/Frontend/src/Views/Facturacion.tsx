@@ -119,6 +119,7 @@ const Facturacion: React.FC = () => {
   const [tipoPago, setTipoPago] = useState<"CONTADO" | "CREDITO">("CONTADO");
   const [plazoDias, setPlazoDias] = useState<number>(0);
   const [pio, setPio] = useState("");
+  const [numeroFacturaSugerido, setNumeroFacturaSugerido] = useState<string>("");
 
   /* ===== Fetch ===== */
   useEffect(() => {
@@ -144,6 +145,19 @@ const Facturacion: React.FC = () => {
       .then((r) => r.json())
       .then((j) => setRemisiones(j.remisiones ?? j.data ?? j ?? []))
       .catch(() => setRemisiones([]));
+  }, []);
+  
+  // Obtener el siguiente número de factura sugerido
+  useEffect(() => {
+    fetch(buildApiUrl('/configuracion/siguiente-numero-factura'), {
+      headers: { Authorization: `Bearer ${getCookie("token")}` }
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        const siguienteNumero = data.siguienteNumero || 1;
+        setNumeroFacturaSugerido(siguienteNumero.toString().padStart(6, '0'));
+      })
+      .catch(() => setNumeroFacturaSugerido('000001'));
   }, []);
 
   // Cargar productos cotizados recientemente cuando cambia el cliente
@@ -395,6 +409,7 @@ const Facturacion: React.FC = () => {
       tipoPago,
       plazoDias,
       tipoCambioValor: tipoCambio,
+      numeroFactura: numeroFacturaSugerido, // Agregar número de factura
       detalles: validLines.map((i) => ({
         inventarioId: i.inventarioId,
         cantidad: i.cantidad,
@@ -420,7 +435,24 @@ const Facturacion: React.FC = () => {
         return;
       }
 
-      notify.ok("✅ Venta registrada");
+      // Actualizar el consecutivo después de guardar exitosamente
+      const numPaginas = Math.ceil(validLines.length / 15);
+      const ultimoNumeroUsado = parseInt(numeroFacturaSugerido) + numPaginas - 1;
+      
+      try {
+        await fetch(buildApiUrl('/configuracion/actualizar-numero-factura'), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+          body: JSON.stringify({ ultimoNumero: ultimoNumeroUsado }),
+        });
+      } catch (error) {
+        console.error('Error al actualizar consecutivo:', error);
+      }
+
+      notify.ok("✅ Venta registrada con número de factura: " + numeroFacturaSugerido);
       setTimeout(() => window.location.reload(), 800);
     } catch {
       notify.err("Error de red al guardar venta");
@@ -657,6 +689,51 @@ const Facturacion: React.FC = () => {
                 placeholder="PIO"
               />
             </label>
+            <label>
+              Número de Factura
+              {(() => {
+                const validLines = items.filter((it) => it.inventarioId && it.cantidad > 0);
+                const numPaginas = Math.ceil(validLines.length / 15);
+                const numeroInicial = parseInt(numeroFacturaSugerido) || 1;
+                const numeroFinal = numeroInicial + numPaginas - 1;
+                const rangoNumeros = numPaginas > 1 
+                  ? `${numeroFacturaSugerido} - ${numeroFinal.toString().padStart(6, '0')}`
+                  : numeroFacturaSugerido;
+                
+                return (
+                  <>
+                    <input
+                      type="text"
+                      value={rangoNumeros}
+                      readOnly
+                      style={{
+                        background: numPaginas > 1 ? "#fef3c7" : "#dcfce7",
+                        border: numPaginas > 1 ? "2px solid #fbbf24" : "2px solid #86efac",
+                        color: numPaginas > 1 ? "#92400e" : "#166534",
+                        fontWeight: 600,
+                        fontSize: "1.1rem",
+                        textAlign: "center",
+                        cursor: "not-allowed"
+                      }}
+                      title={numPaginas > 1 
+                        ? `Esta factura usará ${numPaginas} números consecutivos (${numPaginas} páginas)`
+                        : "Este número se asignará automáticamente al guardar"}
+                    />
+                    {numPaginas > 1 && (
+                      <small style={{ 
+                        display: "block", 
+                        marginTop: "0.25rem", 
+                        color: "#92400e", 
+                        fontWeight: 600,
+                        fontSize: "0.85rem"
+                      }}>
+                        ⚠️ {numPaginas} páginas = {numPaginas} números consecutivos
+                      </small>
+                    )}
+                  </>
+                );
+              })()}
+            </label>
           </div>
 
           <div className="items-container">
@@ -854,6 +931,52 @@ const Facturacion: React.FC = () => {
                     width: "120px"
                   },
                   { name: "Stock", selector: (r: Product) => r.stockActual as any, width: "100px" },
+                  {
+                    name: "Seleccionar",
+                    cell: (p: Product) => (
+                      <button
+                        type="button"
+                        className="sel-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!pickerTargetId) return;
+                          const stock = Number(p.stockActual ?? 0) || 0;
+                          if (stock <= 0) {
+                            notify.warn("Este producto no tiene stock disponible.");
+                            return;
+                          }
+                          const baseNIO = getPrecioProducto(p, "NIO");
+                          const precioSel = moneda === "USD" ? (tipoCambio ? Number((baseNIO / tipoCambio).toFixed(4)) : 0) : Number(baseNIO.toFixed(4));
+                          const cantInicial = Math.min(1, stock);
+                          setItems((prev) =>
+                            prev.map((it) =>
+                              it.id === pickerTargetId
+                                ? {
+                                    ...it,
+                                    producto: `${p.numeroParte ?? ""} — ${p.nombre ?? ""}`.trim(),
+                                    precio: precioSel,
+                                    precioBaseNIO: Number(baseNIO.toFixed(4)),
+                                    inventarioId: Number(p.id),
+                                    esRemision: false,
+                                    remisionDetalleId: null,
+                                    cantidad: cantInicial,
+                                  }
+                                : it
+                            )
+                          );
+                          setPickerAbierto(false);
+                          setBusqueda("");
+                          notify.ok("Producto agregado");
+                        }}
+                        title="Seleccionar producto"
+                      >
+                        ✅
+                      </button>
+                    ),
+                    ignoreRowClick: true,
+                    button: true,
+                    width: "130px",
+                  },
                 ] as unknown as TableColumn<Product>[]}
                 data={productosFiltrados}
                 pagination
@@ -862,36 +985,6 @@ const Facturacion: React.FC = () => {
                 customStyles={{
                   headCells: { style: { justifyContent: "center", textAlign: "center" } },
                   cells: { style: { justifyContent: "center", textAlign: "center" } },
-                }}
-                onRowClicked={(p: Product) => {
-                  if (!pickerTargetId) return;
-                  const stock = Number(p.stockActual ?? 0) || 0;
-                  if (stock <= 0) {
-                    notify.warn("Este producto no tiene stock disponible.");
-                    return;
-                  }
-                  const baseNIO = getPrecioProducto(p, "NIO");
-                  const precioSel = moneda === "USD" ? (tipoCambio ? Number((baseNIO / tipoCambio).toFixed(4)) : 0) : Number(baseNIO.toFixed(4));
-                  const cantInicial = Math.min(1, stock);
-                  setItems((prev) =>
-                    prev.map((it) =>
-                      it.id === pickerTargetId
-                        ? {
-                            ...it,
-                            producto: `${p.numeroParte ?? ""} — ${p.nombre ?? ""}`.trim(),
-                            precio: precioSel,
-                            precioBaseNIO: Number(baseNIO.toFixed(4)),
-                            inventarioId: Number(p.id),
-                            esRemision: false,
-                            remisionDetalleId: null,
-                            cantidad: cantInicial,
-                          }
-                        : it
-                    )
-                  );
-                  setPickerAbierto(false);
-                  setBusqueda("");
-                  notify.ok("Producto agregado");
                 }}
               />
             </div>

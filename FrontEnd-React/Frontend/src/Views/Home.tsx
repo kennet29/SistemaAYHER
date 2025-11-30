@@ -228,6 +228,24 @@ const Home = () => {
           <Link to="/marcas" className="card-link">Entrar</Link>
         </Card>
 
+        <Card color1="#16a34a" color2="#22c55e">
+          <div className="icon-circle">
+            <FaBoxOpen />
+          </div>
+          <h2>Entrada de Compra</h2>
+          <p>Registra compras de productos y actualiza inventario.</p>
+          <Link to="/entrada-compra" className="card-link">Entrar</Link>
+        </Card>
+
+        <Card color1="#3182ce" color2="#4299e1">
+          <div className="icon-circle">
+            <FaChartLine />
+          </div>
+          <h2>Historial de Compras</h2>
+          <p>Consulta el historial completo de entradas de compra.</p>
+          <Link to="/historial-compras" className="card-link">Ver Historial</Link>
+        </Card>
+
         <Card color1="#001f33" color2="#003366">
           <div className="icon-circle">
             <FaExchangeAlt />
@@ -377,7 +395,7 @@ const MainContent = styled.main`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 2.5%;
-  padding: 3% 0;
+  padding: 3% 0 5% 0;
   z-index: 1;
   position: relative;
 
@@ -478,4 +496,7 @@ const Footer = styled.footer`
   font-size: 0.9em;
   letter-spacing: 0.05em;
   box-shadow: 0 -0.5vh 1.5vh rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 10;
+  margin-top: 2rem;
 `;
