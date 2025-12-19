@@ -12,6 +12,7 @@ import {
   FaDollarSign,
   FaUserFriends,
   FaExclamationTriangle,
+  FaUndo,
 } from "react-icons/fa";
 import { Link } from "react-router-dom";
 import { buildApiUrl } from "../api/constants";
@@ -160,7 +161,7 @@ const Home = () => {
       </Header>
 
       <MainContent>
-        <Card color1="#003399" color2="#0052cc">
+        <Card color1="#1e40af" color2="#3b82f6">
           <div className="icon-circle">
             <FaBoxOpen />
           </div>
@@ -169,7 +170,7 @@ const Home = () => {
           <Link to="/inventario" className="card-link">Entrar</Link>
         </Card>
 
-        <Card color1="#ff8f00" color2="#ffc107">
+        <Card color1="#dc2626" color2="#ef4444">
           <div className="icon-circle">
             <FaExclamationTriangle />
           </div>
@@ -180,7 +181,7 @@ const Home = () => {
           </Link>
         </Card>
 
-        <Card color1="#0052cc" color2="#0080ff">
+        <Card color1="#1e40af" color2="#3b82f6">
           <div className="icon-circle">
             <FaCashRegister />
           </div>
@@ -189,8 +190,18 @@ const Home = () => {
           <Link to="/facturacion" className="card-link">Entrar</Link>
         </Card>
 
+
+        <Card color1="#0f172a" color2="#0ea5e9">
+          <div className="icon-circle">
+            <FaUndo />
+          </div>
+          <h2>Devoluciones</h2>
+          <p>Registra devoluciones y genera notas de credito para tus clientes.</p>
+          <Link to="/devoluciones" className="card-link">Registrar</Link>
+        </Card>
+
         {/* ✅ Nueva Card Clientes */}
-        <Card color1="#00695c" color2="#26a69a">
+        <Card color1="#1e40af" color2="#3b82f6">
           <div className="icon-circle">
             <FaUserFriends />
           </div>
@@ -200,7 +211,7 @@ const Home = () => {
         </Card>
 
         {/* ✅ Facturas de crédito pendientes */}
-        <Card color1="#7b1fa2" color2="#512da8">
+        <Card color1="#1e40af" color2="#3b82f6">
           <div className="icon-circle">
             <FaCashRegister />
           </div>
@@ -210,7 +221,7 @@ const Home = () => {
         </Card>
 
         {/* ✅ Nueva Card Cartera de clientes */}
-        <Card color1="#6a1b9a" color2="#9c27b0">
+        <Card color1="#1e40af" color2="#3b82f6">
           <div className="icon-circle">
             <FaChartLine />
           </div>
@@ -219,7 +230,7 @@ const Home = () => {
           <Link to="/cartera-clientes" className="card-link">Entrar</Link>
         </Card>
 
-        <Card color1="#cc0000" color2="#ff3333">
+        <Card color1="#1e40af" color2="#3b82f6">
           <div className="icon-circle">
             <FaTags />
           </div>
@@ -228,7 +239,7 @@ const Home = () => {
           <Link to="/marcas" className="card-link">Entrar</Link>
         </Card>
 
-        <Card color1="#16a34a" color2="#22c55e">
+        <Card color1="#1e40af" color2="#3b82f6">
           <div className="icon-circle">
             <FaBoxOpen />
           </div>
@@ -237,7 +248,7 @@ const Home = () => {
           <Link to="/entrada-compra" className="card-link">Entrar</Link>
         </Card>
 
-        <Card color1="#3182ce" color2="#4299e1">
+        <Card color1="#1e40af" color2="#3b82f6">
           <div className="icon-circle">
             <FaChartLine />
           </div>
@@ -246,7 +257,7 @@ const Home = () => {
           <Link to="/historial-compras" className="card-link">Ver Historial</Link>
         </Card>
 
-        <Card color1="#001f33" color2="#003366">
+        <Card color1="#1e40af" color2="#3b82f6">
           <div className="icon-circle">
             <FaExchangeAlt />
           </div>
@@ -255,7 +266,7 @@ const Home = () => {
           <Link to="/movimientos" className="card-link">Entrar</Link>
         </Card>
 
-        <Card color1="#660000" color2="#990000">
+        <Card color1="#1e40af" color2="#3b82f6">
           <div className="icon-circle">
             <FaThLarge />
           </div>
@@ -264,7 +275,7 @@ const Home = () => {
           <Link to="/categorias" className="card-link">Entrar</Link>
         </Card>
 
-        <Card color1="#00695c" color2="#26a69a">
+        <Card color1="#1e40af" color2="#3b82f6">
           <div className="icon-circle">
             <FaDollarSign />
           </div>
@@ -273,7 +284,7 @@ const Home = () => {
           <Link to="/tipo-cambio" className="card-link">Entrar</Link>
         </Card>
 
-        <Card color1="#004d40" color2="#009688">
+        <Card color1="#1e40af" color2="#3b82f6">
           <div className="icon-circle">
             <FaCog />
           </div>
@@ -282,7 +293,7 @@ const Home = () => {
           <Link to="/configuracion" className="card-link">Entrar</Link>
         </Card>
 
-        <Card color1="#d32f2f" color2="#f44336">
+        <Card color1="#dc2626" color2="#ef4444">
           <div className="icon-circle">
             <FaBoxOpen />
           </div>
@@ -379,6 +390,7 @@ const Header = styled.header`
     font-size: 2.4em;
     font-weight: 700;
     margin: 0;
+    color: #ffffff;
   }
 
   p {

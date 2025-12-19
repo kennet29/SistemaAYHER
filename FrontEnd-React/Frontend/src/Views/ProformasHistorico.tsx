@@ -1,7 +1,7 @@
 // src/Views/ProformasHistorico.tsx - Historial de Proformas
 import React, { useEffect, useMemo, useState } from "react";
 import DataTable from "react-data-table-component";
-import { FaArrowLeft, FaClipboardList } from "react-icons/fa";
+import { FaArrowLeft, FaClipboardList, FaFilePdf, FaFileExcel, FaEdit, FaTrash, FaCashRegister } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -47,9 +47,6 @@ const ProformasHistorico: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
-  const [monedaSeleccionada, setMonedaSeleccionada] = useState<"NIO" | "USD">("NIO");
-  const [showMonedaModal, setShowMonedaModal] = useState(false);
-  const [accionPendiente, setAccionPendiente] = useState<{ tipo: "pdf" | "excel"; row: ProformaRow } | null>(null);
 
   useEffect(() => {
     const token = getCookie("token");
@@ -116,23 +113,7 @@ const ProformasHistorico: React.FC = () => {
     }
   }
 
-  function solicitarMoneda(tipo: "pdf" | "excel", row: ProformaRow) {
-    setAccionPendiente({ tipo, row });
-    setShowMonedaModal(true);
-  }
-
-  function confirmarMoneda() {
-    if (!accionPendiente) return;
-    setShowMonedaModal(false);
-    if (accionPendiente.tipo === "pdf") {
-      ejecutarPdf(accionPendiente.row, monedaSeleccionada);
-    } else {
-      ejecutarExcel(accionPendiente.row, monedaSeleccionada);
-    }
-    setAccionPendiente(null);
-  }
-
-  async function ejecutarPdf(row: ProformaRow, moneda: "NIO" | "USD") {
+  async function ejecutarPdf(row: ProformaRow) {
     setDownloadingId(row.id);
     try {
       const detalle = await fetchDetalle(row.id);
@@ -185,7 +166,7 @@ const ProformasHistorico: React.FC = () => {
         plazoEntrega: detalle.plazoEntrega ?? null,
         condicionPago: detalle.condicionPago ?? null,
         guardarHistorial: false,
-        moneda: moneda,
+        moneda: "NIO", // Ya no importa porque el PDF muestra ambas monedas
       };
       const token = getCookie("token");
       const resp = await fetch(API_PROFORMA_PDF, {
@@ -215,11 +196,11 @@ const ProformasHistorico: React.FC = () => {
     }
   }
 
-  async function ejecutarExcel(row: ProformaRow, moneda: "NIO" | "USD") {
+  async function ejecutarExcel(row: ProformaRow) {
     setDownloadingId(row.id);
     try {
       const token = getCookie("token");
-      const resp = await fetch(buildApiUrl(`/ventas/proformas/${row.id}/excel?moneda=${moneda}`), {
+      const resp = await fetch(buildApiUrl(`/ventas/proformas/${row.id}/excel`), {
         headers: { Authorization: token ? `Bearer ${token}` : "" },
       });
       
@@ -242,6 +223,106 @@ const ProformasHistorico: React.FC = () => {
       toast.error("Error al generar Excel");
     } finally {
       setDownloadingId(null);
+    }
+  }
+
+  async function editarProforma(row: ProformaRow) {
+    try {
+      const detalle = await fetchDetalle(row.id);
+      if (!detalle) return;
+      
+      // Parsear los detalles
+      let items: any[] = [];
+      try {
+        const parsed = JSON.parse(detalle.detallesJson || "[]");
+        if (Array.isArray(parsed)) items = parsed;
+      } catch {
+        items = [];
+      }
+
+      // Guardar en localStorage para cargar en la vista de proforma
+      const proformaData = {
+        id: detalle.id,
+        clienteId: detalle.clienteId,
+        cliente: detalle.cliente,
+        items: items,
+        tipoCambio: detalle.tipoCambioValor,
+        pio: detalle.pio || "",
+        incoterm: detalle.incoterm || "DDP NICARAGUA",
+        plazoEntrega: detalle.plazoEntrega || "Inmediato",
+        condicionPago: detalle.condicionPago || "30 dias credito",
+      };
+      
+      localStorage.setItem("editarProforma", JSON.stringify(proformaData));
+      navigate("/proforma");
+    } catch (error) {
+      toast.error("Error al cargar la proforma para editar");
+    }
+  }
+
+  async function facturarProforma(row: ProformaRow) {
+    try {
+      const detalle = await fetchDetalle(row.id);
+      if (!detalle) return;
+
+      let items: any[] = [];
+      try {
+        const parsed = JSON.parse(detalle.detallesJson || "[]");
+        if (Array.isArray(parsed)) items = parsed;
+      } catch {
+        items = [];
+      }
+
+      if (!items.length) {
+        toast.warn("La proforma no tiene detalles para facturar");
+        return;
+      }
+
+      const prefill = {
+        clienteId: detalle.clienteId ?? detalle.cliente?.id ?? null,
+        cliente: detalle.cliente || null,
+        tipoCambioValor: detalle.tipoCambioValor || null,
+        pio: detalle.pio || "",
+        items: items.map((it: any) => ({
+          inventarioId: typeof it.inventarioId === "number" ? Number(it.inventarioId) : null,
+          numeroParte: it.numeroParte ?? "",
+          nombre: it.nombre ?? "",
+          cantidad: Number(it.cantidad || 0),
+          precioCordoba: Number(it.precioCordoba || 0),
+        })),
+      };
+
+      localStorage.setItem("facturacionPrefill", JSON.stringify(prefill));
+      navigate("/facturacion");
+    } catch (error) {
+      toast.error("Error al cargar la proforma para facturar");
+    }
+  }
+
+  async function borrarProforma(row: ProformaRow) {
+    const confirmar = window.confirm(
+      `¿Estás seguro de que deseas borrar la proforma #${row.id}?\n\nEsta acción no se puede deshacer.`
+    );
+    
+    if (!confirmar) return;
+
+    try {
+      const token = getCookie("token");
+      const resp = await fetch(buildApiUrl(`/ventas/proformas/${row.id}`), {
+        method: "DELETE",
+        headers: { Authorization: token ? `Bearer ${token}` : "" },
+      });
+
+      if (!resp.ok) {
+        toast.error("No se pudo borrar la proforma");
+        return;
+      }
+
+      toast.success("Proforma borrada exitosamente");
+      // Actualizar la lista
+      setProformas((prev) => prev.filter((p) => p.id !== row.id));
+    } catch (error) {
+      toast.error("Error al borrar la proforma");
     }
   }
 
@@ -299,26 +380,55 @@ const ProformasHistorico: React.FC = () => {
     {
       name: "Acciones",
       button: true,
-      width: "200px",
+      width: "220px",
       cell: (r: ProformaRow) => (
-        <div style={{ display: "flex", gap: ".4rem", justifyContent: "center" }}>
+        <div style={{ display: "flex", gap: ".3rem", justifyContent: "center", alignItems: "center" }}>
           <button
             type="button"
-            onClick={() => solicitarMoneda("pdf", r)}
+            onClick={() => ejecutarPdf(r)}
             disabled={downloadingId === r.id}
             className="icon-btn"
-            style={{ minWidth: 84 }}
+            style={{ minWidth: 36, padding: "6px 8px", background: "#dc2626", color: "#fff" }}
+            title="Descargar PDF"
           >
-            PDF
+            <FaFilePdf />
           </button>
           <button
             type="button"
-            onClick={() => solicitarMoneda("excel", r)}
+            onClick={() => ejecutarExcel(r)}
             disabled={downloadingId === r.id}
             className="icon-btn"
-            style={{ minWidth: 92, background: "#f1fff0", color: "#14532d" }}
+            style={{ minWidth: 36, padding: "6px 8px", background: "#16a34a", color: "#fff" }}
+            title="Descargar Excel"
           >
-            Excel
+            <FaFileExcel />
+          </button>
+          <button
+            type="button"
+            onClick={() => editarProforma(r)}
+            className="icon-btn"
+            style={{ minWidth: 36, padding: "6px 8px", background: "#2563eb", color: "#fff" }}
+            title="Editar proforma"
+          >
+            <FaEdit />
+          </button>
+          <button
+            type="button"
+            onClick={() => facturarProforma(r)}
+            className="icon-btn"
+            style={{ minWidth: 36, padding: "6px 8px", background: "#0b9c5a", color: "#fff" }}
+            title="Cargar en Facturación"
+          >
+            <FaCashRegister />
+          </button>
+          <button
+            type="button"
+            onClick={() => borrarProforma(r)}
+            className="icon-btn"
+            style={{ minWidth: 36, padding: "6px 8px", background: "#991b1b", color: "#fff" }}
+            title="Borrar proforma"
+          >
+            <FaTrash />
           </button>
         </div>
       ),
@@ -393,14 +503,14 @@ const ProformasHistorico: React.FC = () => {
           </div>
 
           <div className="ventas-table-wrap proformas-table-wrap" style={{ display: "flex", justifyContent: "center" }}>
-            <div className="ventas-table proformas-table" style={{ width: "100%", maxWidth: "1400px" }}>
+            <div className="ventas-table proformas-table" style={{ width: "100%", maxWidth: "1250px" }}>
               <DataTable
                 columns={columns}
                 data={rows}
                 progressPending={loading}
                 pagination
                 fixedHeader
-                fixedHeaderScrollHeight="360px"
+                fixedHeaderScrollHeight="450px"
                 highlightOnHover
                 dense
                 customStyles={{
@@ -425,108 +535,6 @@ const ProformasHistorico: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Modal de selección de moneda */}
-      {showMonedaModal && (
-        <div style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0, 0, 0, 0.5)",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          zIndex: 9999,
-        }}>
-          <div style={{
-            background: "#fff",
-            padding: "2rem",
-            borderRadius: "12px",
-            boxShadow: "0 8px 30px rgba(0, 0, 0, 0.25)",
-            minWidth: "400px",
-          }}>
-            <h3 style={{ marginTop: 0, color: "#003399" }}>Seleccionar Moneda</h3>
-            <p style={{ marginBottom: "1.5rem", color: "#475569" }}>
-              ¿En qué moneda deseas generar la proforma?
-            </p>
-            
-            <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem" }}>
-              <label style={{
-                flex: 1,
-                padding: "1rem",
-                border: monedaSeleccionada === "NIO" ? "2px solid #003399" : "2px solid #e3e9f5",
-                borderRadius: "8px",
-                cursor: "pointer",
-                background: monedaSeleccionada === "NIO" ? "#eef3ff" : "#fff",
-                transition: "all 0.2s",
-              }}>
-                <input
-                  type="radio"
-                  name="moneda"
-                  value="NIO"
-                  checked={monedaSeleccionada === "NIO"}
-                  onChange={(e) => setMonedaSeleccionada(e.target.value as "NIO" | "USD")}
-                  style={{ marginRight: "0.5rem" }}
-                />
-                <strong>Córdobas (C$)</strong>
-              </label>
-              
-              <label style={{
-                flex: 1,
-                padding: "1rem",
-                border: monedaSeleccionada === "USD" ? "2px solid #003399" : "2px solid #e3e9f5",
-                borderRadius: "8px",
-                cursor: "pointer",
-                background: monedaSeleccionada === "USD" ? "#eef3ff" : "#fff",
-                transition: "all 0.2s",
-              }}>
-                <input
-                  type="radio"
-                  name="moneda"
-                  value="USD"
-                  checked={monedaSeleccionada === "USD"}
-                  onChange={(e) => setMonedaSeleccionada(e.target.value as "NIO" | "USD")}
-                  style={{ marginRight: "0.5rem" }}
-                />
-                <strong>Dólares ($)</strong>
-              </label>
-            </div>
-
-            <div style={{ display: "flex", gap: "1rem", justifyContent: "flex-end" }}>
-              <button
-                onClick={() => {
-                  setShowMonedaModal(false);
-                  setAccionPendiente(null);
-                }}
-                style={{
-                  padding: "0.5rem 1.5rem",
-                  background: "#dc2626",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmarMoneda}
-                style={{
-                  padding: "0.5rem 1.5rem",
-                  background: "#003399",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                }}
-              >
-                Generar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <ToastContainer position="top-right" autoClose={3000} hideProgressBar />
     </div>

@@ -39,6 +39,9 @@ const ctrl = __importStar(require("./devolucion.controller"));
 const auth_1 = require("../../middleware/auth");
 exports.devolucionRouter = (0, express_1.Router)();
 // Devolución de Venta
-exports.devolucionRouter.post('/venta', auth_1.authenticate, ctrl.createDevolucionVenta);
+exports.devolucionRouter.post("/venta", auth_1.authenticate, ctrl.createDevolucionVenta);
+exports.devolucionRouter.get("/venta", auth_1.authenticate, ctrl.listDevolucionesVenta);
+exports.devolucionRouter.get("/venta/:id/pdf", auth_1.authenticate, ctrl.imprimirNotaCreditoVenta);
+exports.devolucionRouter.patch("/venta/:id/cobrar", auth_1.authenticate, ctrl.cobrarDevolucionVenta);
 // Devolución de Compra
-exports.devolucionRouter.post('/compra', auth_1.authenticate, ctrl.createDevolucionCompra);
+exports.devolucionRouter.post("/compra", auth_1.authenticate, ctrl.createDevolucionCompra);

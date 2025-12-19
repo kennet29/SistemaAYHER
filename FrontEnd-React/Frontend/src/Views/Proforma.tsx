@@ -28,6 +28,19 @@ function formatMoney(val: number, currency: string) {
   return `${symbol} ${Number(val || 0).toFixed(2)}`;
 }
 
+// Divide texto de producto en numero de parte y nombre, usando únicamente el separador "|"
+function parseProducto(text: string) {
+  const raw = String(text || "").trim();
+  if (!raw) return { numeroParte: "", nombre: "" };
+  if (raw.includes("|")) {
+    const parts = raw.split("|");
+    const numeroParte = (parts.shift() || "").trim();
+    const nombre = parts.join("|").trim();
+    return { numeroParte: numeroParte || nombre, nombre: nombre || numeroParte };
+  }
+  return { numeroParte: raw, nombre: raw };
+}
+
 // ================= Types =================
 type LineItem = {
   id: string;
@@ -70,6 +83,7 @@ const API_TIPO_CAMBIO = buildApiUrl("/tipo-cambio/latest");
 const API_REMISIONES = buildApiUrl("/remision/pendientes");
 const API_CLIENTES = buildApiUrl("/clientes");
 const API_VENTAS = buildApiUrl("/ventas");
+const API_COTIZACIONES = buildApiUrl("/cotizaciones/recientes");
 
 // ================= Alerts =================
 const notify = {
@@ -109,6 +123,7 @@ const Proforma: React.FC = () => {
   const [pickerRemisionAbierto, setPickerRemisionAbierto] = useState(false);
   const [filaSeleccionRemision, setFilaSeleccionRemision] = useState<string | null>(null);
   const [remisionSearch, setRemisionSearch] = useState("");
+  const [productosRecientes, setProductosRecientes] = useState<Map<number, { clienteNombre: string; clienteEmpresa: string; fecha: string }>>(new Map());
 
   const [items, setItems] = useState<LineItem[]>([
     { id: cryptoId(), producto: "", cantidad: 1, precio: 0 },
@@ -116,6 +131,8 @@ const Proforma: React.FC = () => {
   const [guardada, setGuardada] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [exportandoPdf, setExportandoPdf] = useState(false);
+  const [proformaIdEdicion, setProformaIdEdicion] = useState<number | null>(null);
+  const [actualizandoPrecioId, setActualizandoPrecioId] = useState<string | null>(null);
 
   // Fetch
   useEffect(() => {
@@ -139,6 +156,70 @@ const Proforma: React.FC = () => {
       .then(j => setRemisiones(j.remisiones ?? j.data ?? j ?? []));
   }, []);
 
+  // Productos cotizados recientemente (global)
+  useEffect(() => {
+    const token = getCookie("token");
+    fetch(API_COTIZACIONES, {
+      headers: { Authorization: token ? `Bearer ${token}` : "" },
+    })
+      .then((r) => r.json())
+      .then((body) => {
+        const recientes = Array.isArray(body?.recientes) ? body.recientes : [];
+        const mapa = new Map<number, { clienteNombre: string; clienteEmpresa: string; fecha: string }>();
+        const ahora = Date.now();
+        const limiteMs = 14 * 24 * 60 * 60 * 1000;
+        for (const entry of recientes) {
+          const invId = Number(entry.inventarioId);
+          if (!Number.isFinite(invId)) continue;
+          const fechaStr = entry.fecha || "";
+          const fechaMs = fechaStr ? new Date(fechaStr).getTime() : NaN;
+          if (!Number.isFinite(fechaMs)) continue;
+          if (ahora - fechaMs > limiteMs) continue; // más de 14 días, omitir
+          if (!mapa.has(invId)) {
+            mapa.set(invId, {
+              clienteNombre: entry.cliente?.nombre || "Cliente desconocido",
+              clienteEmpresa: entry.cliente?.empresa || "",
+              fecha: fechaStr,
+            });
+          }
+        }
+        setProductosRecientes(mapa);
+      })
+      .catch(() => setProductosRecientes(new Map()));
+  }, []);
+
+  // Cargar proforma para editar desde localStorage
+  useEffect(() => {
+    const editarData = localStorage.getItem("editarProforma");
+    if (editarData) {
+      try {
+        const data = JSON.parse(editarData);
+        if (data.id) setProformaIdEdicion(data.id);
+        if (data.clienteId) setCliente(data.clienteId);
+        if (data.tipoCambio) setTipoCambio(data.tipoCambio);
+        if (data.pio) setPio(data.pio);
+        if (data.incoterm) setIncoterm(data.incoterm);
+        if (data.plazoEntrega) setPlazoEntrega(data.plazoEntrega);
+        if (data.condicionPago) setCondicionPago(data.condicionPago);
+        if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+          const loadedItems = data.items.map((item: any) => ({
+            id: cryptoId(),
+            producto: `${item.numeroParte || ""} - ${item.nombre || ""}`.trim(),
+            cantidad: item.cantidad || 1,
+            precio: item.precioCordoba || 0,
+            inventarioId: item.inventarioId || null,
+          }));
+          setItems(loadedItems);
+        }
+        setGuardada(true); // Marcar como guardada porque ya existe
+        notify.ok("Proforma cargada para editar");
+        localStorage.removeItem("editarProforma");
+      } catch (error) {
+        console.error("Error al cargar proforma para editar:", error);
+      }
+    }
+  }, []);
+
   // Helpers stock & price
   const getPrecioProducto = (p: Product, m: Moneda) =>
     Number(
@@ -153,6 +234,15 @@ const Proforma: React.FC = () => {
   const getCantidadUsada = (id?: number | null, excl?: string) =>
     id == null ? 0 : items.filter(it => it.inventarioId === id && it.id !== excl)
       .reduce((a, it) => a + (it.cantidad || 0), 0);
+
+  const getPrecioBaseNIO = (it: LineItem) => {
+    const precio = Math.max(0, Number(it.precio) || 0);
+    if (moneda === "USD") {
+      if (!tipoCambio || tipoCambio <= 0) return 0;
+      return Number((precio * tipoCambio).toFixed(4));
+    }
+    return Number(precio.toFixed(4));
+  };
 
   const productosFiltrados = useMemo(() => {
     const q = busqueda.toLowerCase().trim();
@@ -255,9 +345,9 @@ const Proforma: React.FC = () => {
       let numeroParte = (prod as any)?.numeroParte ?? "";
       let nombre = (prod as any)?.nombre ?? "";
       if (!numeroParte || !nombre) {
-        const split = String(it.producto || "").split(" - ");
-        if (!numeroParte && split[0]) numeroParte = split[0].trim();
-        if (!nombre && split[1]) nombre = split[1].trim();
+        const parsed = parseProducto(String(it.producto || ""));
+        if (!numeroParte) numeroParte = parsed.numeroParte;
+        if (!nombre) nombre = parsed.nombre;
       }
       const cantidad = Number(it.cantidad || 0);
       const precio = Number(it.precio || 0);
@@ -284,9 +374,9 @@ const Proforma: React.FC = () => {
         let numeroParte = (prod as any)?.numeroParte ?? "";
         let nombre = (prod as any)?.nombre ?? "";
         if (!numeroParte || !nombre) {
-          const split = String(it.producto || "").split(" - ");
-          if (!numeroParte && split[0]) numeroParte = split[0].trim();
-          if (!nombre && split[1]) nombre = split[1].trim();
+          const parsed = parseProducto(String(it.producto || ""));
+          if (!numeroParte) numeroParte = parsed.numeroParte;
+          if (!nombre) nombre = parsed.nombre;
         }
         const cantidad = Math.max(0, Number(it.cantidad) || 0);
         const precioShown = Math.max(0, Number(it.precio) || 0);
@@ -315,11 +405,52 @@ const Proforma: React.FC = () => {
       incoterm: incoterm.trim() || null,
       plazoEntrega: plazoEntrega.trim() || null,
       condicionPago: condicionPago.trim() || null,
+      moneda: moneda,
       guardarHistorial: opts?.guardarHistorial ?? true,
     };
     if (opts?.soloGuardar) payload.soloGuardar = true;
     return payload;
   };
+
+  async function actualizarPrecioProducto(lineId: string) {
+    const line = items.find((it) => it.id === lineId);
+    if (!line) return;
+    if (line.esRemision) return notify.warn("Las lineas de remision no permiten actualizar precio.");
+    if (typeof line.inventarioId !== "number") {
+      return notify.warn("Seleccione un producto valido para actualizar su precio.");
+    }
+    const precioBaseNio = getPrecioBaseNIO(line);
+    if (!(precioBaseNio > 0)) return notify.warn("Ingrese un precio valido para actualizar.");
+    const tc = Number(tipoCambio || 0);
+    const precioUsd = tc > 0 ? Number((precioBaseNio / tc).toFixed(4)) : null;
+
+    const token = getCookie("token");
+    if (!token) return notify.err("Sesion invalida, inicie sesion nuevamente.");
+
+    setActualizandoPrecioId(lineId);
+    try {
+      const res = await fetch(`${API_PRODUCTOS}/${line.inventarioId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({
+          precioVentaSugeridoCordoba: precioBaseNio,
+          precioVentaPromedioCordoba: precioBaseNio,
+          precioVentaSugeridoDolar: precioUsd ?? undefined,
+          precioVentaPromedioDolar: precioUsd ?? undefined,
+        }),
+      });
+      if (!res.ok) throw new Error("No se pudo actualizar el precio en inventario");
+      notify.ok("Precio actualizado en inventario");
+    } catch (err: any) {
+      console.error(err);
+      notify.err(err?.message || "Error al actualizar el precio");
+    } finally {
+      setActualizandoPrecioId(null);
+    }
+  }
 
   async function guardarProforma() {
     const payload = construirPayload({ guardarHistorial: true, soloGuardar: true });
@@ -327,21 +458,36 @@ const Proforma: React.FC = () => {
     const token = getCookie("token");
     setGuardando(true);
     try {
-      const resp = await fetch(`${API_VENTAS}/proforma/pdf`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      let resp;
+      if (proformaIdEdicion) {
+        // Actualizar proforma existente
+        resp = await fetch(`${API_VENTAS}/proformas/${proformaIdEdicion}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        // Crear nueva proforma
+        resp = await fetch(`${API_VENTAS}/proforma/pdf`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: token ? `Bearer ${token}` : "",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+      }
       if (!resp.ok) {
-        notify.err("No se pudo guardar la proforma");
+        notify.err(proformaIdEdicion ? "No se pudo actualizar la proforma" : "No se pudo guardar la proforma");
         return;
       }
       setGuardada(true);
-      notify.ok("Proforma guardada");
+      notify.ok(proformaIdEdicion ? "Proforma actualizada" : "Proforma guardada");
     } catch {
       notify.err("Error al guardar proforma");
     } finally {
@@ -511,11 +657,13 @@ const Proforma: React.FC = () => {
         <div className="fact-page proforma-page">
           <header className="fact-header">
             <FaCashRegister className="icon" />
-            <div><h1>Proforma</h1></div>
+            <div>
+              <h1>Proforma {proformaIdEdicion && <span style={{ fontSize: "0.8em", color: "#2563eb" }}>(Editando #{proformaIdEdicion})</span>}</h1>
+            </div>
           </header>
 
       {/* Navegación */}
-      <div className="nav-buttons" style={{ display: "flex", gap: "10px", margin: "10px 20px" }}>
+      <div className="nav-buttons" style={{ display: "flex", gap: "10px", margin: "10px 20px", flexWrap: "wrap" }}>
         <button className="ghost" onClick={() => navigate("/facturacion")}>
           <FaArrowLeft /> Volver a Facturación
         </button>
@@ -525,6 +673,19 @@ const Proforma: React.FC = () => {
         <button className="ghost" onClick={() => navigate("/cotizaciones/recientes")}>
           Cotizaciones recientes
         </button>
+        {proformaIdEdicion && (
+          <button 
+            className="ghost" 
+            onClick={() => {
+              setProformaIdEdicion(null);
+              setGuardada(false);
+              notify.ok("Modo crear nueva proforma activado");
+            }}
+            style={{ background: "#eff6ff", color: "#1e40af" }}
+          >
+            <FaPlus /> Nueva Proforma
+          </button>
+        )}
       </div>
 
       {/* ======= FORM ======= */}
@@ -550,11 +711,11 @@ const Proforma: React.FC = () => {
               <input type="date" value={fecha} readOnly />
             </label>
             <label>
-              PIO
+              OL
               <input
                 type="text"
                 value={pio}
-                placeholder="PIO"
+                placeholder="OL"
                 onChange={(e) => { setPio(e.target.value); setGuardada(false); }}
               />
             </label>
@@ -593,15 +754,19 @@ const Proforma: React.FC = () => {
               <span>Producto</span>
               <span>Cant</span>
               <span>Precio</span>
-              <span>Subtotal</span>
-              <span></span>
+              <span>Actualizar</span>
+              <span>Subtotal C$</span>
+              <span>Subtotal $</span>
               <span>-</span>
+            </div>
+            <div style={{ color: "#b91c1c", fontWeight: 700, marginBottom: ".4rem", fontSize: "0.9rem" }}>
+              Usa “|” para separar número de parte y nombre. Ej: 12345|Filtro de aire.
             </div>
 
             {items.map(it => (
               <div className="item-row" key={it.id}>
 
-                <div style={{ display: "flex", gap: ".3rem", background:"white" }}>
+                <div style={{ display: "flex", gap: ".3rem", background:"white", alignItems: "center" }}>
                   <input
                     type="text"
                     disabled={it.esRemision}
@@ -618,6 +783,11 @@ const Proforma: React.FC = () => {
                       setPickerAbierto(true);
                     }}
                   >Buscar</button>
+                  {typeof it.inventarioId === "number" && productosRecientes.has(Number(it.inventarioId)) && (
+                    <span style={{ color: "#b91c1c", fontWeight: 700, fontSize: "0.8rem" }}>
+                      Cotizado recientemente
+                    </span>
+                  )}
                 </div>
 
                 <input
@@ -639,16 +809,46 @@ const Proforma: React.FC = () => {
                   onChange={e => updateItem(it.id, { precio: Number(e.target.value) })}
                 />
 
-                {/* Subtotal por artículo */}
+                <div className="update-cell">
+                  <button
+                    type="button"
+                    className="price-sync-btn"
+                    disabled={it.esRemision || actualizandoPrecioId === it.id || (moneda === "USD" && (!tipoCambio || tipoCambio <= 0))}
+                    onClick={() => actualizarPrecioProducto(it.id)}
+                    title="Guardar este monto como precio sugerido en inventario"
+                  >
+                    {actualizandoPrecioId === it.id ? "Guardando..." : "Actualizar"}
+                  </button>
+                </div>
+
+                {/* Subtotal en Córdobas */}
                 <span className="num-right">
-                  {formatMoney((Number(it.cantidad) || 0) * (Number(it.precio) || 0), moneda)}
+                  {(() => {
+                    const cant = Number(it.cantidad) || 0;
+                    const precio = Number(it.precio) || 0;
+                    const subtotal = cant * precio;
+                    const subtotalNIO = moneda === "USD" ? subtotal * (Number(tipoCambio) || 0) : subtotal;
+                    return `C$ ${subtotalNIO.toFixed(2)}`;
+                  })()}
                 </span>
 
-                {/* Placeholder para columna 'Rem.' (no usada en Proforma) */}
-                <div className="center"></div>
+                {/* Subtotal en Dólares */}
+                <span className="num-right">
+                  {(() => {
+                    const cant = Number(it.cantidad) || 0;
+                    const precio = Number(it.precio) || 0;
+                    const subtotal = cant * precio;
+                    const subtotalUSD = moneda === "NIO" ? subtotal / (Number(tipoCambio) || 1) : subtotal;
+                    return `$ ${subtotalUSD.toFixed(2)}`;
+                  })()}
+                </span>
 
-                {/* Botón eliminar en columna de acciones (más ancha) */}
-                <button className="danger delete-btn" onClick={() => removeRow(it.id)}>
+                {/* Botón eliminar en la misma fila */}
+                <button 
+                  className="danger delete-btn" 
+                  onClick={() => removeRow(it.id)}
+                  style={{ fontSize: "0.85rem", padding: "0.4rem 0.8rem", minWidth: "80px" }}
+                >
                   Eliminar
                 </button>
               </div>
@@ -722,7 +922,49 @@ const Proforma: React.FC = () => {
               <DataTable
                 columns={[
                   { name:"Parte", selector:(r:Product)=> (r.numeroParte ?? ''), sortable:true },
-                  { name:"Nombre", selector:(r:Product)=> (r.nombre ?? ''), grow:2, sortable:true },
+                  { name:"Nombre", selector:(r:Product)=> (r.nombre ?? ''), grow:2, sortable:true,
+                    cell:(r:Product)=>{
+                      const cotizacionInfo = productosRecientes.get(Number(r.id));
+                      const esCotizado = !!cotizacionInfo;
+                      return (
+                        <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-start", gap:"0.25rem", width:"100%" }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:"0.5rem", width:"100%" }}>
+                            <span>{r.nombre}</span>
+                            {esCotizado && (
+                              <span
+                                style={{
+                                  fontSize: "0.7rem",
+                                  padding: "0.15rem 0.45rem",
+                                  borderRadius: "12px",
+                                  background: "#fef3c7",
+                                  border: "1px solid #fbbf24",
+                                  color: "#92400e",
+                                  fontWeight: 600,
+                                  whiteSpace: "nowrap",
+                                }}
+                                title={`Cotizado por ${cotizacionInfo.clienteNombre}${cotizacionInfo.clienteEmpresa ? ` - ${cotizacionInfo.clienteEmpresa}` : ''}`}
+                              >
+                                Cotizado recientemente
+                              </span>
+                            )}
+                          </div>
+                          {esCotizado && (
+                            <span
+                              style={{
+                                fontSize: "0.7rem",
+                                color: "#78716c",
+                                fontStyle: "italic",
+                                paddingLeft: "0.25rem",
+                              }}
+                            >
+                              Por: {cotizacionInfo.clienteNombre}
+                              {cotizacionInfo.clienteEmpresa && ` - ${cotizacionInfo.clienteEmpresa}`}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    }
+                  },
                   { name:"Precio", selector:(r:Product)=>getPrecioProducto(r,moneda), sortable:true,
                     cell:r=>formatMoney(getPrecioProducto(r,moneda),moneda)
                   },
@@ -795,7 +1037,7 @@ const Proforma: React.FC = () => {
           <div><strong>Fecha:</strong> {fecha}</div>
           <div><strong>Moneda:</strong> {moneda === "USD" ? "Dólares (USD)" : "Córdobas (NIO)"}</div>
           <div><strong>Tipo de cambio:</strong> {Number(tipoCambio || 0) > 0 ? Number(tipoCambio).toFixed(4) : "-"}</div>
-          <div><strong>PIO:</strong> {pio.trim() || "—"}</div>
+          <div><strong>OL:</strong> {pio.trim() || "—"}</div>
         </div>
         <table>
           <thead>

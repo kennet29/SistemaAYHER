@@ -4,21 +4,21 @@ import * as ExcelJS from 'exceljs';
 const DEFAULT_FONT = {
     name: 'Calibri',
     family: 2,  // sans-Serif
-    size: 11,
+    size: 9,
     bold: false
 };
 
 const fontSmall = {
     name: 'Calibri',
     family: 2,  // sans-Serif     
-    size: 10,
+    size: 9,
     bold: false
 };
 
-const LIST_MAX_ITEM = 15;
-const LIST_HEIGHT_ROW = 20;
+const LIST_MAX_ITEM = 14;
+const LIST_HEIGHT_ROW = 17;
 
-const FOOTER_START_ROW_OFFSET = 7;
+const FOOTER_START_ROW_OFFSET = 1;
 
 const HEADER_START_ROW_OFFSET = 4;
 const HEADER_HEIGHT_ROW = 11.66;
@@ -28,8 +28,10 @@ const ALIGNMENT_CENTER: Partial<ExcelJS.Alignment> = { horizontal: 'center', ver
 
 const COL_WIDTHS: { [key: string]: number } = {
     'A': 3.86,
+    'B': 10,
     'C': 18.06,
     'D': 30.13,
+    'E': 18,
     'F': 15.90,
     'G': 15.90
 };
@@ -56,6 +58,7 @@ export type InvoiceExcelData = {
         descripcion: string;
         precioUnitario: number;
         subtotal: number;
+        codigoFacturar?: string | null;
     }[] | null;
 };
 
@@ -67,14 +70,32 @@ function chunk<T>(max: number, arr: T[]): T[][] {
     return res;
 }
 
+// Formatea fechas sin desfase por zona horaria, priorizando YYYY-MM-DD
+function formatDateLocal(val?: string | Date | null): string {
+    if (!val) return '';
+    if (typeof val === 'string') {
+        const m = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) {
+            const [, y, mo, d] = m;
+            return `${d}/${mo}/${y}`;
+        }
+    }
+    const d = new Date(val as any);
+    if (isNaN(d.getTime())) return '';
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+}
+
 export async function generateInvoiceExcel(data: InvoiceExcelData): Promise<Blob> {
     //
     // DATA PREPARATION
     //
     const simboloMoneda = data.moneda === 'USD' ? '$' : 'C$';
-    const fecha = data.fecha ? new Date(data.fecha).toLocaleDateString() : '';
+    const fecha = formatDateLocal(data.fecha);
     const monto = data.montoTotal.toFixed(2);
-    const fechaVenc = data.fechaVencimiento ? new Date(data.fechaVencimiento).toLocaleDateString() : null;
+    const fechaVenc = data.fechaVencimiento ? formatDateLocal(data.fechaVencimiento) : null;
 
     const bank = `${data.metodo?.banco || ''} - ${data.metodo?.numeroCuenta || ''} - ${data.metodo?.moneda || ''} - ${data.metodo?.titular || ''}`;
 
@@ -128,41 +149,43 @@ export async function generateInvoiceExcel(data: InvoiceExcelData): Promise<Blob
         const headerOffset = ws.getRow(ws.rowCount + HEADER_START_ROW_OFFSET);
         headerOffset.height = 69.33 + 9.86;
 
-        // Cliente / Fecha
+        // Cliente / Fecha (alineado a la izquierda)
         const cfRowValues: any = [];
-        cfRowValues[3] = 'CLIENTE:';
-        cfRowValues[4] = data.clienteNombre;
-        cfRowValues[6] = 'FECHA:';
-        cfRowValues[7] = fecha;
-        cfRowValues[8] = ' ';
+        cfRowValues[2] = 'CLIENTE:';
+        cfRowValues[3] = data.clienteNombre;
+        cfRowValues[5] = 'FECHA:';
+        cfRowValues[6] = fecha;
 
         const cfRow = ws.addRow(cfRowValues);
-        cfRow.getCell('C').alignment = ALIGNMENT_RIGHT;
-        cfRow.getCell('F').alignment = ALIGNMENT_RIGHT;
-        cfRow.getCell('G').alignment = ALIGNMENT_RIGHT;
+        cfRow.alignment = { horizontal: 'left', vertical: 'middle' };
         cfRow.height = HEADER_HEIGHT_ROW;
+        ws.mergeCells(`C${cfRow.number}:D${cfRow.number}`);
+        ws.mergeCells(`F${cfRow.number}:G${cfRow.number}`);
 
-        // Dirección / Monto
+        // Dirección / Monto (alineado a la izquierda)
         const dmRowValues: any = [];
-        dmRowValues[3] = 'DIRECCION:';
-        dmRowValues[4] = data.clienteDireccion;
-        dmRowValues[6] = 'MONTO:';
-        dmRowValues[7] = `${simboloMoneda}${monto}`;
+        dmRowValues[2] = 'DIRECCION:';
+        dmRowValues[3] = data.clienteDireccion;
+        dmRowValues[5] = 'MONTO:';
+        dmRowValues[6] = Number(monto);
 
         const dmRow = ws.addRow(dmRowValues);
-        dmRow.getCell('C').alignment = ALIGNMENT_RIGHT;
-        dmRow.getCell('D').alignment = { vertical: 'top' };
-        dmRow.getCell('F').alignment = ALIGNMENT_RIGHT;
-        dmRow.getCell('G').alignment = ALIGNMENT_RIGHT;
+        dmRow.alignment = { horizontal: 'left', vertical: 'middle' };
+        dmRow.getCell('C').font = fontSmall;
+        dmRow.getCell('D').font = fontSmall;
+        dmRow.getCell('F').alignment = { horizontal: 'left' };
+        dmRow.getCell('F').numFmt = `"${simboloMoneda}"#,##0.00`;
         dmRow.height = HEADER_HEIGHT_ROW;
-        ws.mergeCells(`D${dmRow.number}:D${dmRow.number + 1}`);
+        // Extender la dirección dos filas hacia abajo (C:D)
+        ws.mergeCells(`C${dmRow.number}:D${dmRow.number + 1}`);
+        ws.mergeCells(`F${dmRow.number}:G${dmRow.number}`);
 
-        // Plazo
+        // Plazo (alineado a la izquierda)
         const r7 = ws.getRow(dmRow.number + 1);
-        r7.getCell('F').value = 'PLAZO:';
-        r7.getCell('F').alignment = ALIGNMENT_RIGHT;
-        r7.getCell('G').value = data.plazo;
-        r7.getCell('G').alignment = ALIGNMENT_RIGHT;
+        r7.getCell('E').value = 'PLAZO:';
+        r7.getCell('E').alignment = { horizontal: 'left' };
+        r7.getCell('F').value = data.plazo;
+        r7.getCell('F').alignment = { horizontal: 'left' };
         r7.height = HEADER_HEIGHT_ROW;
 
         // RUC | Orden de Compra
@@ -174,14 +197,15 @@ export async function generateInvoiceExcel(data: InvoiceExcelData): Promise<Blob
         r8.getCell('D').value = `Orden de Compra: ${data.pio}`;
         r8.getCell('D').font = fontSmall;
         r8.getCell('D').alignment = { horizontal: 'left' };
+        ws.mergeCells(`D${r8.number}:E${r8.number}`);
         r8.height = HEADER_HEIGHT_ROW;
 
         // Vencimiento
         if (fechaVenc) {
-            r8.getCell('F').value = 'VENCIMIENTO:';
-            r8.getCell('F').alignment = ALIGNMENT_RIGHT;
-            r8.getCell('G').value = fechaVenc;
-            r8.getCell('G').alignment = ALIGNMENT_RIGHT;
+            r8.getCell('E').value = 'VENCIMIENTO:';
+            r8.getCell('E').alignment = { horizontal: 'left' };
+            r8.getCell('F').value = fechaVenc;
+            r8.getCell('F').alignment = { horizontal: 'left' };
         }
 
         // Space after header
@@ -191,45 +215,66 @@ export async function generateInvoiceExcel(data: InvoiceExcelData): Promise<Blob
         items.forEach((item) => {
             const rowValues: any = [];
             rowValues[2] = item.cantidad;
-            rowValues[3] = item.numeroParte;
+            rowValues[3] = item.codigoFacturar || item.numeroParte;
             rowValues[4] = item.descripcion;
-            rowValues[6] = `${simboloMoneda}${item.precioUnitario.toFixed(2)}`;
-            rowValues[7] = `${simboloMoneda}${item.subtotal.toFixed(2)}`;
+            rowValues[6] = Number(item.precioUnitario || 0);
+            rowValues[7] = Number(item.subtotal || 0);
 
             const row = ws.addRow(rowValues);
             row.height = LIST_HEIGHT_ROW;
             row.getCell('B').alignment = ALIGNMENT_CENTER;
             row.getCell('C').alignment = ALIGNMENT_CENTER;
+            row.getCell('C').font = { ...DEFAULT_FONT, size: 8 };
             row.getCell('D').alignment = ALIGNMENT_CENTER;
-            row.getCell('F').alignment = ALIGNMENT_RIGHT;
-            row.getCell('G').alignment = ALIGNMENT_RIGHT;
+            // Nombre: mantener tamaño de fuente original (sin reducir)
+            row.getCell('D').font = { ...DEFAULT_FONT };
+            row.getCell('F').alignment = ALIGNMENT_CENTER;
+            row.getCell('G').alignment = ALIGNMENT_CENTER;
+            row.getCell('F').numFmt = `"${simboloMoneda}"#,##0.00`;
+            row.getCell('G').numFmt = `"${simboloMoneda}"#,##0.00`;
+
+            // Unir columnas D y E para el nombre
+            ws.mergeCells(`D${row.number}:E${row.number}`);
         });
 
+        // Agregar filas vacías para que observación/total queden en posición fija (artículo 13)
+        const emptyRowsNeeded = 13 - items.length;
+        for (let i = 0; i < emptyRowsNeeded; i++) {
+            const emptyRow = ws.addRow([]);
+            emptyRow.height = LIST_HEIGHT_ROW;
+        }
 
         // FOOTER
 
         if (isLastPage) {
-            // ÚLTIMA PÁGINA - Mostrar total completo
+            // ÚLTIMA PÁGINA - Mostrar total completo en la ubicación de observación
             const nombreMoneda = data.moneda === 'USD' ? 'Dolares' : 'Cordobas';
-            const rowSon = ws.getRow(ws.rowCount + FOOTER_START_ROW_OFFSET);
+
+            // Reubicar SON/Total más abajo (donde estaba la dirección)
+            const rowSonStart = ws.rowCount + 5;
+            const rowSon = ws.getRow(rowSonStart);
             rowSon.getCell('C').value = 'SON:';
             rowSon.getCell('C').alignment = ALIGNMENT_RIGHT;
             rowSon.getCell('D').value = `${data.montoEnTexto} ${nombreMoneda}`;
             rowSon.getCell('D').font = fontSmall;
-            rowSon.getCell('G').value = `${simboloMoneda}${monto}`;
-            rowSon.getCell('G').alignment = ALIGNMENT_RIGHT;
+            rowSon.getCell('F').value = 'TOTAL:';
+            rowSon.getCell('F').alignment = ALIGNMENT_RIGHT;
+            rowSon.getCell('G').value = Number(monto);
+            rowSon.getCell('G').numFmt = `"${simboloMoneda}"#,##0.00`;
+            rowSon.getCell('G').alignment = ALIGNMENT_CENTER;
 
-            // Dirección
-            const rowFooterDirStart = ws.rowCount + 3;
+            // Dirección del cliente
+            const rowFooterDirStart = rowSonStart + 2;
             const rowFooterDir = ws.getRow(rowFooterDirStart);
-            rowFooterDir.getCell('C').value = data.direccion || '';
+            rowFooterDir.getCell('C').value = data.clienteDireccion || '';
+            rowFooterDir.getCell('C').font = fontSmall;
             rowFooterDir.getCell('C').alignment = ALIGNMENT_CENTER;
             ws.mergeCells(`C${rowFooterDirStart}:F${rowFooterDirStart}`);
 
-            // Razón social
+            // Nombre del titular
             const rowUserStart = ws.rowCount + 1;
             const rowUser = ws.getRow(rowUserStart);
-            rowUser.getCell('E').value = data.razonSocial || '';
+            rowUser.getCell('E').value = 'Dustin Adonis Ayerdis Espinoza';
             rowUser.getCell('E').alignment = ALIGNMENT_CENTER;
             ws.mergeCells(`E${rowUserStart}:G${rowUserStart}`);
 
@@ -252,23 +297,6 @@ export async function generateInvoiceExcel(data: InvoiceExcelData): Promise<Blob
             rowContinua.getCell('D').font = { ...DEFAULT_FONT, bold: true, size: 12 };
             rowContinua.getCell('D').alignment = ALIGNMENT_CENTER;
             ws.mergeCells(`D${rowContinua.number}:G${rowContinua.number}`);
-
-            // Espacio adicional
-            ws.addRows([{}, {}, {}]);
-
-            // Dirección
-            const rowFooterDirStart = ws.rowCount + 1;
-            const rowFooterDir = ws.getRow(rowFooterDirStart);
-            rowFooterDir.getCell('C').value = data.direccion || '';
-            rowFooterDir.getCell('C').alignment = ALIGNMENT_CENTER;
-            ws.mergeCells(`C${rowFooterDirStart}:F${rowFooterDirStart}`);
-
-            // Razón social
-            const rowUserStart = ws.rowCount + 1;
-            const rowUser = ws.getRow(rowUserStart);
-            rowUser.getCell('E').value = data.razonSocial || '';
-            rowUser.getCell('E').alignment = ALIGNMENT_CENTER;
-            ws.mergeCells(`E${rowUserStart}:G${rowUserStart}`);
         }
 
         // Page Break
@@ -281,6 +309,10 @@ export async function generateInvoiceExcel(data: InvoiceExcelData): Promise<Blob
     // 
     // GENERATE FILE
     //
+    // Limitar el área de impresión hasta la columna G y la última fila utilizada
+    ws.pageSetup.printArea = `A1:G${ws.rowCount}`;
+    ws.pageSetup.fitToWidth = 1;
+
     const buffer = await wb.xlsx.writeBuffer();
     return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }

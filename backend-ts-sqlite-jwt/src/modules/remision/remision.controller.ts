@@ -459,6 +459,7 @@ export const imprimirRemisionPDF = async (req: Request, res: Response) => {
         observacion: remision.observacion || null,
         pio: remision.pio || null,
         entregadoA: remision.entregadoA || null,
+        tipoCambio: tipoCambioValor,
       },
       res
     );

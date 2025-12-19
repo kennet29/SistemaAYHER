@@ -71,16 +71,22 @@ export async function create(req: Request, res: Response) {
       total += d.cantidad * d.costoUnitarioCordoba;
 
       // Movimiento: ENTRADA
-      await crearMovimientoYAjustarStock({
-        tx,
-        inventarioId: d.inventarioId,
-        tipoMovimientoNombre: 'Entrada',
-        cantidad: d.cantidad,
-        precioVentaUnitarioCordoba: d.costoUnitarioCordoba,
-        tipoCambioValor: tc,
-        usuario: data.usuario,
-        observacion: `Compra N° ${data.numeroFactura ?? ''}`
-      });
+      try {
+        await crearMovimientoYAjustarStock({
+          tx,
+          inventarioId: d.inventarioId,
+          tipoMovimientoNombre: 'Entrada',
+          cantidad: d.cantidad,
+          precioVentaUnitarioCordoba: d.costoUnitarioCordoba,
+          tipoCambioValor: tc,
+          usuario: data.usuario,
+          observacion: `Compra N° ${data.numeroFactura ?? ''}`
+        });
+        console.log(`✅ Stock actualizado para inventarioId ${d.inventarioId}: +${d.cantidad}`);
+      } catch (error) {
+        console.error(`❌ Error actualizando stock para inventarioId ${d.inventarioId}:`, error);
+        throw error;
+      }
     }
 
     const compraActualizada = await tx.compra.update({

@@ -49,6 +49,7 @@ exports.inventarioRouter.post('/', ctrl.create);
 exports.inventarioRouter.post('/importar', upload.single('file'), importar_controller_1.importarExcel);
 // Bajo stock (stockActual <= stockMinimo)
 exports.inventarioRouter.get('/low-stock', ctrl.listLowStock);
+exports.inventarioRouter.get('/low-stock/excel', ctrl.listLowStockExcel);
 exports.inventarioRouter.get('/:id', ctrl.getById);
 exports.inventarioRouter.put('/:id', ctrl.update);
 exports.inventarioRouter.delete('/:id', ctrl.remove);

@@ -24,6 +24,9 @@ import RestaurarDB from "./Views/RestaurarDB";
 import GenerateInvoiceExcel from "./Views/GenerateInvoiceExcel";
 import EntradaCompra from "./Views/EntradaCompra";
 import HistorialCompras from "./Views/HistorialCompras";
+import EditarFactura from "./Views/EditarFactura";
+import Devoluciones from "./Views/Devoluciones";
+import DevolucionesHistorico from "./Views/DevolucionesHistorico";
 
 function App() {
   return (
@@ -58,15 +61,15 @@ function App() {
           <Route path="/ventas" element={<Ventas />} />
           <Route path="/cartera-clientes" element={<CarteraClientes />} />
           <Route path="/cliente-detalle/:clienteId" element={<ClienteDetalle />} />
-          <Route
-            path="/facturas-pendientes"
-            element={<FacturasPendientes />}
-          />
+          <Route path="/facturas-pendientes" element={<FacturasPendientes />}/>
           <Route path="/stock-critico" element={<StockCritico />} />
           <Route path="/restaurar-db" element={<RestaurarDB />} />
           <Route path="/generate-invoice" element={<GenerateInvoiceExcel />} />
           <Route path="/entrada-compra" element={<EntradaCompra />} />
           <Route path="/historial-compras" element={<HistorialCompras />} />
+          <Route path="/editar-factura/:id" element={<EditarFactura />} />
+          <Route path="/devoluciones" element={<Devoluciones />} />
+          <Route path="/devoluciones/historico" element={<DevolucionesHistorico />} />
         </Routes>
       </BrowserRouter>
     </>

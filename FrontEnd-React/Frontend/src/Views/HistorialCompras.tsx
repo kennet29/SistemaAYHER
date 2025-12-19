@@ -1,6 +1,6 @@
 // src/Views/HistorialCompras.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { FaHistory, FaHome, FaEye, FaTimes, FaSearch } from "react-icons/fa";
+import { FaHistory, FaHome, FaEye, FaTimes, FaSearch, FaEdit, FaTrash, FaSave } from "react-icons/fa";
 import DataTable from "react-data-table-component";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -36,6 +36,11 @@ const HistorialCompras: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [detalleSeleccionado, setDetalleSeleccionado] = useState<MovimientoCompra | null>(null);
+  const [movimientoEdit, setMovimientoEdit] = useState<MovimientoCompra | null>(null);
+  const [editCantidad, setEditCantidad] = useState<number>(1);
+  const [editCostoUsd, setEditCostoUsd] = useState<number>(0);
+  const [editObs, setEditObs] = useState<string>("");
+  const [movimientoDelete, setMovimientoDelete] = useState<MovimientoCompra | null>(null);
 
   useEffect(() => {
     cargarHistorial();
@@ -139,12 +144,62 @@ const HistorialCompras: React.FC = () => {
     );
   }, [movimientosFiltrados]);
 
+  const guardarEdicion = async () => {
+    if (!movimientoEdit) return;
+    if (!(editCantidad > 0)) return toast.warn("La cantidad debe ser mayor a 0");
+    if (!(editCostoUsd > 0)) return toast.warn("El costo debe ser mayor a 0");
+    try {
+      const res = await fetch(`${API_MOVIMIENTOS}/${movimientoEdit.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getCookie("token")}`,
+        },
+        body: JSON.stringify({
+          cantidad: editCantidad,
+          costoUnitarioDolar: editCostoUsd,
+          observacion: editObs,
+        }),
+      });
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        throw new Error(msg || "No se pudo actualizar");
+      }
+      toast.success("Movimiento actualizado");
+      setMovimientoEdit(null);
+      cargarHistorial();
+    } catch (error) {
+      toast.error((error as any)?.message || "Error al actualizar");
+    }
+  };
+
+  const eliminarMovimiento = async () => {
+    if (!movimientoDelete) return;
+    try {
+      const res = await fetch(`${API_MOVIMIENTOS}/${movimientoDelete.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${getCookie("token")}`,
+        },
+      });
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        throw new Error(msg || "No se pudo eliminar");
+      }
+      toast.success("Movimiento eliminado");
+      setMovimientoDelete(null);
+      cargarHistorial();
+    } catch (error) {
+      toast.error((error as any)?.message || "Error al eliminar");
+    }
+  };
+
   const columnas = [
     {
       name: "Producto",
       selector: (r: MovimientoCompra) => r.inventario?.nombre || "-",
       sortable: true,
-      width: "40%",
+      width: "35%",
       cell: (r: MovimientoCompra) => (
         <div>
           <div style={{ fontWeight: 600 }}>{r.inventario?.nombre || "-"}</div>
@@ -159,7 +214,7 @@ const HistorialCompras: React.FC = () => {
       selector: (r: MovimientoCompra) => Number(r.cantidad || 0),
       sortable: true,
       right: true,
-      width: "10%",
+      width: "9%",
       cell: (r: MovimientoCompra) => <span style={{ textAlign: "right", display: "block" }}>{Number(r.cantidad || 0)}</span>,
     },
     {
@@ -167,7 +222,7 @@ const HistorialCompras: React.FC = () => {
       selector: (r: MovimientoCompra) => Number(r.costoUnitarioDolar || 0),
       sortable: true,
       right: true,
-      width: "15%",
+      width: "13%",
       cell: (r: MovimientoCompra) => (
         <span style={{ textAlign: "right", display: "block" }}>
           $ {Number(r.costoUnitarioDolar || 0).toFixed(2)}
@@ -180,7 +235,7 @@ const HistorialCompras: React.FC = () => {
         Number(r.cantidad || 0) * Number(r.costoUnitarioDolar || 0),
       sortable: true,
       right: true,
-      width: "15%",
+      width: "13%",
       cell: (r: MovimientoCompra) => (
         <span style={{ textAlign: "right", display: "block", fontWeight: 600 }}>
           $ {(Number(r.cantidad || 0) * Number(r.costoUnitarioDolar || 0)).toFixed(2)}
@@ -191,7 +246,7 @@ const HistorialCompras: React.FC = () => {
       name: "Fecha",
       selector: (r: MovimientoCompra) => r.createdAt || "",
       sortable: true,
-      width: "12%",
+      width: "11%",
       cell: (r: MovimientoCompra) => {
         const fecha = new Date(r.createdAt || "");
         return (
@@ -202,18 +257,41 @@ const HistorialCompras: React.FC = () => {
       },
     },
     {
-      name: "",
+      name: "Acciones",
       cell: (r: MovimientoCompra) => (
-        <button
-          className="btn-ver"
-          onClick={() => setDetalleSeleccionado(r)}
-          title="Ver detalles"
-        >
-          <FaEye />
-        </button>
+        <div style={{ display: "flex", gap: ".4rem", justifyContent: "center" }}>
+          <button
+            className="btn-ver"
+            onClick={() => setDetalleSeleccionado(r)}
+            title="Ver detalles"
+          >
+            <FaEye />
+          </button>
+          <button
+            className="btn-ver"
+            style={{ background: "#0ea5e9" }}
+            onClick={() => {
+              setMovimientoEdit(r);
+              setEditCantidad(Number(r.cantidad || 0) || 1);
+              setEditCostoUsd(Number(r.costoUnitarioDolar || 0));
+              setEditObs(r.observacion || "");
+            }}
+            title="Editar"
+          >
+            <FaEdit />
+          </button>
+          <button
+            className="btn-ver"
+            style={{ background: "#ef4444" }}
+            onClick={() => setMovimientoDelete(r)}
+            title="Eliminar"
+          >
+            <FaTrash />
+          </button>
+        </div>
       ),
       ignoreRowClick: true,
-      width: "8%",
+      width: "18%",
     },
   ];
 
@@ -324,13 +402,6 @@ const HistorialCompras: React.FC = () => {
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Detalle del Movimiento #{detalleSeleccionado.id}</h3>
-              <button
-                className="modal-close"
-                onClick={() => setDetalleSeleccionado(null)}
-                title="Cerrar"
-              >
-                <FaTimes />
-              </button>
             </div>
             <div className="modal-body">
               <div className="detalle-row">
@@ -383,6 +454,89 @@ const HistorialCompras: React.FC = () => {
                   {detalleSeleccionado.observacion || "-"}
                 </span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal editar */}
+      {movimientoEdit && (
+        <div className="modal-overlay" onClick={() => setMovimientoEdit(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "520px" }}>
+            <div className="modal-header">
+              <h3>Editar movimiento #{movimientoEdit.id}</h3>
+            </div>
+            <div className="modal-body">
+              <div className="detalle-row">
+                <span className="detalle-label">Producto:</span>
+                <span className="detalle-value">
+                  {movimientoEdit.inventario?.numeroParte || "-"} — {movimientoEdit.inventario?.nombre || "-"}
+                </span>
+              </div>
+              <div className="detalle-row">
+                <span className="detalle-label">Cantidad:</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={editCantidad}
+                  onChange={(e) => setEditCantidad(Math.max(1, Number(e.target.value) || 1))}
+                  style={{ width: "120px", padding: ".35rem" }}
+                />
+              </div>
+              <div className="detalle-row">
+                <span className="detalle-label">Costo USD:</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={editCostoUsd}
+                  onChange={(e) => setEditCostoUsd(Math.max(0, Number(e.target.value) || 0))}
+                  style={{ width: "140px", padding: ".35rem" }}
+                />
+              </div>
+              <div className="detalle-row full-width">
+                <span className="detalle-label">Observación:</span>
+                <input
+                  type="text"
+                  value={editObs}
+                  onChange={(e) => setEditObs(e.target.value)}
+                  placeholder="Opcional"
+                  style={{ width: "100%", padding: ".4rem" }}
+                />
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: ".6rem", padding: "0 1.25rem 1rem" }}>
+              <button className="btn-limpiar" onClick={() => setMovimientoEdit(null)}>
+                Cancelar
+              </button>
+              <button className="btn-nueva-compra" onClick={guardarEdicion}>
+                <FaSave /> Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal eliminar */}
+      {movimientoDelete && (
+        <div className="modal-overlay" onClick={() => setMovimientoDelete(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "420px" }}>
+            <div className="modal-header">
+              <h3>Eliminar movimiento</h3>
+            </div>
+            <div className="modal-body">
+              <p>
+                ¿Eliminar el movimiento #{movimientoDelete.id} de{" "}
+                <strong>{movimientoDelete.inventario?.numeroParte || movimientoDelete.inventario?.nombre || "-"}</strong>?
+              </p>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: ".6rem", padding: "0 1.25rem 1rem" }}>
+              <button className="btn-limpiar" onClick={() => setMovimientoDelete(null)}>
+                Cancelar
+              </button>
+              <button className="btn-nueva-compra" style={{ background: "#ef4444" }} onClick={eliminarMovimiento}>
+                <FaTrash /> Eliminar
+              </button>
             </div>
           </div>
         </div>

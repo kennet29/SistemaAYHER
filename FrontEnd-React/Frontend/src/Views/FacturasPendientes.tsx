@@ -344,7 +344,7 @@ const FacturasPendientes: React.FC = () => {
               <h3>
                 Detalles de Factura {detalleFactura.numeroFactura ? `N° ${detalleFactura.numeroFactura}` : `#${detalleFactura.id}`}
               </h3>
-              <button className="close-btn" onClick={() => setDetalleFactura(null)}>✕</button>
+              <button className="close-btn" onClick={() => setDetalleFactura(null)}>Cerrar</button>
             </div>
             
             <div className="modal-content">
@@ -373,9 +373,9 @@ const FacturasPendientes: React.FC = () => {
                     <span className="label">Plazo:</span>
                     <span className="value">{detalleFactura.plazoDias ? `${detalleFactura.plazoDias} dias` : '—'}</span>
                   </div>
-                  <div className="info-item">
+                  <div className="info-item estado-item">
                     <span className="label">Estado:</span>
-                    <span className={`value ${detalleFactura.cancelada ? 'success' : 'danger'}`}>
+                    <span className={`estado-chip ${detalleFactura.cancelada ? 'pagada' : 'pendiente'}`}>
                       {detalleFactura.cancelada ? '✓ Pagada' : 'Pendiente'}
                     </span>
                   </div>
@@ -483,6 +483,7 @@ const ModalOverlay = styled.div`
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -506,12 +507,13 @@ const ModalBox = styled.div`
 `;
 
 const DetalleModalBox = styled.div`
-  background: #fff;
+  background: linear-gradient(180deg, #f7f9ff 0%, #ffffff 100%);
   border-radius: 20px;
   width: min(900px, 95%);
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 25px 70px rgba(0,0,0,0.35);
+  border: 1px solid #e3e9f5;
   
   .modal-header {
     display: flex;
@@ -519,7 +521,7 @@ const DetalleModalBox = styled.div`
     align-items: center;
     padding: 24px;
     border-bottom: 2px solid #e3e9f5;
-    background: linear-gradient(135deg, #004aad, #0066ff);
+    background: linear-gradient(135deg, #003172, #0066ff);
     border-radius: 16px 16px 0 0;
     
     h3 {
@@ -530,38 +532,76 @@ const DetalleModalBox = styled.div`
     }
     
     .close-btn {
-      background: rgba(255,255,255,0.2);
-      border: 2px solid #fff;
+      background: linear-gradient(135deg, #004aad, #006eff);
       color: #fff;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
+      border: 1px solid #004aad;
+      border-radius: 999px;
+      padding: 8px 16px;
       cursor: pointer;
-      font-size: 20px;
       font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.2px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 12px 26px rgba(0, 90, 170, 0.18);
       transition: all 0.2s ease;
       
+      &::before {
+        content: '↩';
+        font-size: 12px;
+        background: rgba(255,255,255,0.2);
+        border-radius: 50%;
+        width: 22px;
+        height: 22px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(255,255,255,0.35);
+      }
+      
       &:hover {
-        background: #fff;
-        color: #004aad;
+        background: linear-gradient(135deg, #003172, #0052cc);
+        box-shadow: 0 14px 30px rgba(0, 70, 140, 0.22);
       }
     }
   }
   
   .modal-content {
-    padding: 24px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    background: linear-gradient(160deg, #f9fbff 0%, #ffffff 55%);
   }
   
   .info-section {
-    margin-bottom: 24px;
+    margin-bottom: 0;
+    background: #fff;
+    border: 1px solid #e9eef8;
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 12px 32px rgba(0, 22, 60, 0.06);
     
     h4 {
       margin: 0 0 16px 0;
-      color: #004aad;
+      color: #003c8a;
       font-size: 16px;
       font-weight: 700;
-      border-bottom: 2px solid #e3e9f5;
-      padding-bottom: 8px;
+      border-bottom: 2px solid #edf2ff;
+      padding-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      
+      &::before {
+        content: '';
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #004aad, #00a1ff);
+        box-shadow: 0 0 0 4px rgba(0, 160, 255, 0.1);
+      }
     }
   }
   
@@ -592,15 +632,51 @@ const DetalleModalBox = styled.div`
       &.danger { color: #c62828; }
       &.total { color: #004aad; font-size: 18px; }
     }
+
+    &.estado-item {
+      .label {
+        letter-spacing: 0.5px;
+        color: #a30f1f;
+      }
+    }
+  }
+
+  .estado-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    background: #fff;
+    box-shadow: 0 10px 26px rgba(220, 38, 38, 0.08);
+    border: 1px solid #f28b82;
+    
+    &.pendiente {
+      color: #c62828;
+      background: #fff;
+      border-color: #f28b82;
+    }
+    
+    &.pagada {
+      color: #166534;
+      background: #f0fdf4;
+      border-color: #86efac;
+      box-shadow: 0 10px 26px rgba(22, 101, 52, 0.08);
+    }
   }
   
   .totales-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px;
-    background: #f8f9fa;
+    background: #f8fbff;
     padding: 16px;
     border-radius: 12px;
+    border: 1px dashed #dbeafe;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.04);
   }
   
   .total-item {
@@ -635,41 +711,44 @@ const DetalleModalBox = styled.div`
     border-radius: 16px;
     font-size: 16px;
     font-weight: 700;
+    background: #fff;
+    border: 1px solid #e3e9f5;
+    box-shadow: 0 10px 26px rgba(0,0,0,0.05);
     
     &.pagada {
       background: #dcfce7;
       color: #166534;
-      border: 2px solid #86efac;
+      border: 1px solid #86efac;
     }
     
     &.vencida {
-      background: #fee2e2;
+      background: #fff;
       color: #991b1b;
-      border: 2px solid #fca5a5;
+      border: 1px dashed #fca5a5;
     }
     
     &.vence-hoy {
-      background: #fef3c7;
+      background: #fffaf0;
       color: #92400e;
-      border: 2px solid #fbbf24;
+      border: 1px solid #fbbf24;
     }
     
     &.proximo {
-      background: #fed7aa;
+      background: #fff7ed;
       color: #9a3412;
-      border: 2px solid #fb923c;
+      border: 1px solid #fb923c;
     }
     
     &.vigente {
-      background: #dbeafe;
+      background: #eef5ff;
       color: #1e40af;
-      border: 2px solid #93c5fd;
+      border: 1px solid #93c5fd;
     }
     
     &.sin-venc {
-      background: #f3f4f6;
+      background: #fff;
       color: #6b7280;
-      border: 2px solid #d1d5db;
+      border: 1px dashed #d1d5db;
     }
   }
   
@@ -766,18 +845,37 @@ const DetalleModalBox = styled.div`
     background: #f8f9fa;
     
     .btn-close {
-      padding: 10px 24px;
-      background: #004aad;
+      padding: 12px 28px;
+      background: linear-gradient(135deg, #004aad, #006eff);
       color: #fff;
-      border: none;
-      border-radius: 8px;
+      border: 1px solid #004aad;
+      border-radius: 999px;
       cursor: pointer;
-      font-weight: 600;
+      font-weight: 700;
       font-size: 14px;
+      letter-spacing: 0.2px;
       transition: all 0.2s ease;
+      box-shadow: 0 14px 30px rgba(0, 90, 170, 0.18);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      
+      &::before {
+        content: '↩';
+        font-size: 13px;
+        background: rgba(255,255,255,0.2);
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(255,255,255,0.35);
+      }
       
       &:hover {
-        background: #003a8d;
+        background: linear-gradient(135deg, #003172, #0052cc);
+        box-shadow: 0 16px 34px rgba(0, 70, 140, 0.22);
       }
     }
   }

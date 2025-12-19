@@ -5,6 +5,42 @@
 .proforma-page{
   font-family: 'Inter', 'Poppins', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
+
+/* Ajustar grid de items para Proforma con más espacio */
+.proforma-page .items-header,
+.proforma-page .item-row{
+  display:grid;
+  grid-template-columns:
+    minmax(320px, 2fr) /* producto */
+    clamp(80px, 8vw, 100px) /* cant */
+    clamp(110px, 11vw, 140px) /* precio */
+    clamp(120px, 12vw, 150px) /* actualizar */
+    clamp(120px, 12vw, 150px) /* subtotal C$ */
+    clamp(120px, 12vw, 150px) /* subtotal $ */
+    clamp(90px, 9vw, 110px) /* eliminar */;
+  gap:1.5rem; /* más espacio entre columnas */
+  align-items:center;
+  text-align:center;
+}
+
+/* Hacer la tabla más ancha */
+.proforma-page .fact-content {
+  max-width: 95%;
+  width: 95%;
+  margin: 0 auto;
+}
+
+.proforma-page .items-container{
+  width: 98%;
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.proforma-page .card {
+  max-width: 100%;
+  width: 100%;
+}
+
 /* Logo en pantalla removido por solicitud; estilos eliminados */
 .proforma-page .delete-btn{
   width:100%;
@@ -20,7 +56,7 @@
   justify-content:center;
 }
 .proformas-table{
-  width:min(1100px, 96%);
+  width:min(1250px, 96%);
   margin:0 auto;
 }
 

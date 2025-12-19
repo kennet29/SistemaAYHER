@@ -130,24 +130,45 @@ button{cursor:pointer}
 
 .ventas-table-wrap{
   display:flex;
-  justify-content:flex-start;
+  justify-content:center;
   width: 100%;
   padding:0;
   margin-top: 2rem;
-  padding-left: 5px;
+  padding: 0 1rem;
 }
 .ventas-table{
-  width:65%;
-  margin:0;
+  width: 95%;
+  margin:0 auto;
   box-sizing:border-box;
   overflow-x:auto;
+  overflow-y:auto;
+  max-height: 600px;
   border: 1px solid #e3e9f5;
   border-radius: 8px;
   background: #fff;
 }
 
 .ventas-table .rdt_Table {
-  min-height: 500px;
+  min-width: 1100px;
+}
+
+.ventas-table::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.ventas-table::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 5px;
+}
+
+.ventas-table::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+  border-radius: 5px;
+}
+
+.ventas-table::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #3182ce 0%, #2c5282 100%);
 }
 
 .ventas-separator{

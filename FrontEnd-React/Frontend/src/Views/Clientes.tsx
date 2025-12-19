@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import DataTable from "react-data-table-component";
-import { FaPlus, FaUser, FaArrowLeft } from "react-icons/fa";
+import { FaPlus, FaUser, FaArrowLeft, FaSearch, FaTimes } from "react-icons/fa";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useNavigate } from "react-router-dom";
@@ -48,9 +48,9 @@ const defaultForm: ClienteForm = {
   correo2: "",
   direccion: "",
   observacion: "",
-  creditoHabilitado: false,
-  creditoMaximoCordoba: 0,
-  creditoMaximoDolar: 0,
+  creditoHabilitado: true,
+  creditoMaximoCordoba: 100000,
+  creditoMaximoDolar: 2739.73,
 };
 
 export default function Clientes() {
@@ -59,7 +59,9 @@ export default function Clientes() {
   const [form, setForm] = useState<ClienteForm>(defaultForm);
   const [editing, setEditing] = useState(false);
   const [busqueda, setBusqueda] = useState("");
+  const [busquedaModal, setBusquedaModal] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mostrarModal, setMostrarModal] = useState(false);
 
   async function loadClientes() {
     setLoading(true);
@@ -116,7 +118,9 @@ export default function Clientes() {
       setEditing(false);
       loadClientes();
     } else {
-      toast.error("No se pudo guardar el cliente");
+      const errorData = await res.json().catch(() => ({}));
+      console.error("Error al guardar cliente:", errorData);
+      toast.error(errorData.message || "No se pudo guardar el cliente");
     }
   }
 
@@ -143,15 +147,18 @@ export default function Clientes() {
     setEditing(true);
   }
 
-  const filtered = useMemo(() => {
-    const q = busqueda.toLowerCase();
+  const filtrarClientes = (query: string) => {
+    const q = query.toLowerCase();
     return clientes.filter(
       (c: any) =>
         c.nombre?.toLowerCase().includes(q) ||
         c.empresa?.toLowerCase().includes(q) ||
         c.ruc?.toLowerCase().includes(q)
     );
-  }, [busqueda, clientes]);
+  };
+
+  const filtered = useMemo(() => filtrarClientes(busqueda), [busqueda, clientes]);
+  const filteredModal = useMemo(() => filtrarClientes(busquedaModal), [busquedaModal, clientes]);
 
   const creditSummary = useMemo(() => {
     const enabled = clientes.filter((c) => c.creditoHabilitado).length;
@@ -163,7 +170,7 @@ export default function Clientes() {
     { name: "CLIENTE", selector: (r: any) => r.nombre ?? "�", sortable: true },
     { name: "EMPRESA", selector: (r: any) => r.empresa ?? "�" },
     { name: "RUC", selector: (r: any) => r.ruc ?? "�" },
-    { name: "TELOFONO", selector: (r: any) => r.telefono1 ?? "�" },
+    { name: "TELEFONO", selector: (r: any) => r.telefono1 ?? "�" },
     {
       name: "ACCIONES",
       cell: (r: any) => (
@@ -274,6 +281,9 @@ export default function Clientes() {
         <div className="search-meta">
           <span>Resultados: {filtered.length}</span>
         </div>
+        <button className="btn-modal" type="button" onClick={() => setMostrarModal(true)}>
+          <FaSearch /> Ver tabla
+        </button>
       </div>
 
       <DataTable
@@ -284,6 +294,50 @@ export default function Clientes() {
         highlightOnHover
         dense
       />
+
+      {mostrarModal && (
+        <div
+          className="modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setMostrarModal(false);
+          }}
+        >
+          <div className="modal-card">
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Listado</p>
+                <h3>Clientes</h3>
+              </div>
+              <button className="btn-close" type="button" onClick={() => setMostrarModal(false)}>
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="modal-search">
+              <input
+                className="search"
+                placeholder="Filtrar por nombre, empresa o RUC..."
+                value={busquedaModal}
+                onChange={(e) => setBusquedaModal(e.target.value)}
+              />
+              <div className="search-meta">
+                <span>Resultados: {filteredModal.length}</span>
+              </div>
+            </div>
+
+            <div className="modal-table">
+              <DataTable
+                columns={columns}
+                data={filteredModal}
+                progressPending={loading}
+                pagination
+                highlightOnHover
+                dense
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <ToastContainer position="top-center" autoClose={2000} />
     </div>

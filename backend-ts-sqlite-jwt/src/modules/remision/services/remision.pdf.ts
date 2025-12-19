@@ -29,6 +29,9 @@ type Detalle = {
     descripcion?: string | null;
     precioVentaSugeridoCordoba?: number | null;
     precioVentaPromedioCordoba?: number | null;
+    precioVentaSugeridoDolar?: number | null;
+    precioVentaPromedioDolar?: number | null;
+    precioDolar?: number | null;
   } | null;
   numeroParte?: string | null;
   nombre?: string | null;
@@ -43,9 +46,27 @@ const fmtDate = (val: Date | string) => {
     return String(val);
   }
 };
-const fmtNIO = (n: number) => `C$ ${Number(n || 0).toFixed(2)}`;
+const fmtMoney = (n: number, symbol: string) =>
+  `${symbol} ${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 const pickPrecioCordoba = (inv?: { precioVentaSugeridoCordoba?: number | null; precioVentaPromedioCordoba?: number | null }) =>
   Number(inv?.precioVentaSugeridoCordoba ?? inv?.precioVentaPromedioCordoba ?? 0) || 0;
+
+const pickPrecioDolar = (
+  inv?: { precioVentaSugeridoDolar?: number | null; precioVentaPromedioDolar?: number | null; precioDolar?: number | null },
+  tipoCambio?: number | null
+) => {
+  const directo = Number(
+    inv?.precioVentaSugeridoDolar ??
+    inv?.precioVentaPromedioDolar ??
+    inv?.precioDolar ??
+    0
+  ) || 0;
+  if (directo > 0) return directo;
+  const cordoba = pickPrecioCordoba(inv as any);
+  if (tipoCambio && tipoCambio > 0) return cordoba / tipoCambio;
+  return 0;
+};
 
 export async function generarRemisionPDFStreamV2(
   {
@@ -57,6 +78,7 @@ export async function generarRemisionPDFStreamV2(
     observacion,
     pio,
     entregadoA,
+    tipoCambio,
   }: {
     empresa: Empresa;
     cliente: Cliente;
@@ -66,10 +88,11 @@ export async function generarRemisionPDFStreamV2(
     observacion?: string | null;
     pio?: string | null;
     entregadoA?: string | null;
+    tipoCambio?: number | null;
   },
   res: Response
 ) {
-  const doc = new PDFDocument({ size: "A4", margin: 36 });
+  const doc = new PDFDocument({ size: "A4", margin: 28 });
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="remision_${numero}.pdf"`);
   doc.pipe(res);
@@ -79,188 +102,209 @@ export async function generarRemisionPDFStreamV2(
   const left = doc.page.margins.left;
   const right = pageWidth - doc.page.margins.right;
   const contentWidth = right - left;
+  const colorPrimary = "#0f172a";
+  const colorAccent = "#0ea5e9";
+  const colorMuted = "#475569";
+  const colorBorder = "#1f2937";
 
   const drawHeader = () => {
     const logoPath = resolveLogoPath((empresa as any)?.logoUrl ?? null);
     if (logoPath) {
-      try { doc.image(logoPath, right - 150, 24, { width: 140 }); } catch {}
+      try { doc.image(logoPath, left, 24, { width: 150 }); } catch {}
     }
-    doc.font("Helvetica-Bold").fontSize(10).fillColor("#111827");
-    doc.text("NOTA DE REMISION", left, 38, { width: contentWidth, align: "center" });
-    doc.fillColor("#b91c1c").fontSize(11).text(`N° ${numero}`, left, 54, { width: contentWidth, align: "center" });
+    doc.fillColor(colorPrimary).font("Helvetica-Bold").fontSize(13);
+    doc.text("NOTA DE REMISION", left, 28, { width: contentWidth, align: "center" });
+    doc.fontSize(10).fillColor(colorMuted);
+    doc.text(`Numero: ${numero}`, left, 44, { width: contentWidth, align: "center" });
+
+    // Datos de empresa arriba (fuera de la tabla)
+    const contacto = [
+      empresa?.telefono1 || empresa?.telefono2 || "",
+      empresa?.correo || "",
+    ].filter(Boolean).join(" | ");
+    const infoY = 64;
+    const infoWidth = contentWidth * 0.6;
+    const infoX = right - infoWidth;
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(colorPrimary);
+    doc.text(empresa?.razonSocial || "Servicios Multiples e importaciones AYHER", infoX, infoY, { width: infoWidth, align: "right" });
+    if (contacto) {
+      doc.font("Helvetica").fontSize(9).fillColor(colorMuted);
+      doc.text(contacto, infoX, infoY + 12, { width: infoWidth, align: "right" });
+    }
   };
 
   const drawDatosGenerales = (startY: number) => {
-    const rows = [
-      ["Entregado a:", entregadoA || cliente?.nombre || cliente?.empresa || "N/A", "Fecha:", fmtDate(fecha)],
-      ["Empresa:", cliente?.empresa || cliente?.nombre || "N/A", "Ruc:", cliente?.ruc || empresa?.ruc || ""],
-      ["Dirección:", cliente?.direccion || empresa?.direccion || "", "Pedido N°:", pio || "-"],
+    const rows: Array<{ label1: string; value1: string; label2: string; value2: string; height?: number }> = [
+      { label1: "Entregado a", value1: entregadoA || cliente?.nombre || cliente?.empresa || "N/A", label2: "Fecha", value2: fmtDate(fecha) },
+      { label1: "Empresa", value1: cliente?.empresa || cliente?.nombre || "N/A", label2: "RUC", value2: cliente?.ruc || empresa?.ruc || "" },
+      { label1: "Direccion", value1: cliente?.direccion || empresa?.direccion || "", label2: "Pedido No.", value2: pio || "-", height: 48 },
     ];
     const colW = contentWidth / 2;
     const rowH = 22;
-    doc.save().lineWidth(1).strokeColor("#111827");
+
+    doc.save().lineWidth(1).strokeColor(colorBorder);
     rows.forEach((r, idx) => {
-      const y = startY + idx * rowH;
-      doc.rect(left, y, contentWidth, rowH).stroke();
-      doc.moveTo(left + colW, y).lineTo(left + colW, y + rowH).stroke();
-      doc.font("Helvetica-Bold").fontSize(10).fillColor("#111827");
-      doc.text(r[0], left + 4, y + 6, { width: 90 });
-      doc.font("Helvetica").text(r[1], left + 96, y + 6, { width: colW - 100 });
-      doc.font("Helvetica-Bold").text(r[2], left + colW + 4, y + 6, { width: 90 });
-      doc.font("Helvetica").text(r[3], left + colW + 96, y + 6, { width: colW - 100 });
+      const h = r.height || rowH;
+      const y = startY + rows.slice(0, idx).reduce((acc, x) => acc + (x.height || rowH), 0);
+      if (idx % 2 === 0) doc.rect(left, y, contentWidth, h).fillOpacity(0.06).fill(colorAccent).fillOpacity(1);
+      doc.rect(left, y, contentWidth, h).stroke();
+      doc.moveTo(left + colW, y).lineTo(left + colW, y + h).stroke();
+      doc.font("Helvetica-Bold").fontSize(9.5).fillColor(colorPrimary);
+      doc.text(`${r.label1}:`, left + 6, y + 5, { width: 90 });
+      doc.font("Helvetica").fillColor(colorMuted).text(r.value1, left + 96, y + 5, { width: colW - 110 });
+      doc.font("Helvetica-Bold").fillColor(colorPrimary).text(`${r.label2}:`, left + colW + 6, y + 5, { width: 90 });
+      doc.font("Helvetica").fillColor(colorMuted).text(r.value2, left + colW + 96, y + 5, { width: colW - 110 });
     });
     doc.restore();
-    return startY + rows.length * rowH + 10;
+    const totalHeight = rows.reduce((acc, x) => acc + (x.height || rowH), 0);
+    return startY + totalHeight + 10;
   };
 
   const drawItemsTable = (startY: number) => {
-    const codeW = 100;
-    const qtyW = 80;
-    const priceW = 90;
-    const totalW = 100;
-    const descW = Math.max(140, contentWidth - (codeW + qtyW + priceW + totalW));
+    const codeW = 60;
+    const qtyW = 50;
+    const priceCW = 70;
+    const totalCW = 80;
+    const priceUW = 70;
+    const totalUW = 80;
+    const fixedWidth = codeW + qtyW + priceCW + totalCW + priceUW + totalUW;
+    let descW = contentWidth - fixedWidth;
+    if (descW < 110) descW = 110;
+    if (descW + fixedWidth > contentWidth) descW = contentWidth - fixedWidth;
     const cols = [
-      { title: "CODIGO", w: codeW },
-      { title: "DESCRIPCION PRODUCTO", w: descW },
-      { title: "CANTIDAD", w: qtyW },
-      { title: "PRECIO", w: priceW },
-      { title: "TOTAL", w: totalW },
+      { title: "COD", w: codeW },
+      { title: "DESCRIPCION", w: descW },
+      { title: "CANT.", w: qtyW },
+      { title: "PRECIO C$", w: priceCW },
+      { title: "TOTAL C$", w: totalCW },
+      { title: "PRECIO $", w: priceUW },
+      { title: "TOTAL $", w: totalUW },
     ];
     const colX: number[] = [];
     cols.reduce((acc, c) => { colX.push(acc); return acc + c.w; }, left);
 
-    const headerH = 22;
-    doc.save().rect(left, startY, contentWidth, headerH).fill("#cbd5e1").restore();
-    doc.save().lineWidth(1).strokeColor("#111827");
+    const headerH = 20;
+    doc.save().rect(left, startY, contentWidth, headerH).fill(colorPrimary).restore();
+    doc.save().lineWidth(1).strokeColor(colorBorder);
     doc.rect(left, startY, contentWidth, headerH).stroke();
-    doc.moveTo(colX[1], startY).lineTo(colX[1], startY + headerH).stroke();
-    doc.moveTo(colX[2], startY).lineTo(colX[2], startY + headerH).stroke();
-    doc.moveTo(colX[3], startY).lineTo(colX[3], startY + headerH).stroke();
-    doc.moveTo(colX[4], startY).lineTo(colX[4], startY + headerH).stroke();
+    for (let i = 1; i < cols.length; i++) doc.moveTo(colX[i], startY).lineTo(colX[i], startY + headerH).stroke();
     doc.restore();
-    doc.font("Helvetica-Bold").fontSize(10).fillColor("#111827");
-    cols.forEach((c, idx) => doc.text(c.title, colX[idx] + 4, startY + 6, { width: c.w - 8, align: "center" }));
+    doc.font("Helvetica-Bold").fontSize(9.5).fillColor("#e2e8f0");
+    cols.forEach((c, idx) => doc.text(c.title, colX[idx] + 3, startY + 5, { width: c.w - 6, align: "center" }));
 
     let y = startY + headerH;
-    const bottomLimit = pageHeight - doc.page.margins.bottom - 140;
+    const bottomLimit = pageHeight - doc.page.margins.bottom - 150;
     const filas = Array.isArray(detalles) ? detalles : [];
-    doc.font("Helvetica").fontSize(10).fillColor("#111827");
+    doc.font("Helvetica").fontSize(9).fillColor(colorPrimary);
 
-    let totalGeneral = 0;
+    let totalCordoba = 0;
+    let totalDolar = 0;
+
     filas.forEach((d, idx) => {
       const codigo = d.inventario?.numeroParte || d.numeroParte || "-";
       const desc = d.inventario?.nombre || d.inventario?.descripcion || d.nombre || d.descripcion || "";
       const cant = Number(d.cantidad || 0);
-      const precio = pickPrecioCordoba(d.inventario as any);
-      const subtotal = cant * precio;
-      totalGeneral += subtotal;
-      const descH = doc.heightOfString(desc, { width: cols[1].w - 10 });
-      const rowH = Math.max(32, descH + 12);
+      const precioC = pickPrecioCordoba(d.inventario as any);
+      const precioU = pickPrecioDolar(d.inventario as any, tipoCambio);
+      const subtotalC = cant * precioC;
+      const subtotalU = cant * precioU;
+      totalCordoba += subtotalC;
+      totalDolar += subtotalU;
+      const descH = doc.heightOfString(desc, { width: cols[1].w - 8 });
+      const rowH = Math.max(26, descH + 10);
 
       if (y + rowH > bottomLimit) {
         doc.addPage();
         drawHeader();
-        y = 120;
-        doc.save().rect(left, y, contentWidth, headerH).fill("#cbd5e1").restore();
-        doc.save().lineWidth(1).strokeColor("#111827");
+        y = 118;
+        doc.save().rect(left, y, contentWidth, headerH).fill(colorPrimary).restore();
+        doc.save().lineWidth(1).strokeColor(colorBorder);
         doc.rect(left, y, contentWidth, headerH).stroke();
-        doc.moveTo(colX[1], y).lineTo(colX[1], y + headerH).stroke();
-        doc.moveTo(colX[2], y).lineTo(colX[2], y + headerH).stroke();
-        doc.moveTo(colX[3], y).lineTo(colX[3], y + headerH).stroke();
-        doc.moveTo(colX[4], y).lineTo(colX[4], y + headerH).stroke();
+        for (let i = 1; i < cols.length; i++) doc.moveTo(colX[i], y).lineTo(colX[i], y + headerH).stroke();
         doc.restore();
-        doc.font("Helvetica-Bold").fontSize(10).fillColor("#111827");
-        cols.forEach((c, idx2) => doc.text(c.title, colX[idx2] + 4, y + 6, { width: c.w - 8, align: "center" }));
-        doc.font("Helvetica").fontSize(10).fillColor("#111827");
+        doc.font("Helvetica-Bold").fontSize(9.5).fillColor("#e2e8f0");
+        cols.forEach((c, idx2) => doc.text(c.title, colX[idx2] + 3, y + 5, { width: c.w - 6, align: "center" }));
+        doc.font("Helvetica").fontSize(9).fillColor(colorPrimary);
         y += headerH;
       }
 
       if (idx % 2 === 0) {
         doc.save().rect(left, y, contentWidth, rowH).fill("#f8fafc").restore();
       }
-      doc.save().lineWidth(1).strokeColor("#111827");
+      doc.save().lineWidth(1).strokeColor(colorBorder);
       doc.rect(left, y, contentWidth, rowH).stroke();
-      doc.moveTo(colX[1], y).lineTo(colX[1], y + rowH).stroke();
-      doc.moveTo(colX[2], y).lineTo(colX[2], y + rowH).stroke();
-      doc.moveTo(colX[3], y).lineTo(colX[3], y + rowH).stroke();
-      doc.moveTo(colX[4], y).lineTo(colX[4], y + rowH).stroke();
+      for (let i = 1; i < cols.length; i++) doc.moveTo(colX[i], y).lineTo(colX[i], y + rowH).stroke();
       doc.restore();
 
-      doc.text(String(codigo), colX[0] + 4, y + 6, { width: cols[0].w - 8, align: "center" });
-      doc.text(desc, colX[1] + 4, y + 6, { width: cols[1].w - 8, align: "center" });
-      doc.text(String(cant), colX[2] + 4, y + 6, { width: cols[2].w - 8, align: "center" });
-      doc.text(fmtNIO(precio), colX[3] + 4, y + 6, { width: cols[3].w - 8, align: "right" });
-      doc.text(fmtNIO(subtotal), colX[4] + 4, y + 6, { width: cols[4].w - 8, align: "right" });
+      const centerY = y + 5;
+      doc.text(String(codigo), colX[0] + 3, centerY, { width: cols[0].w - 6, align: "center" });
+      doc.text(desc, colX[1] + 3, centerY, { width: cols[1].w - 6, align: "center" });
+      doc.text(String(cant), colX[2] + 3, centerY, { width: cols[2].w - 6, align: "center" });
+      doc.text(fmtMoney(precioC, "C$"), colX[3] + 3, centerY, { width: cols[3].w - 6, align: "right" });
+      doc.text(fmtMoney(subtotalC, "C$"), colX[4] + 3, centerY, { width: cols[4].w - 6, align: "right" });
+      doc.text(fmtMoney(precioU, "$"), colX[5] + 3, centerY, { width: cols[5].w - 6, align: "right" });
+      doc.text(fmtMoney(subtotalU, "$"), colX[6] + 3, centerY, { width: cols[6].w - 6, align: "right" });
 
       y += rowH;
     });
 
-    // Total general
-    const totalRowH = 28;
-    // Verificar si hay espacio para el total, si no, crear nueva página
+    const totalRowH = 26;
     if (y + totalRowH > bottomLimit) {
       doc.addPage();
       drawHeader();
-      y = 120;
+      y = 118;
     }
-    
-    // Dibujar fila de TOTAL con bordes
-    doc.save().lineWidth(1).strokeColor("#111827");
+
+    doc.save().lineWidth(1.1).strokeColor(colorBorder);
     doc.rect(left, y, contentWidth, totalRowH).stroke();
-    doc.moveTo(colX[1], y).lineTo(colX[1], y + totalRowH).stroke();
-    doc.moveTo(colX[2], y).lineTo(colX[2], y + totalRowH).stroke();
-    doc.moveTo(colX[3], y).lineTo(colX[3], y + totalRowH).stroke();
-    doc.moveTo(colX[4], y).lineTo(colX[4], y + totalRowH).stroke();
-    doc.restore();
-    
-    doc.save().font("Helvetica-Bold").fontSize(11).fillColor("#111827");
-    doc.text("TOTAL", colX[2] + 4, y + 8, { width: cols[2].w + cols[3].w - 8, align: "right" });
-    doc.text(fmtNIO(totalGeneral), colX[4] + 4, y + 8, { width: cols[4].w - 8, align: "right" });
+    for (let i = 1; i < cols.length; i++) doc.moveTo(colX[i], y).lineTo(colX[i], y + totalRowH).stroke();
     doc.restore();
 
-    return y + totalRowH + 10;
+    doc.save().font("Helvetica-Bold").fontSize(10).fillColor(colorPrimary);
+    doc.text("TOTAL C$", colX[2] + 3, y + 7, { width: cols[2].w + cols[3].w - 6, align: "right" });
+    doc.text(fmtMoney(totalCordoba, "C$"), colX[4] + 3, y + 7, { width: cols[4].w - 6, align: "right" });
+    doc.text("TOTAL $", colX[5] + 3, y + 7, { width: cols[5].w - 6, align: "right" });
+    doc.fillColor(colorPrimary).text(fmtMoney(totalDolar, "$"), colX[6] + 3, y + 7, { width: cols[6].w - 6, align: "right" });
+    doc.restore();
+
+    return y + totalRowH + 8;
   };
 
   const drawFirmas = (startY: number) => {
-    const rowH = 28; // más alto para facilitar firma
+    const rowH = 26;
     const labelW = 120;
     const fechaW = 110;
-    const gridColor = "#111827";
+    const gridColor = colorBorder;
 
-    // Marco exterior
     doc.save().lineWidth(1).strokeColor(gridColor);
     doc.rect(left, startY, contentWidth, rowH * 2).stroke();
-    // Columna fecha (gris)
     doc.rect(left + contentWidth - fechaW, startY, fechaW, rowH * 2).stroke().fillOpacity(0.12).fill("#9ca3af").fillOpacity(1);
-    // Divide filas
     doc.moveTo(left, startY + rowH).lineTo(right, startY + rowH).stroke(gridColor);
-    // Divide columnas principales
     doc.moveTo(left + labelW, startY).lineTo(left + labelW, startY + rowH * 2).stroke(gridColor);
     doc.moveTo(left + contentWidth - fechaW, startY).lineTo(left + contentWidth - fechaW, startY + rowH * 2).stroke(gridColor);
     doc.restore();
 
-    doc.font("Helvetica").fontSize(10).fillColor("#111827");
-    doc.text("Recibi Conforme:", left + 6, startY + 8, { width: labelW - 12 });
-    doc.text("Entregue Conforme:", left + 6, startY + rowH + 8, { width: labelW - 12 });
+    doc.font("Helvetica").fontSize(9.5).fillColor(colorPrimary);
+    doc.text("Recibi Conforme:", left + 6, startY + 6, { width: labelW - 12 });
+    doc.text("Entregue Conforme:", left + 6, startY + rowH + 6, { width: labelW - 12 });
 
-    // Fecha en su propio cuadro gris
-    const fechaLabelY = startY + 6;
-    const fechaValorY = startY + rowH + 4;
-    doc.font("Helvetica-Bold").text("Fecha:", left + contentWidth - fechaW + 6, fechaLabelY, { width: fechaW - 12, align: "left" });
-    doc.font("Helvetica").text(fmtDate(fecha), left + contentWidth - fechaW + 6, fechaValorY, { width: fechaW - 12, align: "right" });
+    const fechaLabelY = startY + 5;
+    const fechaValorY = startY + rowH + 3;
+    doc.font("Helvetica-Bold").fillColor(colorPrimary).text("Fecha:", left + contentWidth - fechaW + 6, fechaLabelY, { width: fechaW - 12, align: "left" });
+    doc.font("Helvetica").fillColor(colorMuted).text(fmtDate(fecha), left + contentWidth - fechaW + 6, fechaValorY, { width: fechaW - 12, align: "right" });
 
-    return startY + rowH * 2 + 10;
+    return startY + rowH * 2 + 8;
   };
 
   drawHeader();
-  let cursorY = 110;
+  let cursorY = 104;
   cursorY = drawDatosGenerales(cursorY);
-  cursorY = drawItemsTable(cursorY + 6);
-  cursorY = drawFirmas(cursorY + 6);
+  cursorY = drawItemsTable(cursorY + 4);
+  cursorY = drawFirmas(cursorY + 4);
 
-  doc.font("Helvetica").fontSize(10).fillColor("#111827");
+  doc.font("Helvetica").fontSize(9.5).fillColor(colorPrimary);
   doc.text("Atentamente,", left, cursorY + 8);
-  doc.text("SERVICIOS MÚLTIPLES E IMPORTADORA AyHer", left, cursorY + 22);
+  doc.font("Helvetica-Bold").text(empresa?.razonSocial || "SERVICIOS MULTIPLES E IMPORTADORA AyHer", left, cursorY + 20);
 
   doc.end();
 }

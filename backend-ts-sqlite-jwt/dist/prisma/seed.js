@@ -108,7 +108,7 @@ async function seedClientes() {
             ruc: 'J0310000239584',
             direccion: 'Km 45, 1/2 carretera a La Boquita, Diriamba, Carazo',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         },
         {
             tipoCliente: 'EMPRESA',
@@ -117,7 +117,7 @@ async function seedClientes() {
             ruc: 'J0310000405719',
             direccion: 'KM 12.5 Carretera Norte, Módulo 30, Las Mercedes, Managua, Nicaragua',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         },
         {
             tipoCliente: 'EMPRESA',
@@ -126,7 +126,7 @@ async function seedClientes() {
             ruc: 'J0310000409188',
             direccion: 'Puente Denivel Portezuelo, 800 mtrs al lago, Managua, Nicaragua',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         },
         {
             tipoCliente: 'EMPRESA',
@@ -135,7 +135,7 @@ async function seedClientes() {
             ruc: 'J0310000019612',
             direccion: 'Semáforos Portezuelo, KM 5.5 Carretera Norte, 400 mts Norte, Managua, Nicaragua',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         },
         {
             tipoCliente: 'EMPRESA',
@@ -144,7 +144,7 @@ async function seedClientes() {
             ruc: 'J0310000383537',
             direccion: 'KM 14 1/2 Carretera nueva a León, Parque SBC ALLIAN',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         },
         {
             tipoCliente: 'EMPRESA',
@@ -153,7 +153,7 @@ async function seedClientes() {
             ruc: 'J0310000234990',
             direccion: 'KM 14 1/2 Carretera nueva a León, Módulo N8, Managua, Nicaragua',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         },
         {
             tipoCliente: 'EMPRESA',
@@ -162,7 +162,7 @@ async function seedClientes() {
             ruc: 'J0310000106967',
             direccion: 'Carretera Masaya 28 1/2 Km, Zona Franca Coyotepe, Masaya, Nicaragua',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         },
         {
             tipoCliente: 'EMPRESA',
@@ -171,7 +171,7 @@ async function seedClientes() {
             ruc: 'J0310000384657',
             direccion: 'Gass Uno, 1 cuadra Este, Masatepe – Masaya',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         },
         {
             tipoCliente: 'EMPRESA',
@@ -180,7 +180,7 @@ async function seedClientes() {
             ruc: 'J0310000226318',
             direccion: 'Unión Fenosa, 200 mts sur, 100 mts este, KM 32 Carretera Masaya–Granada',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         },
         {
             tipoCliente: 'EMPRESA',
@@ -189,7 +189,7 @@ async function seedClientes() {
             ruc: 'J0310000234752',
             direccion: 'Zona Franca Las Palmeras, KM 45 1/2 San Marcos, Masatepe',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         },
         {
             tipoCliente: 'EMPRESA',
@@ -198,7 +198,7 @@ async function seedClientes() {
             ruc: 'J0310000234752',
             direccion: 'Zona Franca Las Palmeras, KM 45 1/2 San Marcos, Masatepe',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         },
         {
             tipoCliente: 'EMPRESA',
@@ -207,7 +207,7 @@ async function seedClientes() {
             ruc: 'J0310000397465',
             direccion: 'Zona Franca Internacional Chinandega S.A, KM 124 Carretera León – Chinandega',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         },
         {
             tipoCliente: 'EMPRESA',
@@ -216,7 +216,7 @@ async function seedClientes() {
             ruc: 'J1330000034642',
             direccion: 'KM 88.5 Carretera León – Managua, Frente a Seminario San Agustín',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         },
         {
             tipoCliente: 'EMPRESA',
@@ -225,7 +225,7 @@ async function seedClientes() {
             ruc: 'J0310000234779',
             direccion: 'Zona Franca Nicaragua, Bo. Conchagua, KM 109.5 Carretera Panamericana Rivas',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         },
         {
             tipoCliente: 'EMPRESA',
@@ -234,7 +234,7 @@ async function seedClientes() {
             ruc: 'J0310000203423',
             direccion: 'Km 45 Carretera San Marcos–Jinotepe, San Marcos, Carazo, Nicaragua',
             estado: 'ACTIVO',
-            creditoHabilitado: false
+            creditoHabilitado: true
         }
     ];
     for (const cliente of clientes) {
@@ -248,24 +248,140 @@ async function seedClientes() {
 }
 async function seedConfiguracion() {
     const existing = await prisma.configuracion.findFirst();
+    const configData = {
+        razonSocial: 'Servicios Multiples e importaciones AYHER',
+        ruc: '0411301830006D',
+        direccion: 'Gasolinera Puma 3. al Sur 1/2 arriba',
+        telefono1: '8972-8438',
+        telefono2: null,
+        correo: 'cramber83@gmail.com',
+        sitioWeb: null,
+        logoUrl: null,
+        mensajeFactura: 'Gracias por su preferencia. Precios sujetos a cambio sin previo aviso.',
+    };
     if (existing) {
-        console.log('ℹ️ Configuración ya existe, omitiendo...');
+        const config = await prisma.configuracion.update({
+            where: { id: existing.id },
+            data: configData
+        });
+        console.log('✅ Configuración de empresa actualizada:', config.razonSocial);
+    }
+    else {
+        const config = await prisma.configuracion.create({
+            data: configData
+        });
+        console.log('✅ Configuración de empresa creada:', config.razonSocial);
+    }
+}
+async function seedMetodosPago() {
+    const metodosPago = [
+        {
+            nombre: 'BAC',
+            tipoCuenta: 'BANCO',
+            banco: 'BAC',
+            numeroCuenta: '362101875',
+            titular: 'Dustin Adonis Ayerdis Espinoza',
+            moneda: 'NIO',
+            activo: true,
+            observaciones: 'Cuenta principal para pagos en córdobas'
+        }
+    ];
+    for (const metodo of metodosPago) {
+        const existing = await prisma.metodoPago.findFirst({
+            where: {
+                banco: metodo.banco,
+                numeroCuenta: metodo.numeroCuenta
+            }
+        });
+        if (!existing) {
+            await prisma.metodoPago.create({
+                data: metodo
+            });
+            console.log(`✅ Método de pago creado: ${metodo.banco} - ${metodo.numeroCuenta}`);
+        }
+        else {
+            console.log(`ℹ️ Método de pago ya existe: ${metodo.banco} - ${metodo.numeroCuenta}`);
+        }
+    }
+}
+async function seedVentaPrueba() {
+    // Verificar si ya existe una venta de prueba
+    const ventaExistente = await prisma.venta.findFirst({
+        where: { observacion: 'VENTA DE PRUEBA - 15 ARTICULOS' }
+    });
+    if (ventaExistente) {
+        console.log('ℹ️ Venta de prueba ya existe');
         return;
     }
-    const config = await prisma.configuracion.create({
+    // Obtener el primer cliente
+    const cliente = await prisma.cliente.findFirst();
+    if (!cliente) {
+        console.log('⚠️ No hay clientes para crear venta de prueba');
+        return;
+    }
+    // Obtener productos del inventario (hasta 15)
+    const productos = await prisma.inventario.findMany({
+        take: 15,
+        include: { marca: true }
+    });
+    if (productos.length === 0) {
+        console.log('⚠️ No hay productos en inventario para crear venta de prueba');
+        return;
+    }
+    // Obtener tipo de cambio actual
+    const tipoCambio = await prisma.tipoCambio.findFirst({
+        orderBy: { createdAt: 'desc' }
+    });
+    const tc = Number(tipoCambio?.valor || 36.62);
+    // Crear la venta
+    const venta = await prisma.venta.create({
         data: {
-            razonSocial: 'Servicios Multiples e importaciones AYHER',
-            ruc: '0411301830006D',
-            direccion: 'Gasolinera Puma 3. al Sur 1/2 arriba',
-            telefono1: '8972-8438',
-            telefono2: null,
-            correo: 'cramber83@gmail.com',
-            sitioWeb: null,
-            logoUrl: null,
-            mensajeFactura: 'Gracias por su preferencia. Precios sujetos a cambio sin previo aviso.',
+            cliente: {
+                connect: { id: cliente.id }
+            },
+            tipoPago: 'CONTADO',
+            estadoPago: 'PAGADO',
+            cancelada: false,
+            totalCordoba: 0, // Se calculará después
+            totalDolar: 0, // Se calculará después
+            tipoCambioValor: new Prisma.Decimal(tc),
+            observacion: 'VENTA DE PRUEBA - 15 ARTICULOS',
+            pio: 'PIO-TEST-001',
+            detalles: {
+                create: productos.map((producto, index) => {
+                    const cantidad = Math.floor(Math.random() * 5) + 1; // 1-5 unidades
+                    const precioCordoba = Number(producto.precioVentaSugeridoCordoba || producto.precioVentaPromedioCordoba || 100);
+                    const precioDolar = precioCordoba / tc;
+                    return {
+                        inventarioId: producto.id,
+                        cantidad: cantidad,
+                        precioUnitarioCordoba: new Prisma.Decimal(precioCordoba),
+                        precioUnitarioDolar: new Prisma.Decimal(precioDolar)
+                    };
+                })
+            }
+        },
+        include: {
+            detalles: true
         }
     });
-    console.log('✅ Configuración de empresa creada:', config.razonSocial);
+    // Calcular totales
+    let totalCordoba = 0;
+    let totalDolar = 0;
+    for (const detalle of venta.detalles) {
+        totalCordoba += Number(detalle.cantidad) * Number(detalle.precioUnitarioCordoba);
+        totalDolar += Number(detalle.cantidad) * Number(detalle.precioUnitarioDolar);
+    }
+    // Actualizar la venta con los totales
+    await prisma.venta.update({
+        where: { id: venta.id },
+        data: {
+            totalCordoba: new Prisma.Decimal(totalCordoba),
+            totalDolar: new Prisma.Decimal(totalDolar)
+        }
+    });
+    console.log(`✅ Venta de prueba creada con ${productos.length} artículos`);
+    console.log(`   Total: C$ ${totalCordoba.toFixed(2)} / $ ${totalDolar.toFixed(2)}`);
 }
 async function main() {
     await seedAdmin();
@@ -274,6 +390,8 @@ async function main() {
     await seedCategoriasYMarcas();
     await seedClientes();
     await seedConfiguracion();
+    await seedMetodosPago();
+    await seedVentaPrueba();
 }
 main()
     .catch((e) => {

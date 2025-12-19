@@ -16,6 +16,7 @@ inventarioRouter.post('/importar', upload.single('file'), importarExcel);
 
 // Bajo stock (stockActual <= stockMinimo)
 inventarioRouter.get('/low-stock', ctrl.listLowStock);
+inventarioRouter.get('/low-stock/excel', ctrl.listLowStockExcel);
 
 inventarioRouter.get('/:id',  ctrl.getById);
 inventarioRouter.put('/:id',  ctrl.update);

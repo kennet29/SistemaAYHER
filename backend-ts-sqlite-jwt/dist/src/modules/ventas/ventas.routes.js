@@ -48,11 +48,14 @@ exports.ventaRouter.get('/pendientes', auth_1.authenticate, ctrl.listPendientes)
 // Historial de Proformas
 exports.ventaRouter.get('/proformas', auth_1.authenticate, ctrl.listProformas);
 exports.ventaRouter.get('/proformas/:id', auth_1.authenticate, ctrl.getProformaById);
+exports.ventaRouter.put('/proformas/:id', auth_1.authenticate, ctrl.updateProforma);
+exports.ventaRouter.delete('/proformas/:id', auth_1.authenticate, ctrl.deleteProforma);
 exports.ventaRouter.get('/proformas/:id/excel', auth_1.authenticate, ctrl.generarProformaExcel);
 exports.ventaRouter
     .route('/:id')
     .get(auth_1.authenticate, ctrl.getById)
-    .patch(auth_1.authenticate, ctrl.update);
+    .patch(auth_1.authenticate, ctrl.update)
+    .delete(auth_1.authenticate, ctrl.deleteVenta);
 // Excel de una venta (historial)
 exports.ventaRouter.get('/:id/excel', auth_1.authenticate, ctrl.generarVentaExcel);
 // Marcar/actualizar cancelada (crédito pagado)

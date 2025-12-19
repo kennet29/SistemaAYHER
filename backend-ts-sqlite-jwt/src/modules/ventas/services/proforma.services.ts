@@ -7,6 +7,10 @@ const normalizePio = (pio?: string | null) => {
   return typeof pio === "string" && pio.trim().length > 0 ? pio.trim() : "N/A";
 };
 
+const formatNumber = (num: number): string => {
+  return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
 export async function generarProformaPDF({ empresa, cliente, detalles, totalCordoba, totalDolar, pio }: any) {
   const fileName = `proforma_${Date.now()}.pdf`;
   const filePath = `./tmp/${fileName}`;
@@ -52,7 +56,7 @@ export async function generarProformaPDF({ empresa, cliente, detalles, totalCord
     .font("Helvetica")
     .text(`Cliente: ${cliente?.nombre ?? "N/A"}`)
     .text(`Fecha: ${new Date().toLocaleDateString()}`)
-    .text(`PIO: ${displayPio}`)
+    .text(`OL: ${displayPio}`)
     .moveDown(1);
 
   // ===== Tabla =====
@@ -171,7 +175,7 @@ export async function generarProformaPDFStream(
     .text(`Cliente: ${cliente?.nombre ?? "N/A"}`, left + 10, metaTop + 10, { width: contentWidth / 2 - 12 })
     .text(`Fecha: ${new Date().toLocaleDateString()}`, left + contentWidth / 2, metaTop + 10, { width: contentWidth / 2 - 12 })
     .text(`Tipo de cambio: ${tipoCambio ? Number(tipoCambio).toFixed(4) : '-'}`, left + contentWidth / 2, metaTop + 28, { width: contentWidth / 2 - 12 });
-  doc.text(`PIO: ${displayPio}`, left + 10, doc.y + lineStep, { width: contentWidth - 20 });
+  doc.text(`OL: ${displayPio}`, left + 10, doc.y + lineStep, { width: contentWidth - 20 });
 
   // ===== Tabla ===== con paginación A4
   const tableTop = metaTop + 70;
@@ -403,7 +407,7 @@ export async function generarProformaPDFStreamV2(
     .text(`Cliente: ${cliente?.nombre ?? "N/A"}`, left + 10, metaTop + 10, { width: contentWidth / 2 - 12 })
     .text(`Fecha: ${new Date().toLocaleDateString()}`, left + contentWidth / 2, metaTop + 10, { width: contentWidth / 2 - 12, align: 'right' })
     .text(`Tipo de cambio: ${tipoCambio ? Number(tipoCambio).toFixed(4) : '-'}`, left + contentWidth / 2, metaTop + 34, { width: contentWidth / 2 - 12, align: 'right' });
-  doc.text(`PIO: ${displayPio}`, left + 10, doc.y + metaLineStep, { width: contentWidth - 20 });
+  doc.text(`OL: ${displayPio}`, left + 10, doc.y + metaLineStep, { width: contentWidth - 20 });
   // Campos extra: izquierda (RUC/ID, Empresa, Contacto, Razón/Representante, Dirección)
   let yLeft = metaTop + 36;
   if (cliRuc) { doc.font('Helvetica-Bold').text(`RUC/ID: ${cliRuc}`, left + 10, yLeft, { width: contentWidth / 2 - 12 }); yLeft += extraStep; }
@@ -580,10 +584,17 @@ export async function generarProformaPDFStreamV3(
   const drawHeader = () => {
     const headerTop = 20;
     const logoPath = resolveLogoPath(empresa?.logoUrl);
-    if (logoPath) { try { doc.image(logoPath, left, headerTop, { width: 140 }); } catch {} }
+    if (logoPath) { try { doc.image(logoPath, left, headerTop, { width: 200 }); } catch {} }
+
+    // Formato de fecha dd/mm/yyyy
+    const now = new Date();
+    const dia = String(now.getDate()).padStart(2, '0');
+    const mes = String(now.getMonth() + 1).padStart(2, '0');
+    const anio = now.getFullYear();
+    const fechaFormateada = `${dia}/${mes}/${anio}`;
 
     doc.font("Helvetica").fontSize(11).fillColor("#111827")
-      .text(`Fecha: ${new Date().toLocaleDateString()}`, right - 160, headerTop, { width: 160, align: "right" })
+      .text(`Fecha: ${fechaFormateada}`, right - 160, headerTop, { width: 160, align: "right" })
       .text(`Oferta N°: ${numeroOferta}`, right - 160, headerTop + 16, { width: 160, align: "right" });
   };
 
@@ -592,11 +603,14 @@ export async function generarProformaPDFStreamV3(
     doc.font("Helvetica").fontSize(11).fillColor("#111827");
     const y = startY + 14;
     const linea1 = cliente?.empresa || cliente?.nombre || "Cliente";
-    const linea2 = cliente?.direccion || "";
-    const linea3 = cliente?.ciudad || cliente?.pais || "";
+    const rucCliente = cliente?.ruc || cliente?.identificacion || cliente?.cedula || "";
+    const linea2 = rucCliente ? `RUC: ${rucCliente}` : "";
+    const linea3 = cliente?.direccion || "";
+    const linea4 = cliente?.ciudad || cliente?.pais || "";
     doc.text(linea1, left, y);
     if (linea2) doc.text(linea2, left, doc.y + 2);
     if (linea3) doc.text(linea3, left, doc.y + 2);
+    if (linea4) doc.text(linea4, left, doc.y + 2);
     return doc.y + 6;
   };
 
@@ -621,13 +635,22 @@ export async function generarProformaPDFStreamV3(
   };
 
   const drawTabla = (startY: number) => {
+    const tc = Number(tipoCambio || 36.5);
+    
+    // Mostrar tipo de cambio de forma prominente con 2 decimales
+    doc.font("Helvetica-Bold").fontSize(10).fillColor("#0b2d64")
+      .text(`Tipo de Cambio: C$ ${tc.toFixed(2)} por USD`, left, startY, { width: contentWidth, align: "right" });
+    const tableStartY = startY + 18;
+    
     const cols = [
-      { w: 30, title: "Pos" },
-      { w: 85, title: "No. De Parte" },
-      { w: contentWidth - (30 + 85 + 60 + 90 + 90), title: "Descripcion" },
-      { w: 60, title: "Cant." },
-      { w: 90, title: "Precio Unitario" },
-      { w: 90, title: "Precio Tot." },
+      { w: 25, title: "Pos" },
+      { w: 65, title: "No. Parte" },
+      { w: contentWidth - (25 + 65 + 40 + 55 + 55 + 55 + 55), title: "Descripcion" },
+      { w: 40, title: "Cant." },
+      { w: 55, title: "Precio C$" },
+      { w: 55, title: "Precio $" },
+      { w: 55, title: "Subtotal C$" },
+      { w: 55, title: "Subtotal $" },
     ];
     const colX: number[] = [];
     cols.reduce((acc, c) => {
@@ -636,94 +659,121 @@ export async function generarProformaPDFStreamV3(
     }, left);
 
     const drawHeaderRow = (yHeader: number) => {
-      doc.save().rect(left, yHeader, contentWidth, 22).fill("#0b2d64").restore();
-      // Marco exterior del header para dejar borde visible
-      doc.save().strokeColor("#0b2d64").lineWidth(1.2).rect(left, yHeader, contentWidth, 22).stroke().restore();
-      doc.font("Helvetica-Bold").fontSize(10).fillColor("#ffffff");
+      doc.save().rect(left, yHeader, contentWidth, 24).fill("#0b2d64").restore();
+      doc.save().strokeColor("#0b2d64").lineWidth(1.2).rect(left, yHeader, contentWidth, 24).stroke().restore();
+      doc.font("Helvetica-Bold").fontSize(8).fillColor("#ffffff");
       cols.forEach((c, idx) => {
-        doc.text(c.title, colX[idx] + 4, yHeader + 6, { width: c.w - 8, align: "center" });
+        doc.text(c.title, colX[idx] + 2, yHeader + 8, { width: c.w - 4, align: "center" });
       });
-      // Bordes verticales del header
       doc.save();
       doc.strokeColor("#ffffff").lineWidth(1);
       for (let i = 1; i < cols.length; i++) {
-        doc.moveTo(colX[i], yHeader).lineTo(colX[i], yHeader + 22).stroke();
+        doc.moveTo(colX[i], yHeader).lineTo(colX[i], yHeader + 24).stroke();
       }
       doc.restore();
       doc.font("Helvetica").fillColor("#111827");
     };
 
-    const bottomLimit = pageHeight - doc.page.margins.bottom - 80;
-    drawHeaderRow(startY);
-    let y = startY + 22;
+    const bottomLimit = pageHeight - doc.page.margins.bottom - 100;
+    drawHeaderRow(tableStartY);
+    let y = tableStartY + 24;
     const filas = Array.isArray(detalles) ? detalles : [];
-    let total = 0;
+    let totalCordobas = 0;
+    let totalDolares = 0;
 
-    const tc = Number(tipoCambio || 36.5);
     filas.forEach((d: any, i) => {
       const cant = Number(d.cantidad || 0);
       const precioCordoba = Number(d.precio ?? d.precioUnitarioCordoba ?? 0);
-      const precio = esUSD ? (precioCordoba / tc) : precioCordoba;
-      const sub = cant * precio;
-      total += sub;
-      const rowH = 18;
+      const precioDolar = precioCordoba / tc;
+      const subCordoba = cant * precioCordoba;
+      const subDolar = cant * precioDolar;
+      totalCordobas += subCordoba;
+      totalDolares += subDolar;
+      
+      // Calcular altura dinámica basada en el contenido
+      doc.font("Helvetica-Bold").fontSize(8);
+      const parteTxt = String(d.numeroParte ?? "");
+      const nombreTxt = String(d.nombre ?? d.descripcion ?? "");
+      
+      const parteHeight = doc.heightOfString(parteTxt, { width: cols[1].w - 4 });
+      const nombreHeight = doc.heightOfString(nombreTxt, { width: cols[2].w - 4 });
+      const maxContentHeight = Math.max(parteHeight, nombreHeight);
+      const rowH = Math.max(24, maxContentHeight + 12); // Mínimo 24px, o contenido + padding
 
       if (y + rowH > bottomLimit) {
         doc.addPage();
-        drawHeaderRow(doc.page.margins.top);
-        y = doc.page.margins.top + 22;
+        doc.font("Helvetica-Bold").fontSize(10).fillColor("#0b2d64")
+          .text(`Tipo de Cambio: C$ ${tc.toFixed(2)} por USD`, left, doc.page.margins.top, { width: contentWidth, align: "right" });
+        drawHeaderRow(doc.page.margins.top + 18);
+        y = doc.page.margins.top + 42;
       }
 
-      // Fondo alternado
       if (i % 2 === 0) {
         doc.save().rect(left, y, contentWidth, rowH).fill("#f8fafc").restore();
       }
 
-      // Bordes tipo Excel - rectángulo completo de la fila (más gruesos y oscuros)
       doc.save();
       doc.strokeColor("#333333").lineWidth(1.2);
       doc.rect(left, y, contentWidth, rowH).stroke();
       
-      // Bordes verticales internos
       for (let j = 1; j < cols.length; j++) {
         doc.moveTo(colX[j], y).lineTo(colX[j], y + rowH).stroke();
       }
       doc.restore();
 
-      // Contenido de las celdas (sin asteriscos) - CENTRADO
-      doc.text(String(i + 1), colX[0] + 4, y + 4, { width: cols[0].w - 8, align: "center" }); // Posición
-      const parteTxt = String(d.numeroParte ?? "");
-      doc.text(parteTxt, colX[1] + 4, y + 4, { width: cols[1].w - 8, align: "center" });
-      doc.text(String(d.nombre ?? d.descripcion ?? ""), colX[2] + 4, y + 4, { width: cols[2].w - 8, align: "center" });
-      doc.text(String(cant), colX[3], y + 4, { width: cols[3].w - 4, align: "center" });
-      doc.text(fmtMoney(precio), colX[4], y + 4, { width: cols[4].w - 4, align: "center" });
-      doc.text(fmtMoney(sub), colX[5], y + 4, { width: cols[5].w - 4, align: "center" });
+      doc.font("Helvetica-Bold").fontSize(8).fillColor("#111827");
+      const verticalCenter = y + (rowH / 2) - 4;
+      doc.text(String(i + 1), colX[0] + 2, verticalCenter, { width: cols[0].w - 4, align: "center" });
+      doc.text(parteTxt, colX[1] + 2, y + 6, { width: cols[1].w - 4, align: "center" });
+      doc.text(nombreTxt, colX[2] + 2, y + 6, { width: cols[2].w - 4, align: "center" });
+      doc.text(String(cant), colX[3] + 2, verticalCenter, { width: cols[3].w - 4, align: "center" });
+      doc.text(formatNumber(precioCordoba), colX[4] + 2, verticalCenter, { width: cols[4].w - 4, align: "right" });
+      doc.text(formatNumber(precioDolar), colX[5] + 2, verticalCenter, { width: cols[5].w - 4, align: "right" });
+      doc.text(formatNumber(subCordoba), colX[6] + 2, verticalCenter, { width: cols[6].w - 4, align: "right" });
+      doc.text(formatNumber(subDolar), colX[7] + 2, verticalCenter, { width: cols[7].w - 4, align: "right" });
       y += rowH;
     });
 
-    // Totales (fila con bordes)
+    // Totales (dos filas más anchas, empezando desde Cant.)
     y += 10;
-    const totalRowH = 20;
+    const totalRowH = 28;
     
-    // Verificar si hay espacio para el total, si no, crear nueva página
-    if (y + totalRowH > bottomLimit) {
+    if (y + totalRowH * 2 > bottomLimit) {
       doc.addPage();
-      drawHeaderRow(doc.page.margins.top);
-      y = doc.page.margins.top + 22;
+      y = doc.page.margins.top + 10;
     }
     
+    // Calcular el ancho para las filas de totales (desde "Cant." hasta el final)
+    const totalStartX = colX[3]; // Empieza desde "Cant."
+    const totalWidth = cols[3].w + cols[4].w + cols[5].w + cols[6].w + cols[7].w;
+    // Label ocupa menos espacio, valor ocupa más
+    const labelWidth = cols[3].w + cols[4].w + cols[5].w;
+    const valueWidth = cols[6].w + cols[7].w;
+    const valueDividerX = totalStartX + labelWidth;
+    
+    // Fila Total Córdobas
     doc.save();
     doc.strokeColor("#333333").lineWidth(1.2);
-    doc.rect(left, y, contentWidth, totalRowH).stroke();
-    for (let j = 1; j < cols.length; j++) {
-      doc.moveTo(colX[j], y).lineTo(colX[j], y + totalRowH).stroke();
-    }
+    doc.rect(totalStartX, y, totalWidth, totalRowH).stroke();
+    doc.moveTo(valueDividerX, y).lineTo(valueDividerX, y + totalRowH).stroke(); // Línea divisoria
     doc.restore();
-    doc.font("Helvetica-Bold").fontSize(11);
-    doc.text("TOTAL", colX[4], y + 5, { width: cols[4].w - 4, align: "right" });
-    doc.text(fmtMoney(total), colX[5], y + 5, { width: cols[5].w - 4, align: "right" });
+    doc.font("Helvetica-Bold").fontSize(12).fillColor("#111827");
+    doc.text("TOTAL C$", totalStartX + 4, y + 9, { width: labelWidth - 8, align: "right" });
+    doc.text(`C$ ${formatNumber(totalCordobas)}`, valueDividerX + 4, y + 9, { width: valueWidth - 8, align: "right" });
+    
+    y += totalRowH;
+    
+    // Fila Total Dólares
+    doc.save();
+    doc.strokeColor("#333333").lineWidth(1.2);
+    doc.rect(totalStartX, y, totalWidth, totalRowH).stroke();
+    doc.moveTo(valueDividerX, y).lineTo(valueDividerX, y + totalRowH).stroke(); // Línea divisoria
+    doc.restore();
+    doc.font("Helvetica-Bold").fontSize(12).fillColor("#111827");
+    doc.text("Total $", totalStartX + 4, y + 9, { width: labelWidth - 8, align: "right" });
+    doc.text(`$ ${formatNumber(totalDolares)}`, valueDividerX + 4, y + 9, { width: valueWidth - 8, align: "right" });
 
-    return y + 24;
+    return y + 28;
   };
 
   drawHeader();
@@ -739,12 +789,6 @@ export async function generarProformaPDFStreamV3(
   cursorY += 18;
   doc.font("Helvetica-Bold").fontSize(11).fillColor("#111827")
     .text("SERVICIOS MULTIPLES E IMPORTACIONES AYHER", left, cursorY, { width: contentWidth, align: "center" });
-
-  if (empresa?.mensajeFactura) {
-    cursorY += 20;
-    doc.font("Helvetica-Oblique").fontSize(9).fillColor("#111827")
-      .text(String(empresa.mensajeFactura), left, cursorY, { width: contentWidth });
-  }
 
   doc.end();
 }

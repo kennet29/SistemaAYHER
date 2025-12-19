@@ -36,8 +36,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.movimientoInventarioRouter = void 0;
 const express_1 = require("express");
 const ctrl = __importStar(require("./MovimientoInventario.controller"));
+const auth_1 = require("../../middleware/auth");
 exports.movimientoInventarioRouter = (0, express_1.Router)();
 // 📋 Listar todos los movimientos
 exports.movimientoInventarioRouter.get("/", ctrl.list);
 // ➕ Registrar nuevo movimiento
 exports.movimientoInventarioRouter.post("/", ctrl.create);
+exports.movimientoInventarioRouter.patch("/:id", auth_1.authenticate, ctrl.update);
+exports.movimientoInventarioRouter.delete("/:id", auth_1.authenticate, ctrl.remove);

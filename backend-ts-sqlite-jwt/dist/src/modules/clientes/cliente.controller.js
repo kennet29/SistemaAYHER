@@ -14,20 +14,20 @@ const optionalEmail = zod_1.z
 const clienteSchema = zod_1.z.object({
     tipoCliente: zod_1.z.string().default("PERSONA"),
     nombre: zod_1.z.string().min(2, "El nombre es obligatorio"),
-    empresa: zod_1.z.string().optional(),
-    nombreContacto: zod_1.z.string().optional(),
-    ruc: zod_1.z.string().optional(),
-    razonSocial: zod_1.z.string().optional(),
-    telefono1: zod_1.z.string().optional(),
-    telefono2: zod_1.z.string().optional(),
+    empresa: zod_1.z.string().nullish().transform(val => val ?? undefined),
+    nombreContacto: zod_1.z.string().nullish().transform(val => val ?? undefined),
+    ruc: zod_1.z.string().nullish().transform(val => val ?? undefined),
+    razonSocial: zod_1.z.string().nullish().transform(val => val ?? undefined),
+    telefono1: zod_1.z.string().nullish().transform(val => val ?? undefined),
+    telefono2: zod_1.z.string().nullish().transform(val => val ?? undefined),
     correo1: optionalEmail,
     correo2: optionalEmail,
-    direccion: zod_1.z.string().optional(),
-    observacion: zod_1.z.string().optional(),
+    direccion: zod_1.z.string().nullish().transform(val => val ?? undefined),
+    observacion: zod_1.z.string().nullish().transform(val => val ?? undefined),
     estado: zod_1.z.string().default("ACTIVO"),
-    creditoHabilitado: zod_1.z.boolean().default(false),
-    creditoMaximoCordoba: zod_1.z.number().nonnegative().optional().default(0),
-    creditoMaximoDolar: zod_1.z.number().nonnegative().optional().default(0),
+    creditoHabilitado: zod_1.z.boolean().default(true),
+    creditoMaximoCordoba: zod_1.z.number().nonnegative().optional().default(100000),
+    creditoMaximoDolar: zod_1.z.number().nonnegative().optional().default(2739.73),
 });
 //// =============================
 // ✅ Crear nuevo cliente
@@ -59,6 +59,11 @@ exports.createCliente = createCliente;
 //// =============================
 const getClientes = async (req, res) => {
     try {
+        // Ensure all clients keep credit enabled by default
+        await prisma_1.prisma.cliente.updateMany({
+            where: { creditoHabilitado: false },
+            data: { creditoHabilitado: true }
+        });
         const clientes = await prisma_1.prisma.cliente.findMany({
             orderBy: { id: "desc" },
         });

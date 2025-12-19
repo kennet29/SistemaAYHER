@@ -1,7 +1,8 @@
-// src/pages/Facturacion.tsx
+﻿// src/pages/Facturacion.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FaCashRegister, FaPlus, FaTrash, FaSave, FaSearch, FaTimes,
+  FaFileInvoiceDollar, FaClipboardList, FaHistory, FaUndo,
 } from "react-icons/fa";
 import DataTable from "react-data-table-component";
 import type { TableColumn } from "react-data-table-component";
@@ -23,7 +24,7 @@ function cryptoId() {
 }
 function formatMoney(val: number, currency: string) {
   const symbol = currency === "USD" ? "$" : "C$";
-  return `${symbol} ${Number(val || 0).toFixed(2)}`;
+  return `${symbol} ${Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /* ===== Types ===== */
@@ -36,6 +37,7 @@ type LineItem = {
   esRemision?: boolean;
   remisionDetalleId?: number | null;
   inventarioId?: number | null;
+  codigoFacturar?: string | null;
 };
 type Moneda = "NIO" | "USD";
 type Product = {
@@ -44,6 +46,7 @@ type Product = {
   numeroParte?: string;
   descripcion?: string;
   stockActual?: number | string;
+  codigoSustituto?: string | null;
   precioVentaSugeridoCordoba?: number | string;
   precioVentaSugeridoDolar?: number | string;
   precioVentaPromedioCordoba?: number | string;
@@ -86,7 +89,7 @@ const Facturacion: React.FC = () => {
 
   const [cliente, setCliente] = useState<number | "">("");
   const [clientesList, setClientesList] = useState<any[]>([]);
-  const [fecha] = useState<string>(() => {
+  const [fecha, setFecha] = useState<string>(() => {
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -112,9 +115,21 @@ const Facturacion: React.FC = () => {
   const [pickerClienteAbierto, setPickerClienteAbierto] = useState(false);
   const [busquedaCliente, setBusquedaCliente] = useState("");
 
+  // Evita scroll de fondo cuando los modales est??n abiertos
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const prevOverflow = document.body.style.overflow;
+    const modalAbierto = pickerAbierto || pickerRemisionAbierto;
+    document.body.style.overflow = modalAbierto ? "hidden" : "";
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, [pickerAbierto, pickerRemisionAbierto]);
+
   const [items, setItems] = useState<LineItem[]>([
-    { id: cryptoId(), producto: "", cantidad: 1, precio: 0, precioBaseNIO: 0 },
+    { id: cryptoId(), producto: "", cantidad: 1, precio: 0, precioBaseNIO: 0, codigoFacturar: null },
   ]);
+  const [actualizandoPrecioId, setActualizandoPrecioId] = useState<string | null>(null);
+  const [confirmPrecio, setConfirmPrecio] = useState<{ lineId: string; precioNio: number } | null>(null);
+  const [pickerSustituto, setPickerSustituto] = useState<{ product: Product; lineId: string } | null>(null);
 
   const [tipoPago, setTipoPago] = useState<"CONTADO" | "CREDITO">("CONTADO");
   const [plazoDias, setPlazoDias] = useState<number>(0);
@@ -160,35 +175,65 @@ const Facturacion: React.FC = () => {
       .catch(() => setNumeroFacturaSugerido('000001'));
   }, []);
 
-  // Cargar productos cotizados recientemente cuando cambia el cliente
+  // Prefill desde proforma (localStorage: facturacionPrefill)
   useEffect(() => {
-    if (cliente === "") {
-      setProductosRecientes(new Map());
-      return;
-    }
-    
+    const raw = localStorage.getItem("facturacionPrefill");
+    if (!raw) return;
+    try {
+      const data = JSON.parse(raw);
+      if (data.clienteId != null && data.clienteId !== "") setCliente(Number(data.clienteId));
+      if (typeof data.pio === "string") setPio(data.pio);
+      if (data.tipoCambioValor) setTipoCambio(Number(data.tipoCambioValor));
+      setMoneda("NIO");
+      if (Array.isArray(data.items) && data.items.length) {
+        const mapped = data.items.map((it: any) => {
+          const labelParte = it.numeroParte ? `${it.numeroParte}` : "";
+          const labelNombre = it.nombre ? `${it.nombre}` : "";
+          const productoLabel = `${labelParte}${labelParte && labelNombre ? " — " : ""}${labelNombre}`.trim() || (labelParte || labelNombre);
+          const precio = Number(it.precioCordoba || 0);
+          return {
+            id: cryptoId(),
+            producto: productoLabel,
+            cantidad: Number(it.cantidad || 0),
+            precio,
+            precioBaseNIO: precio,
+            inventarioId: typeof it.inventarioId === "number" ? Number(it.inventarioId) : null,
+          } as LineItem;
+        });
+        if (mapped.length) setItems(mapped);
+      }
+    } catch {}
+    localStorage.removeItem("facturacionPrefill");
+  }, []);
+
+  // Cargar productos cotizados recientemente (global)
+  useEffect(() => {
     const token = getCookie("token");
-    const params = new URLSearchParams();
-    params.set("clienteId", String(cliente));
     
-    fetch(`${API_COTIZACIONES}?${params.toString()}`, {
+    fetch(API_COTIZACIONES, {
       headers: { Authorization: token ? `Bearer ${token}` : "" },
     })
       .then((r) => r.json())
       .then((body) => {
         const recientes = Array.isArray(body?.recientes) ? body.recientes : [];
         const mapa = new Map<number, { clienteNombre: string; clienteEmpresa: string; fecha: string }>();
+        const ahora = Date.now();
+        const limiteMs = 14 * 24 * 60 * 60 * 1000;
         
         for (const entry of recientes) {
           const invId = Number(entry.inventarioId);
           if (!Number.isFinite(invId)) continue;
+          const fechaStr = entry.fecha || "";
+          const fechaMs = fechaStr ? new Date(fechaStr).getTime() : NaN;
+          if (!Number.isFinite(fechaMs)) continue;
+          if (ahora - fechaMs > limiteMs) continue; // más de 14 días, omitir
           
           // Solo guardar la primera (más reciente) cotización de cada producto
           if (!mapa.has(invId)) {
             mapa.set(invId, {
               clienteNombre: entry.cliente?.nombre || "Cliente desconocido",
               clienteEmpresa: entry.cliente?.empresa || "",
-              fecha: entry.fecha || "",
+              fecha: fechaStr,
             });
           }
         }
@@ -196,7 +241,7 @@ const Facturacion: React.FC = () => {
         setProductosRecientes(mapa);
       })
       .catch(() => setProductosRecientes(new Map()));
-  }, [cliente]);
+  }, []);
 
   const getPrecioProducto = (p: Product, m: Moneda) => {
     const raw =
@@ -224,11 +269,66 @@ const Facturacion: React.FC = () => {
       .reduce((acc, it) => acc + (Number(it.cantidad) || 0), 0);
   };
 
+  const getPrecioBaseNIO = (line: LineItem) => {
+    if (typeof line.precioBaseNIO === "number" && Number.isFinite(line.precioBaseNIO)) {
+      return Number(line.precioBaseNIO) || 0;
+    }
+    const precioNum = Number(line.precio) || 0;
+    if (moneda === "USD") {
+      if (!tipoCambio || tipoCambio <= 0) return 0;
+      return Number((precioNum * tipoCambio).toFixed(4));
+    }
+    return Number(precioNum.toFixed(4));
+  };
+
+  const parseSustitutos = (codigoSustituto?: string | null) =>
+    (codigoSustituto || "")
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean);
+
+  const asignarProductoALinea = (p: Product, targetId: string, codigoOverride?: string) => {
+    const stock = Number(p.stockActual ?? 0) || 0;
+    if (stock <= 0) {
+      notify.warn("Este producto no tiene stock disponible.");
+      return;
+    }
+    const marcaNombre = p.marca?.nombre ? ` · ${p.marca.nombre}` : "";
+    const codigoLabel = codigoOverride ?? p.numeroParte ?? "";
+    const baseNIO = getPrecioProducto(p, "NIO");
+    const precioSel =
+      moneda === "USD" ? (tipoCambio ? Number((baseNIO / tipoCambio).toFixed(4)) : 0) : Number(baseNIO.toFixed(4));
+    const cantInicial = Math.min(1, stock);
+    setItems((prev) =>
+      prev.map((it) =>
+        it.id === targetId
+          ? {
+              ...it,
+              producto: `${codigoLabel ? `${codigoLabel} — ` : ""}${p.nombre ?? ""}${marcaNombre}`.trim(),
+              precio: precioSel,
+              precioBaseNIO: Number(baseNIO.toFixed(4)),
+              inventarioId: Number(p.id),
+              esRemision: false,
+              remisionDetalleId: null,
+              cantidad: cantInicial,
+              codigoFacturar: codigoLabel || p.numeroParte || null,
+            }
+          : it
+      )
+    );
+    setPickerAbierto(false);
+    setBusqueda("");
+    setPickerSustituto(null);
+    notify.ok("Producto agregado");
+  };
+
   const productosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     if (!q) return productos;
     return productos.filter((p) =>
-      [p.nombre, p.numeroParte, p.descripcion].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
+      [p.nombre, p.numeroParte, p.descripcion, p.codigoSustituto]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q) || parseSustitutos(String(v)).some((c) => c.toLowerCase().includes(q)))
     );
   }, [busqueda, productos]);
 
@@ -249,6 +349,21 @@ const Facturacion: React.FC = () => {
     () => items.reduce((acc, it) => acc + (Number(it.cantidad) || 0) * (Number(it.precio) || 0), 0),
     [items]
   );
+
+  // Totales base en C$ y su equivalente en USD
+  const totalCordoba = useMemo(
+    () =>
+      items.reduce(
+        (acc, it) => acc + (Number(it.cantidad) || 0) * (getPrecioBaseNIO(it) || 0),
+        0
+      ),
+    [items, moneda, tipoCambio]
+  );
+
+  const totalDolar = useMemo(() => {
+    if (!tipoCambio || tipoCambio <= 0) return null;
+    return totalCordoba / tipoCambio;
+  }, [totalCordoba, tipoCambio]);
 
   useEffect(() => {
     // Derivar precio mostrado desde base en C$ para evitar acumulación por toggles
@@ -317,8 +432,86 @@ const Facturacion: React.FC = () => {
     notify.ok("Línea eliminada");
   }
 
+  async function actualizarPrecioProducto(lineId: string) {
+    const linea = items.find((it) => it.id === lineId);
+    if (!linea) return;
+    if (linea.esRemision) return notify.warn("Las líneas de remisión no permiten actualizar el precio.");
+    if (typeof linea.inventarioId !== "number") {
+      return notify.warn("Seleccione un producto antes de actualizar su precio en inventario.");
+    }
+    const baseNio = getPrecioBaseNIO(linea);
+    if (!(baseNio > 0)) return notify.warn("Ingrese un precio válido para actualizar.");
+
+    const token = getCookie("token");
+    if (!token) return notify.err("Sesión inválida, inicie sesión nuevamente.");
+
+    setActualizandoPrecioId(lineId);
+    const precioRedondeado = Number(baseNio.toFixed(4));
+    try {
+      const res = await fetch(`${API_PRODUCTOS}/${linea.inventarioId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          precioVentaSugeridoCordoba: precioRedondeado,
+          precioVentaPromedioCordoba: precioRedondeado,
+        }),
+      });
+
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        throw new Error(msg || "No se pudo actualizar el precio");
+      }
+
+      const precioUsd = tipoCambio && tipoCambio > 0 ? Number((precioRedondeado / tipoCambio).toFixed(4)) : null;
+
+      setProductos((prev) =>
+        prev.map((p) =>
+          Number(p.id) === Number(linea.inventarioId)
+            ? {
+                ...p,
+                precioVentaSugeridoCordoba: precioRedondeado,
+                precioVentaPromedioCordoba: precioRedondeado,
+                precioVentaSugeridoDolar: precioUsd ?? p.precioVentaSugeridoDolar,
+                precioVentaPromedioDolar: precioUsd ?? p.precioVentaPromedioDolar,
+              }
+            : p
+        )
+      );
+
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === lineId
+            ? {
+                ...it,
+                precioBaseNIO: precioRedondeado,
+                precio: moneda === "USD" && precioUsd != null ? precioUsd : precioRedondeado,
+              }
+            : it
+        )
+      );
+
+      notify.ok("Precio actualizado en inventario");
+    } catch (error: any) {
+      console.error("No se pudo actualizar precio de inventario", error);
+      notify.err(error?.message || "No se pudo actualizar el precio");
+    } finally {
+      setActualizandoPrecioId(null);
+    }
+  }
+  const solicitarConfirmacionPrecio = (lineId: string) => {
+    const linea = items.find((it) => it.id === lineId);
+    if (!linea) return;
+    const precioNio = getPrecioBaseNIO(linea);
+    if (!(precioNio > 0)) return notify.warn("Ingrese un precio válido para actualizar.");
+    setConfirmPrecio({ lineId, precioNio });
+  };
+
   async function guardar() {
     if (cliente === "") return void notify.warn("Seleccione un cliente.");
+    if (!fecha) return void notify.warn("Seleccione una fecha.");
     const validLines = items.filter((i) => (i.inventarioId ?? null) !== null && (i.cantidad || 0) > 0);
     const token = getCookie("token");
     if (!validLines.length) return void notify.warn("Agregue al menos una línea válida.");
@@ -352,7 +545,7 @@ const Facturacion: React.FC = () => {
           .filter((id) => Number.isFinite(id))
       )
     );
-    if (inventarioIds.length) {
+        if (inventarioIds.length) {
       try {
         const params = new URLSearchParams();
         params.set("inventarioIds", inventarioIds.join(","));
@@ -375,17 +568,17 @@ const Facturacion: React.FC = () => {
                 .slice(0, 5)
                 .map((entry) => {
                   const etiqueta = entry.inventario?.numeroParte
-                    ? `${entry.inventario.numeroParte} — ${entry.inventario?.nombre ?? ""}`.trim()
+                    ? `${entry.inventario.numeroParte} - ${entry.inventario?.nombre ?? ""}`.trim()
                     : entry.inventario?.nombre ?? `#${entry.inventarioId}`;
                   const fecha = new Date(entry.fecha);
                   const dias = Math.max(
                     0,
                     Math.floor((Date.now() - fecha.getTime()) / (1000 * 60 * 60 * 24))
                   );
-                  const sufijo = Number.isNaN(dias) ? "" : ` (${dias} ${dias === 1 ? "día" : "días"})`;
+                  const sufijo = Number.isNaN(dias) ? "" : ` (${dias} ${dias === 1 ? "dia" : "dias"})`;
                   return `${etiqueta}${sufijo}`;
                 });
-              notify.warn(`Producto(s) cotizado(s) en las últimas 2 semanas:\n• ${listado.join("\n• ")}`);
+              notify.warn(`Producto(s) cotizado(s) en las ultimas 2 semanas:\n- ${listado.join("\n- ")}`);
             }
           }
         }
@@ -396,7 +589,7 @@ const Facturacion: React.FC = () => {
 
     const precioCordoba = (precioActual: number, base?: number) => {
       if (typeof base === "number") return Number(base.toFixed(4));
-      if (moneda === "NIO") return Number((precioActual).toFixed(4));
+      if (moneda === "NIO") return Number(precioActual.toFixed(4));
       if (!tipoCambio) return 0;
       return Number((precioActual * tipoCambio).toFixed(4));
     };
@@ -409,14 +602,17 @@ const Facturacion: React.FC = () => {
       tipoPago,
       plazoDias,
       tipoCambioValor: tipoCambio,
-      numeroFactura: numeroFacturaSugerido, // Agregar número de factura
+      numeroFactura: numeroFacturaSugerido,
       detalles: validLines.map((i) => ({
         inventarioId: i.inventarioId,
         cantidad: i.cantidad,
         precioUnitarioCordoba: precioCordoba(i.precio, i.precioBaseNIO),
         remisionDetalleId: i.remisionDetalleId ?? null,
+        codigoFacturar: i.codigoFacturar || null,
+        numeroParte: i.codigoFacturar || null,
       })),
       pio: sanitizedPio ? sanitizedPio : null,
+
     };
 
     try {
@@ -452,7 +648,7 @@ const Facturacion: React.FC = () => {
         console.error('Error al actualizar consecutivo:', error);
       }
 
-      notify.ok("✅ Venta registrada con número de factura: " + numeroFacturaSugerido);
+      notify.ok("? Venta registrada con número de factura: " + numeroFacturaSugerido);
       setTimeout(() => window.location.reload(), 800);
     } catch {
       notify.err("Error de red al guardar venta");
@@ -547,13 +743,14 @@ const Facturacion: React.FC = () => {
               inventarioId: r.inventarioId,
               remisionDetalleId: r.detalleId,
               esRemision: true,
+              codigoFacturar: r.numeroParte || null,
             });
             setPickerRemisionAbierto(false);
             notify.ok("Línea de remisión agregada");
           }}
           title={r.yaAgregado ? "Ya agregado" : `Usar #${r.remisionId}`}
         >
-          ✅
+          <FaPlus />
         </button>
       ),
       ignoreRowClick: true,
@@ -569,15 +766,18 @@ const Facturacion: React.FC = () => {
       <header className="fact-header">
         <button className="back-btn" title="Volver" onClick={() => navigate("/home")}>Volver</button>
         <FaCashRegister className="icon" />
-        <div><h1>Facturación</h1></div>
+        <div><h1>Facturacion</h1></div>
       </header>
 
       <div className="nav-buttons" style={{ display: "flex", gap: "10px" }}>
-        <button className="ghost" onClick={() => navigate("/proforma")}>🧾 Proforma</button>
-        <button className="ghost" onClick={() => navigate("/remisiones")}>📦 Remisiones</button>
-        <button className="ghost" onClick={() => navigate("/ventas")}>📜 Historial ventas</button>
+        <button className="ghost" onClick={() => navigate("/proforma")}><FaFileInvoiceDollar /> Proforma</button>
+        <button className="ghost" onClick={() => navigate("/remisiones")}><FaClipboardList /> Remisiones</button>
+        <div className="top-actions">
+          <button className="ghost" onClick={() => navigate("/ventas")}><FaHistory /> Historial ventas</button>
+          <button className="ghost" onClick={() => navigate("/devoluciones")}><FaUndo /> Devoluciones</button>
+          <button className="ghost" onClick={() => navigate("/devoluciones/historico")}><FaHistory /> Historial devoluciones</button>
+        </div>
       </div>
-
       <div className="fact-content">
         <div className="card">
           <div className="grid-3">
@@ -619,7 +819,7 @@ const Facturacion: React.FC = () => {
                     }}
                     title="Limpiar cliente"
                   >
-                    ✕
+                    ?
                   </button>
                 )}
               </div>
@@ -639,7 +839,11 @@ const Facturacion: React.FC = () => {
 
             <label>
               Fecha
-              <input type="date" value={fecha} readOnly />
+              <input
+                type="date"
+                value={fecha}
+                onChange={(e) => setFecha(e.target.value)}
+              />
             </label>
           </div>
 
@@ -653,7 +857,7 @@ const Facturacion: React.FC = () => {
                   if (nuevoTipo === "CREDITO") {
                     const clienteSeleccionado = clientesList.find(c => c.id === cliente);
                     if (clienteSeleccionado && !clienteSeleccionado.creditoHabilitado) {
-                      notify.warn("⚠️ Este cliente no tiene habilitada una linea de credito. Solo puede realizar compras al contado.");
+                      notify.warn("?? Este cliente no tiene habilitada una linea de credito. Solo puede realizar compras al contado.");
                       return;
                     }
                   }
@@ -681,12 +885,12 @@ const Facturacion: React.FC = () => {
           </div>
           <div className="grid-3">
             <label>
-              PIO
+              PO
               <input
                 type="text"
                 value={pio}
                 onChange={(e) => setPio(e.target.value)}
-                placeholder="PIO"
+                placeholder="PO"
               />
             </label>
             <label>
@@ -727,7 +931,7 @@ const Facturacion: React.FC = () => {
                         fontWeight: 600,
                         fontSize: "0.85rem"
                       }}>
-                        ⚠️ {numPaginas} páginas = {numPaginas} números consecutivos
+                        ?? {numPaginas} páginas = {numPaginas} números consecutivos
                       </small>
                     )}
                   </>
@@ -738,64 +942,91 @@ const Facturacion: React.FC = () => {
 
           <div className="items-container">
             
-            {/* ✅ SUBTOTAL HEADER */}
+            {/* ? SUBTOTAL HEADER */}
             <div className="items-header">
               <span>Producto</span>
               <span>Cant</span>
               <span>Precio</span>
-              <span>Subtotal</span> {/* ✅ */}
+              <span>Actualizar</span>
+              <span>Subtotal</span> {/* ? */}
+              <span>Subtotal US$</span>
               <span>Rem.</span>
               <span>-</span>
             </div>
 
-            {items.map((it) => (
-              <div className="item-row" key={it.id}>
-                <div style={{ display: "flex", gap: ".3rem",color:"black",backgroundColor:"white" }}>
+            {items.map((it) => {
+              const precioNioLinea = getPrecioBaseNIO(it);
+              const puedeActualizarPrecio = typeof it.inventarioId === "number" && !it.esRemision && precioNioLinea > 0;
+              const subtotalCordoba = (Number(it.cantidad) || 0) * (getPrecioBaseNIO(it) || 0);
+              const subtotalUsd = tipoCambio && tipoCambio > 0 ? subtotalCordoba / tipoCambio : null;
+              return (
+                <div className="item-row" key={it.id}>
+                  <div style={{ display: "flex", gap: ".3rem",color:"black",backgroundColor:"white", alignItems: "center" }}>
+                    <input
+                      className="product-input"
+                      type="text"
+                      value={it.producto}
+                      disabled={it.esRemision}
+                      placeholder="Buscar..."
+                      onChange={(e) => updateItem(it.id, { producto: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      style={{marginLeft:"15px",width:"75px",border:"2px solid black"}}
+                      className="icon-btn"
+                      onClick={() => {
+                        if (cliente === "") {
+                          notify.warn("Seleccione un cliente primero.");
+                          return;
+                        }
+                        setPickerTargetId(it.id);
+                        setPickerAbierto(true);
+                      }}
+                      title="Buscar producto"
+                    >
+                      Buscar
+                    </button>
+                    {typeof it.inventarioId === "number" && productosRecientes.has(Number(it.inventarioId)) && (
+                      <span style={{ color: "#b91c1c", fontWeight: 700, fontSize: "0.8rem" }}>
+                        Cotizado recientemente
+                      </span>
+                    )}
+                  </div>
+
                   <input
-                    type="text"
-                    value={it.producto}
+                    className="qty-input"
+                    type="number"
+                    min={0}
                     disabled={it.esRemision}
-                    placeholder="Buscar..."
-                    onChange={(e) => updateItem(it.id, { producto: e.target.value })}
+                    value={it.cantidad}
+                    onChange={(e) => updateItem(it.id, { cantidad: Number(e.target.value) })}
                   />
-                  <button
-                    type="button"
-                    style={{marginLeft:"15px",width:"75px",border:"2px solid black"}}
-                    className="icon-btn"
-                    onClick={() => {
-                      if (cliente === "") {
-                        notify.warn("Seleccione un cliente primero.");
-                        return;
-                      }
-                      setPickerTargetId(it.id);
-                      setPickerAbierto(true);
-                    }}
-                    title="Buscar producto"
-                  >
-                    Buscar
-                  </button>
-                </div>
 
-                <input
-                  className="qty-input"
-                  type="number"
-                  min={0}
-                  disabled={it.esRemision}
-                  value={it.cantidad}
-                  onChange={(e) => updateItem(it.id, { cantidad: Number(e.target.value) })}
-                />
+                  <div className="price-cell">
+                    <input
+                      className="price-input"
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      disabled={it.esRemision}
+                      value={it.precio}
+                      onChange={(e) => updateItem(it.id, { precio: Number(e.target.value) })}
+                    />
+                  </div>
 
-                <input
-                  className="price-input"
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  disabled={it.esRemision}
-                  value={it.precio}
-                  onChange={(e) => updateItem(it.id, { precio: Number(e.target.value) })}
-                />
+                  <div className="update-cell">
+                    <button
+                      type="button"
+                      className="price-sync-btn"
+                      disabled={!puedeActualizarPrecio || actualizandoPrecioId === it.id}
+                      onClick={() => solicitarConfirmacionPrecio(it.id)}
+                      title="Guardar este monto como precio sugerido en inventario"
+                    >
+                      {actualizandoPrecioId === it.id ? "Guardando..." : "Actualizar"}
+                    </button>
+                  </div>
 
-                {/* ✅ SUBTOTAL CELL */}
+                {/* ? SUBTOTAL CELL */}
                 <span
                   style={{
                     padding: "4px 8px",
@@ -805,6 +1036,17 @@ const Facturacion: React.FC = () => {
                   }}
                 >
                   {formatMoney((Number(it.cantidad) || 0) * (Number(it.precio) || 0), moneda)}
+                </span>
+                <span
+                  style={{
+                    padding: "4px 8px",
+                    fontWeight: "600",
+                    minWidth: "92px",
+                    textAlign: "right"
+                  }}
+                  title={subtotalUsd == null ? "Requiere tipo de cambio" : ""}
+                >
+                  {subtotalUsd != null ? formatMoney(subtotalUsd, "USD") : "-"}
                 </span>
 
                 <div className="center">
@@ -837,100 +1079,142 @@ const Facturacion: React.FC = () => {
                   Borrar
                 </button>
               </div>
-            ))}
+            );
+          })}
 
             <button type="button" onClick={addRow}><FaPlus /> Agregar línea</button>
           </div>
         </div>
 
-        <div className="resumen">
-          <div></div>
-          <div className="right">
+        <div className="resumen-actions-container">
+          <div className="resumen">
+            <div className="right">
             <div className="row total">
               <span>Total</span>
               <b>{formatMoney(total, moneda)}</b>
             </div>
+            {totalDolar != null && (
+              <div className="row">
+                <span>Total US$</span>
+                <b>{formatMoney(totalDolar, "USD")}</b>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="actions">
-          <button type="button" className="primary" onClick={guardar}><FaSave /> Guardar</button>
+          <div className="actions">
+            <button type="button" className="primary" onClick={guardar}>
+              <FaSave /> Guardar
+            </button>
+          </div>
         </div>
 
         {/* MODALES — Productos */}
         {pickerAbierto && (
-          <div className="picker-overlay" role="dialog" aria-modal="true">
-            <div className="picker-card">
+          <div className="picker-overlay picker-overlay--productos" role="dialog" aria-modal="true">
+            <div className="picker-card picker-card--productos">
               <div className="picker-top">
                 <h3 className="picker-title"><FaSearch /> Productos</h3>
                 <button type="button" className="picker-close" onClick={() => setPickerAbierto(false)}><FaTimes /></button>
               </div>
 
-              <input placeholder="Buscar..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+              <div className="picker-search-bar">
+                <FaSearch className="picker-search-icon" />
+                <input
+                  className="picker-search"
+                  placeholder="Buscar por parte, nombre o descripcion..."
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                />
+                {busqueda && (
+                  <button
+                    type="button"
+                    className="picker-search-clear"
+                    onClick={() => setBusqueda("")}
+                    aria-label="Limpiar busqueda"
+                  >
+                    x
+                  </button>
+                )}
+                <span className="picker-search-count">{productosFiltrados.length}</span>
+              </div>
 
-              <DataTable
-                columns={[
-                  { name: "Parte", selector: (r: Product) => r.numeroParte as any, width: "120px" },
-                  { 
-                    name: "Marca", 
-                    selector: (r: Product) => r.marca?.nombre as any,
-                    cell: (r: Product) => <span>{r.marca?.nombre || "-"}</span>,
-                    width: "120px"
-                  },
-                  { 
-                    name: "Nombre", 
-                    selector: (r: Product) => r.nombre as any, 
-                    grow: 2,
-                    cell: (r: Product) => {
-                      const cotizacionInfo = productosRecientes.get(Number(r.id));
-                      const esCotizado = !!cotizacionInfo;
-                      
-                      return (
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.25rem", width: "100%" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", width: "100%" }}>
-                            <span>{r.nombre}</span>
+              <div className="picker-table">
+                <DataTable
+                  columns={[
+                    { name: "Parte", selector: (r: Product) => r.numeroParte as any, width: "200px", minWidth: "180px" },
+                    { 
+                      name: "Marca", 
+                      selector: (r: Product) => r.marca?.nombre as any,
+                      cell: (r: Product) => <span>{r.marca?.nombre || "-"}</span>,
+                      width: "220px",
+                      minWidth: "200px"
+                    },
+                    { 
+                      name: "Nombre", 
+                      selector: (r: Product) => r.nombre as any, 
+                      grow: 2,
+                      minWidth: "260px",
+                      style: { whiteSpace: "nowrap" },
+                      cell: (r: Product) => {
+                        const cotizacionInfo = productosRecientes.get(Number(r.id));
+                        const esCotizado = !!cotizacionInfo;
+                        const marca = r.marca?.nombre ? " - " + r.marca.nombre : "";
+
+                        return (
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "0.25rem", width: "100%" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", width: "100%" }}>
+                              <span>{r.nombre}{marca}</span>
+                              {esCotizado && (
+                                <span
+                                  style={{
+                                    fontSize: "0.7rem",
+                                    padding: "0.15rem 0.45rem",
+                                    borderRadius: "12px",
+                                    background: "#fef3c7",
+                                    border: "1px solid #fbbf24",
+                                    color: "#92400e",
+                                    fontWeight: 600,
+                                    whiteSpace: "nowrap",
+                                  }}
+                                  title={"Cotizado por " + cotizacionInfo.clienteNombre + (cotizacionInfo.clienteEmpresa ? " - " + cotizacionInfo.clienteEmpresa : "")}
+                                >
+                                  Cotizado Recientemente
+                                </span>
+                              )}
+                            </div>
                             {esCotizado && (
                               <span
                                 style={{
                                   fontSize: "0.7rem",
-                                  padding: "0.15rem 0.45rem",
-                                  borderRadius: "12px",
-                                  background: "#fef3c7",
-                                  border: "1px solid #fbbf24",
-                                  color: "#92400e",
-                                  fontWeight: 600,
-                                  whiteSpace: "nowrap",
+                                  color: "#78716c",
+                                  fontStyle: "italic",
+                                  paddingLeft: "0.25rem",
                                 }}
-                                title={`Cotizado por ${cotizacionInfo.clienteNombre}${cotizacionInfo.clienteEmpresa ? ` - ${cotizacionInfo.clienteEmpresa}` : ''}`}
                               >
-                                📋 Cotizado Recientemente
+                                Por: {cotizacionInfo.clienteNombre}
+                                {cotizacionInfo.clienteEmpresa && " - " + cotizacionInfo.clienteEmpresa}
                               </span>
                             )}
                           </div>
-                          {esCotizado && (
-                            <span
-                              style={{
-                                fontSize: "0.7rem",
-                                color: "#78716c",
-                                fontStyle: "italic",
-                                paddingLeft: "0.25rem",
-                              }}
-                            >
-                              Por: {cotizacionInfo.clienteNombre}
-                              {cotizacionInfo.clienteEmpresa && ` - ${cotizacionInfo.clienteEmpresa}`}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    }
-                  },
+                        );
+                      }
+                    },
                   {
                     name: "Precio",
                     selector: (r: Product) => getPrecioProducto(r, moneda) as any,
                     cell: (r: Product) => formatMoney(getPrecioProducto(r, moneda), moneda),
-                    width: "120px"
+                    width: "190px",
+                    minWidth: "170px"
                   },
-                  { name: "Stock", selector: (r: Product) => r.stockActual as any, width: "100px" },
+                  {
+                    name: "Sustituto",
+                    selector: (r: Product) => r.codigoSustituto as any,
+                    width: "280px",
+                    minWidth: "260px",
+                    cell: (r: Product) => (r.codigoSustituto ? r.codigoSustituto : "—"),
+                  },
+                  { name: "Stock", selector: (r: Product) => r.stockActual as any, width: "150px", minWidth: "140px" },
                   {
                     name: "Seleccionar",
                     cell: (p: Product) => (
@@ -940,53 +1224,38 @@ const Facturacion: React.FC = () => {
                         onClick={(e) => {
                           e.stopPropagation();
                           if (!pickerTargetId) return;
-                          const stock = Number(p.stockActual ?? 0) || 0;
-                          if (stock <= 0) {
-                            notify.warn("Este producto no tiene stock disponible.");
+                          const sustitutos = parseSustitutos(p.codigoSustituto);
+                          if (sustitutos.length) {
+                            setPickerSustituto({ product: p, lineId: pickerTargetId });
+                            setPickerAbierto(false);
+                            setBusqueda("");
                             return;
                           }
-                          const baseNIO = getPrecioProducto(p, "NIO");
-                          const precioSel = moneda === "USD" ? (tipoCambio ? Number((baseNIO / tipoCambio).toFixed(4)) : 0) : Number(baseNIO.toFixed(4));
-                          const cantInicial = Math.min(1, stock);
-                          setItems((prev) =>
-                            prev.map((it) =>
-                              it.id === pickerTargetId
-                                ? {
-                                    ...it,
-                                    producto: `${p.numeroParte ?? ""} — ${p.nombre ?? ""}`.trim(),
-                                    precio: precioSel,
-                                    precioBaseNIO: Number(baseNIO.toFixed(4)),
-                                    inventarioId: Number(p.id),
-                                    esRemision: false,
-                                    remisionDetalleId: null,
-                                    cantidad: cantInicial,
-                                  }
-                                : it
-                            )
-                          );
-                          setPickerAbierto(false);
-                          setBusqueda("");
-                          notify.ok("Producto agregado");
+                          asignarProductoALinea(p, pickerTargetId);
                         }}
                         title="Seleccionar producto"
                       >
-                        ✅
+                        ?
                       </button>
                     ),
                     ignoreRowClick: true,
                     button: true,
-                    width: "130px",
+                    width: "170px",
                   },
                 ] as unknown as TableColumn<Product>[]}
-                data={productosFiltrados}
-                pagination
-                highlightOnHover
-                pointerOnHover
-                customStyles={{
-                  headCells: { style: { justifyContent: "center", textAlign: "center" } },
-                  cells: { style: { justifyContent: "center", textAlign: "center" } },
-                }}
-              />
+                  data={productosFiltrados}
+                  pagination
+                  paginationPerPage={5}
+                  paginationRowsPerPageOptions={[5, 10, 15]}
+                  highlightOnHover
+                  pointerOnHover
+                  customStyles={{
+                    table: { style: { minWidth: "1500px" } },
+                    headCells: { style: { justifyContent: "center", textAlign: "center" } },
+                    cells: { style: { justifyContent: "center", textAlign: "center" } },
+                  }}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -1011,19 +1280,21 @@ const Facturacion: React.FC = () => {
                 />
               </div>
 
-              <DataTable
-                columns={remisionColumns as any}
-                data={remisionRows}
-                pagination
-                highlightOnHover
-                pointerOnHover
-                dense
-                noDataComponent="No hay líneas de remisión pendientes para este cliente."
-                customStyles={{
-                  headCells: { style: { justifyContent: "center", textAlign: "center" } },
-                  cells: { style: { justifyContent: "center", textAlign: "center" } },
-                }}
-              />
+              <div className="picker-table">
+                <DataTable
+                  columns={remisionColumns as any}
+                  data={remisionRows}
+                  pagination
+                  highlightOnHover
+                  pointerOnHover
+                  dense
+                  noDataComponent="No hay lineas de remision pendientes para este cliente."
+                  customStyles={{
+                    headCells: { style: { justifyContent: "center", textAlign: "center" } },
+                    cells: { style: { justifyContent: "center", textAlign: "center" } },
+                  }}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -1045,35 +1316,103 @@ const Facturacion: React.FC = () => {
                 onChange={(e) => setBusquedaCliente(e.target.value)} 
               />
 
-              <DataTable
-                columns={[
-                  { name: "Nombre", selector: (r: any) => r.nombre, sortable: true, grow: 2 },
-                  { name: "Empresa", selector: (r: any) => r.empresa || "-", sortable: true, grow: 2 },
-                  { name: "Teléfono", selector: (r: any) => r.telefono || "-", width: "140px" },
-                  { name: "Correo", selector: (r: any) => r.correo || "-", grow: 2 },
-                ] as any}
-                data={clientesFiltrados}
-                pagination
-                highlightOnHover
-                pointerOnHover
-                customStyles={{
-                  headCells: { style: { justifyContent: "center", textAlign: "center" } },
-                  cells: { style: { justifyContent: "center", textAlign: "center" } },
-                }}
-                onRowClicked={(c: any) => {
-                  setCliente(Number(c.id));
-                  setPickerClienteAbierto(false);
-                  setBusquedaCliente("");
-                  notify.ok(`Cliente seleccionado: ${c.nombre}`);
-                }}
-              />
+              <div className="picker-table">
+                <DataTable
+                  columns={[
+                    { name: "Nombre", selector: (r: any) => r.nombre, sortable: true, grow: 2 },
+                    { name: "Empresa", selector: (r: any) => r.empresa || "-", sortable: true, grow: 2 },
+                    { name: "Telefono", selector: (r: any) => r.telefono || "-", width: "140px" },
+                    { name: "Correo", selector: (r: any) => r.correo || "-", grow: 2 },
+                  ] as any}
+                  data={clientesFiltrados}
+                  pagination
+                  highlightOnHover
+                  pointerOnHover
+                  customStyles={{
+                    headCells: { style: { justifyContent: "center", textAlign: "center" } },
+                    cells: { style: { justifyContent: "center", textAlign: "center" } },
+                  }}
+                  onRowClicked={(c: any) => {
+                    setCliente(Number(c.id));
+                    setPickerClienteAbierto(false);
+                    setBusquedaCliente("");
+                    notify.ok(`Cliente seleccionado: ${c.nombre}`);
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal confirmación de precio */}
+        {confirmPrecio && (
+          <div className="confirm-overlay" role="dialog" aria-modal="true">
+            <div className="confirm-card">
+              <h3>Confirmar actualización de precio</h3>
+              <p>
+                ¿Actualizar el precio sugerido de inventario a{" "}
+                <strong>{formatMoney(confirmPrecio.precioNio, "NIO")}</strong>?
+              </p>
+              <div className="confirm-actions">
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setConfirmPrecio(null)}
+                  disabled={actualizandoPrecioId === confirmPrecio.lineId}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={async () => {
+                    await actualizarPrecioProducto(confirmPrecio.lineId);
+                    setConfirmPrecio(null);
+                  }}
+                  disabled={actualizandoPrecioId === confirmPrecio.lineId}
+                >
+                  {actualizandoPrecioId === confirmPrecio.lineId ? "Guardando..." : "Actualizar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal selección de código sustituto */}
+        {pickerSustituto && (
+          <div className="confirm-overlay" role="dialog" aria-modal="true">
+            <div className="confirm-card">
+              <h3>Elegir código para facturar</h3>
+              <p>Este producto tiene códigos sustitutos. Elige cuál usar en la factura:</p>
+              <div className="sustituto-list">
+                <button
+                  type="button"
+                  onClick={() => asignarProductoALinea(pickerSustituto.product, pickerSustituto.lineId, pickerSustituto.product.numeroParte || undefined)}
+                >
+                  Principal: {pickerSustituto.product.numeroParte || "—"}
+                </button>
+                {parseSustitutos(pickerSustituto.product.codigoSustituto).map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    onClick={() => asignarProductoALinea(pickerSustituto.product, pickerSustituto.lineId, code)}
+                  >
+                    Sustituto: {code}
+                  </button>
+                ))}
+              </div>
+              <div className="confirm-actions">
+                <button type="button" className="ghost" onClick={() => setPickerSustituto(null)}>
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
         )}
       </div>
 
       <ToastContainer newestOnTop closeOnClick pauseOnHover draggable />
-      </div>
+    </div>
     </div>
   );
 };

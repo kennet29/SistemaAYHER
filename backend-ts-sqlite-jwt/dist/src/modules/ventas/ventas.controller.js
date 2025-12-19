@@ -11,9 +11,12 @@ exports.proforma = proforma;
 exports.listPendientes = listPendientes;
 exports.listProformas = listProformas;
 exports.getProformaById = getProformaById;
+exports.updateProforma = updateProforma;
+exports.deleteProforma = deleteProforma;
 exports.updateCancelada = updateCancelada;
 exports.generarProformaExcel = generarProformaExcel;
 exports.update = update;
+exports.deleteVenta = deleteVenta;
 const prisma_1 = require("../../db/prisma");
 const zod_1 = require("zod");
 const stock_service_1 = require("../services/stock.service");
@@ -21,6 +24,7 @@ const proforma_services_1 = require("./services/proforma.services");
 const exceljs_1 = __importDefault(require("exceljs"));
 const fs_1 = __importDefault(require("fs"));
 const logo_1 = require("../../utils/logo");
+const excelInvoice_1 = require("../../utils/excelInvoice");
 const round4 = (n) => Number((n ?? 0).toFixed(4));
 const fmtCurrency = (n) => Number(n || 0);
 /* ===== Zod ===== */
@@ -29,6 +33,8 @@ const DetalleSchema = zod_1.z.object({
     cantidad: zod_1.z.number().int().positive(),
     precioUnitarioCordoba: zod_1.z.number().nonnegative(),
     remisionDetalleId: zod_1.z.number().int().nullable().optional(),
+    codigoFacturar: zod_1.z.string().trim().max(100).nullable().optional(),
+    numeroParte: zod_1.z.string().trim().max(150).nullable().optional(),
 });
 const VentaSchema = zod_1.z.object({
     fecha: zod_1.z.coerce.date().optional(),
@@ -45,7 +51,7 @@ const VentaSchema = zod_1.z.object({
 /* ===== Listar ===== */
 async function list(_req, res) {
     const ventas = await prisma_1.prisma.venta.findMany({
-        include: { detalles: { include: { inventario: true, remisionDetalle: true } }, cliente: true },
+        include: { detalles: { include: { inventario: { include: { marca: true } }, remisionDetalle: true } }, cliente: true },
         orderBy: { id: "desc" },
     });
     res.json({ ventas });
@@ -60,7 +66,7 @@ async function generarVentaExcel(req, res) {
             where: { id },
             include: {
                 cliente: true,
-                detalles: { include: { inventario: true } },
+                detalles: { include: { inventario: { include: { marca: true } } } },
             },
         });
         if (!venta)
@@ -148,130 +154,46 @@ async function generarVentaExcel(req, res) {
         const totalEntero = Math.floor(montoTotal);
         const totalDecimal = Math.round((montoTotal - totalEntero) * 100);
         const montoEnTexto = `${numeroATexto(totalEntero)}${totalDecimal > 0 ? ` con ${totalDecimal}/100` : ''} ${nombreMoneda}`;
-        // Fila 1-3: Espacio para logo/encabezado
-        ws.getRow(1).height = 15;
-        ws.getRow(2).height = 15;
-        ws.getRow(3).height = 15;
-        // Fila 4: Título
-        ws.mergeCells('A4:H4');
-        ws.getCell('A4').value = 'FACTURA';
-        ws.getCell('A4').font = { size: 16, bold: true };
-        ws.getCell('A4').alignment = { horizontal: 'center', vertical: 'middle' };
-        ws.getRow(4).height = 25;
-        // Fila 5: Cliente y Code/Fecha
-        ws.getCell('B5').value = 'CLIENTE:';
-        ws.getCell('B5').font = { bold: true };
-        ws.mergeCells('C5:D5');
-        ws.getCell('C5').value = clienteNombre;
-        ws.getCell('F5').value = `Code: ${venta.numeroFactura || ''}`;
-        ws.getCell('F5').font = { bold: true };
-        ws.getCell('G5').value = 'FECHA:';
-        ws.getCell('G5').font = { bold: true };
-        ws.getCell('H5').value = fecha;
-        // Fila 6: Dirección y Monto
-        ws.getCell('B6').value = 'DIRECCION:';
-        ws.getCell('B6').font = { bold: true };
-        ws.mergeCells('C6:E6');
-        ws.getCell('C6').value = clienteDireccion;
-        ws.getCell('G6').value = 'MONTO:';
-        ws.getCell('G6').font = { bold: true };
-        ws.getCell('H6').value = `${simboloMoneda}${montoTotal.toFixed(2)}`;
-        // Fila 7: Plazo
-        ws.getCell('G7').value = 'PLAZO:';
-        ws.getCell('G7').font = { bold: true };
-        ws.getCell('H7').value = `${plazo} días`;
-        // Fila 8: RUC y Orden de Compra / Vencimiento
-        ws.getCell('B8').value = 'RUC:';
-        ws.getCell('B8').font = { bold: true };
-        ws.mergeCells('C8:E8');
-        ws.getCell('C8').value = `${clienteRuc}        Orden de Compra: ${pio}`;
-        if (venta.tipoPago === 'CREDITO') {
-            ws.getCell('G8').value = 'VENCIMIENTO:';
-            ws.getCell('G8').font = { bold: true };
-            ws.getCell('H8').value = fechaVenc;
-        }
-        // Fila 9: Espacio
-        ws.getRow(9).height = 5;
-        // Fila 10: Encabezados de tabla
-        const headerRow = 10;
-        ws.getCell('B10').value = 'Cant';
-        ws.getCell('C10').value = 'No. Parte';
-        ws.getCell('D10').value = 'Descripción';
-        ws.getCell('F10').value = 'Precio Unit.';
-        ws.getCell('G10').value = 'Subtotal';
-        ws.getRow(headerRow).font = { bold: true };
-        ws.getRow(headerRow).alignment = { horizontal: 'center', vertical: 'middle' };
-        ws.getRow(headerRow).height = 18;
-        // Agregar productos
-        let currentRow = 11;
-        const tipoCambio = Number(venta.tipoCambioValor || 1);
-        (venta.detalles || []).forEach((d) => {
+        const montoEnTextoSinMoneda = `${numeroATexto(totalEntero)}${totalDecimal > 0 ? ` con ${totalDecimal}/100` : ''}`;
+        const tipoCambioDetalle = Number(venta.tipoCambioValor || 1);
+        // Construir buffer usando la plantilla centralizada
+        const excelItems = (venta.detalles || []).map((d) => {
             const cantidad = Number(d.cantidad || 0);
-            const numeroParte = d.inventario?.numeroParte || '-';
-            const producto = d.inventario?.nombre || d.inventario?.descripcion || '-';
-            let precioUnitario = 0;
-            if (usarDolares) {
-                precioUnitario = Number(d.precioUnitarioDolar || (d.precioUnitarioCordoba || 0) / tipoCambio);
-            }
-            else {
-                precioUnitario = Number(d.precioUnitarioCordoba || 0);
-            }
+            const precioUnitario = usarDolares
+                ? Number(d.precioUnitarioDolar || (Number(d.precioUnitarioCordoba || 0) / (tipoCambioDetalle || 1)))
+                : Number(d.precioUnitarioCordoba || 0);
             const subtotal = cantidad * precioUnitario;
-            const row = ws.getRow(currentRow);
-            row.getCell(2).value = cantidad;
-            row.getCell(3).value = numeroParte;
-            row.getCell(4).value = producto;
-            row.getCell(6).value = precioUnitario;
-            row.getCell(6).numFmt = `"${simboloMoneda}"#,##0.00`;
-            row.getCell(7).value = subtotal;
-            row.getCell(7).numFmt = `"${simboloMoneda}"#,##0.00`;
-            row.getCell(2).alignment = { horizontal: 'center', vertical: 'middle' };
-            row.getCell(3).alignment = { horizontal: 'left', vertical: 'middle' };
-            row.getCell(4).alignment = { horizontal: 'left', vertical: 'middle' };
-            row.getCell(6).alignment = { horizontal: 'right', vertical: 'middle' };
-            row.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
-            currentRow++;
+            return {
+                cantidad,
+                numeroParte: d.codigoFacturar || d.inventario?.numeroParte || '-',
+                codigoFacturar: d.codigoFacturar || null,
+                descripcion: d.inventario?.nombre || d.inventario?.descripcion || '-',
+                precioUnitario,
+                subtotal
+            };
         });
-        // Saltar a fila para total (dejar espacio)
-        currentRow = Math.max(currentRow, 30);
-        // Fila de total en texto
-        ws.getCell(`B${currentRow}`).value = 'SON:';
-        ws.getCell(`B${currentRow}`).font = { bold: true };
-        ws.mergeCells(`C${currentRow}:F${currentRow}`);
-        ws.getCell(`C${currentRow}`).value = montoEnTexto;
-        ws.getCell(`G${currentRow}`).value = 'Total';
-        ws.getCell(`G${currentRow}`).font = { bold: true };
-        ws.getCell(`G${currentRow}`).alignment = { horizontal: 'right' };
-        ws.getCell(`H${currentRow}`).value = montoTotal;
-        ws.getCell(`H${currentRow}`).numFmt = `"${simboloMoneda}"#,##0.00`;
-        ws.getCell(`H${currentRow}`).font = { bold: true };
-        // Pie de página (3 filas más abajo)
-        currentRow += 3;
-        if (configuracion) {
-            ws.mergeCells(`B${currentRow}:H${currentRow}`);
-            ws.getCell(`B${currentRow}`).value = configuracion.direccion || '';
-            ws.getCell(`B${currentRow}`).alignment = { horizontal: 'center', vertical: 'middle' };
-            currentRow++;
-            ws.mergeCells(`B${currentRow}:H${currentRow}`);
-            ws.getCell(`B${currentRow}`).value = configuracion.razonSocial || '';
-            ws.getCell(`B${currentRow}`).alignment = { horizontal: 'center', vertical: 'middle' };
-        }
-        // Aplicar bordes a la tabla de productos
-        for (let r = headerRow; r < currentRow - 3; r++) {
-            for (let col = 2; col <= 7; col++) {
-                const cell = ws.getRow(r).getCell(col);
-                cell.border = {
-                    top: { style: 'thin' },
-                    bottom: { style: 'thin' },
-                    left: { style: 'thin' },
-                    right: { style: 'thin' }
-                };
-            }
-        }
+        const excelData = {
+            clienteNombre,
+            clienteDireccion,
+            clienteRuc,
+            fecha: venta.fecha || '',
+            fechaVencimiento: venta.fechaVencimiento || null,
+            montoTotal,
+            montoEnTexto: montoEnTextoSinMoneda,
+            plazo,
+            pio,
+            moneda: usarDolares ? 'USD' : 'NIO',
+            razonSocial: configuracion?.razonSocial || '',
+            direccion: configuracion?.direccion || '',
+            metodo: null,
+            numeroFactura: venta.numeroFactura || String(id),
+            items: excelItems
+        };
+        const buffer = await (0, excelInvoice_1.generateInvoiceExcel)(excelData);
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename=factura_${venta.numeroFactura || id}.xlsx`);
-        await wb.xlsx.write(res);
-        res.status(200).end();
+        res.status(200).end(buffer);
+        return;
     }
     catch (err) {
         console.error("[ventas] Error generando Excel", err);
@@ -285,7 +207,7 @@ async function getById(req, res) {
         return res.status(400).json({ message: "ID inválido" });
     const venta = await prisma_1.prisma.venta.findUnique({
         where: { id },
-        include: { detalles: { include: { inventario: true, remisionDetalle: true } }, cliente: true },
+        include: { detalles: { include: { inventario: { include: { marca: true } }, remisionDetalle: true } }, cliente: true },
     });
     if (!venta)
         return res.status(404).json({ message: "No encontrada" });
@@ -370,12 +292,25 @@ async function create(req, res) {
             const movimientos = [];
             const decrementarPorInventario = new Map();
             const remisionDetalleIdsTocados = [];
+            // Mapa rápido de numeroParte por inventario (para default de codigoFacturar)
+            const inventarioIdsUnicos = Array.from(new Set(data.detalles.map((d) => d.inventarioId)));
+            const inventarios = inventarioIdsUnicos.length
+                ? await tx.inventario.findMany({
+                    where: { id: { in: inventarioIdsUnicos } },
+                    select: { id: true, numeroParte: true },
+                })
+                : [];
+            const numeroPartePorInventario = new Map();
+            for (const inv of inventarios) {
+                numeroPartePorInventario.set(inv.id, inv.numeroParte ?? null);
+            }
             // Agrupar extras por (inventarioId, precio) para "sumar" en una sola línea
             const extrasMap = new Map();
             const remisionDetalleRows = [];
             for (const d of data.detalles) {
                 const cantidad = Number(d.cantidad || 0);
                 const precioC$ = Number(d.precioUnitarioCordoba || 0);
+                const codigoFacturar = d.codigoFacturar ?? d.numeroParte ?? numeroPartePorInventario.get(d.inventarioId) ?? null;
                 if (!(cantidad > 0))
                     continue;
                 if (d.remisionDetalleId) {
@@ -388,6 +323,7 @@ async function create(req, res) {
                         precioUnitarioCordoba: round4(precioC$),
                         precioUnitarioDolar: precioUS$,
                         remisionDetalleId: d.remisionDetalleId,
+                        codigoFacturar,
                     });
                     remisionDetalleIdsTocados.push(d.remisionDetalleId);
                     // No crear movimiento ni decrementar stock: ya salió en la remisión
@@ -398,9 +334,11 @@ async function create(req, res) {
                     const prev = extrasMap.get(key);
                     if (prev) {
                         prev.cantidad += cantidad;
+                        if (!prev.codigoFacturar && codigoFacturar)
+                            prev.codigoFacturar = codigoFacturar;
                     }
                     else {
-                        extrasMap.set(key, { inventarioId: d.inventarioId, cantidad, precioC$ });
+                        extrasMap.set(key, { inventarioId: d.inventarioId, cantidad, precioC$, codigoFacturar });
                     }
                     // Preparar decremento agrupado por inventario
                     decrementarPorInventario.set(d.inventarioId, (decrementarPorInventario.get(d.inventarioId) || 0) + cantidad);
@@ -413,9 +351,11 @@ async function create(req, res) {
                 const prev = remisionMap.get(key);
                 if (prev) {
                     prev.cantidad += Number(r.cantidad || 0);
+                    if (!prev.codigoFacturar && r.codigoFacturar)
+                        prev.codigoFacturar = r.codigoFacturar;
                 }
                 else {
-                    remisionMap.set(key, { inventarioId: r.inventarioId, cantidad: Number(r.cantidad || 0), precioC$: round4(Number(r.precioUnitarioCordoba || 0)) });
+                    remisionMap.set(key, { inventarioId: r.inventarioId, cantidad: Number(r.cantidad || 0), precioC$: round4(Number(r.precioUnitarioCordoba || 0)), codigoFacturar: r.codigoFacturar ?? null });
                 }
             }
             // Union de claves y armado de detalle combinado
@@ -431,6 +371,7 @@ async function create(req, res) {
                 if (!(cantidadTotal > 0))
                     continue;
                 const precioUS$ = round4(precioC$ / tipoCambio);
+                const codigoFacturar = rem?.codigoFacturar ?? ex?.codigoFacturar ?? null;
                 detalleVentaRows.push({
                     ventaId: venta.id,
                     inventarioId,
@@ -438,6 +379,7 @@ async function create(req, res) {
                     precioUnitarioCordoba: precioC$,
                     precioUnitarioDolar: precioUS$,
                     remisionDetalleId: null, // combinado
+                    codigoFacturar,
                 });
                 totalCordoba += round4(cantidadTotal * precioC$);
                 // Movimiento SOLO por extras
@@ -454,7 +396,24 @@ async function create(req, res) {
                 }
             }
             if (detalleVentaRows.length) {
-                await tx.detalleVenta.createMany({ data: detalleVentaRows });
+                if (detalleVentaRows.length) {
+                    try {
+                        await tx.detalleVenta.createMany({ data: detalleVentaRows });
+                    }
+                    catch (err) {
+                        const msg = String(err?.message || "");
+                        const isClientDesactualizado = msg.includes("codigoFacturar") || msg.includes("Unknown arg `codigoFacturar`");
+                        if (!isClientDesactualizado)
+                            throw err;
+                        // Compatibilidad: cliente de Prisma viejo sin columna; insertar sin el campo y luego actualizar por SQL crudo
+                        const fallbackData = detalleVentaRows.map(({ codigoFacturar, ...rest }) => rest);
+                        await tx.detalleVenta.createMany({ data: fallbackData });
+                        const rowsWithCode = detalleVentaRows.filter((r) => r.codigoFacturar);
+                        for (const r of rowsWithCode) {
+                            await tx.$executeRawUnsafe('UPDATE "DetalleVenta" SET codigoFacturar = ? WHERE ventaId = ? AND inventarioId = ? AND abs(precioUnitarioCordoba - ?) < 0.0001', r.codigoFacturar, r.ventaId, r.inventarioId, r.precioUnitarioCordoba);
+                        }
+                    }
+                }
             }
             if (remisionDetalleIdsTocados.length) {
                 await tx.detalleRemision.updateMany({
@@ -527,7 +486,7 @@ async function proforma(req, res) {
             ua: req.headers['user-agent'],
             ip: req.headers['x-forwarded-for'] || req.ip,
         });
-        const { cliente, clienteId, detalles, tipoCambioValor, pio, incoterm, plazoEntrega, condicionPago, guardarHistorial, soloGuardar } = req.body;
+        const { cliente, clienteId, detalles, tipoCambioValor, pio, incoterm, plazoEntrega, condicionPago, moneda, guardarHistorial, soloGuardar } = req.body;
         console.info('[ventas] proforma body', {
             cliente: cliente?.nombre ?? null,
             detallesCount: Array.isArray(detalles) ? detalles.length : 0,
@@ -536,6 +495,7 @@ async function proforma(req, res) {
             incoterm,
             plazoEntrega,
             condicionPago,
+            moneda,
             guardarHistorial,
             soloGuardar,
         });
@@ -625,7 +585,10 @@ async function proforma(req, res) {
                 select: { inventarioId: true, fecha: true, precioCordoba: true, clienteId: true },
             });
             recientes.forEach((r) => {
-                const prev = recientesMap.get(r.inventarioId);
+                const invId = Number(r.inventarioId);
+                if (!Number.isFinite(invId))
+                    return;
+                const prev = recientesMap.get(invId);
                 const coincide = Boolean(clienteIdParaRegistro && r.clienteId === clienteIdParaRegistro);
                 if (prev) {
                     prev.conteo += 1;
@@ -636,7 +599,7 @@ async function proforma(req, res) {
                     }
                 }
                 else {
-                    recientesMap.set(r.inventarioId, {
+                    recientesMap.set(invId, {
                         ultimaFecha: r.fecha,
                         precioCordoba: Number(r.precioCordoba || 0),
                         conteo: 1,
@@ -664,23 +627,26 @@ async function proforma(req, res) {
         const quoteEntries = detallesNorm
             .map((item) => {
             const inventarioId = Number(item?.inventarioId);
-            if (!Number.isFinite(inventarioId))
-                return null;
+            const idVal = Number.isFinite(inventarioId) ? inventarioId : null;
             const cantidad = Math.max(0, Number(item.cantidad) || 0);
             if (cantidad <= 0)
                 return null;
             const precioCordoba = Number(item.precio ?? 0);
             const precioDolar = tipoCambio > 0 ? Number((precioCordoba / tipoCambio).toFixed(4)) : 0;
+            const numeroParteLibre = item?.numeroParte ?? null;
+            const nombreLibre = item?.nombre ?? null;
             return {
-                inventarioId,
+                inventarioId: idVal,
                 clienteId: clienteIdParaRegistro,
                 cantidad,
                 precioCordoba,
                 precioDolar,
                 moneda: "NIO",
+                numeroParteLibre: idVal ? null : (numeroParteLibre ?? null),
+                nombreLibre: idVal ? null : (nombreLibre ?? null),
             };
         })
-            .filter((entry) => Boolean(entry));
+            .filter((entry) => entry !== null);
         if (shouldGuardarHistorial && quoteEntries.length) {
             try {
                 await prisma_1.prisma.productoCotizado.createMany({ data: quoteEntries });
@@ -689,33 +655,35 @@ async function proforma(req, res) {
                 console.warn("[ventas] No se pudo registrar cotizaciones recientes:", logError);
             }
         }
-        // Guardar registro de Proforma (encabezado + detalles) - SIEMPRE se guarda para tener un ID
+        // Guardar registro de Proforma (encabezado + detalles) - SOLO si se solicita guardar en historial
         let proformaRecord = null;
-        try {
-            const detallesForJson = detallesNorm.map((item) => ({
-                inventarioId: Number(item?.inventarioId) || null,
-                numeroParte: item?.numeroParte ?? null,
-                nombre: item?.nombre ?? null,
-                cantidad: Number(item?.cantidad || 0),
-                precioCordoba: Number(item?.precio || 0),
-            }));
-            proformaRecord = await prisma_1.prisma.proforma.create({
-                data: {
-                    clienteId: clienteIdParaRegistro ?? null,
-                    fecha: new Date(),
-                    totalCordoba: totalCordoba,
-                    totalDolar: totalDolar,
-                    tipoCambioValor: tipoCambio || null,
-                    pio: typeof pio === "string" && pio.trim().length > 0 ? pio.trim() : null,
-                    incoterm: typeof incoterm === "string" && incoterm.trim().length > 0 ? incoterm.trim() : null,
-                    plazoEntrega: typeof plazoEntrega === "string" && plazoEntrega.trim().length > 0 ? plazoEntrega.trim() : null,
-                    condicionPago: typeof condicionPago === "string" && condicionPago.trim().length > 0 ? condicionPago.trim() : null,
-                    detallesJson: JSON.stringify(detallesForJson),
-                },
-            });
-        }
-        catch (err) {
-            console.warn("[ventas] No se pudo registrar proforma en historial:", err);
+        if (shouldGuardarHistorial) {
+            try {
+                const detallesForJson = detallesNorm.map((item) => ({
+                    inventarioId: Number(item?.inventarioId) || null,
+                    numeroParte: item?.numeroParte ?? null,
+                    nombre: item?.nombre ?? null,
+                    cantidad: Number(item?.cantidad || 0),
+                    precioCordoba: Number(item?.precio || 0),
+                }));
+                proformaRecord = await prisma_1.prisma.proforma.create({
+                    data: {
+                        clienteId: clienteIdParaRegistro ?? null,
+                        fecha: new Date(),
+                        totalCordoba: totalCordoba,
+                        totalDolar: totalDolar,
+                        tipoCambioValor: tipoCambio || null,
+                        pio: typeof pio === "string" && pio.trim().length > 0 ? pio.trim() : null,
+                        incoterm: typeof incoterm === "string" && incoterm.trim().length > 0 ? incoterm.trim() : null,
+                        plazoEntrega: typeof plazoEntrega === "string" && plazoEntrega.trim().length > 0 ? plazoEntrega.trim() : null,
+                        condicionPago: typeof condicionPago === "string" && condicionPago.trim().length > 0 ? condicionPago.trim() : null,
+                        detallesJson: JSON.stringify(detallesForJson),
+                    },
+                });
+            }
+            catch (err) {
+                console.warn("[ventas] No se pudo registrar proforma en historial:", err);
+            }
         }
         console.info('[ventas] proforma totals', {
             totalCordoba: Number(totalCordoba || 0).toFixed(2),
@@ -743,6 +711,7 @@ async function proforma(req, res) {
             plazoEntrega: typeof plazoEntrega === "string" && plazoEntrega.trim().length > 0 ? plazoEntrega.trim() : null,
             condicionPago: typeof condicionPago === "string" && condicionPago.trim().length > 0 ? condicionPago.trim() : null,
             proformaId: proformaRecord?.id ?? null,
+            moneda: moneda || "NIO",
         }, res);
     }
     catch (error) {
@@ -821,6 +790,67 @@ async function getProformaById(req, res) {
     catch (error) {
         console.error("❌ Error al obtener proforma:", error);
         res.status(500).json({ message: "Error interno al obtener proforma" });
+    }
+}
+async function updateProforma(req, res) {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+    }
+    try {
+        const proforma = await prisma_1.prisma.proforma.findUnique({ where: { id } });
+        if (!proforma) {
+            return res.status(404).json({ message: "Proforma no encontrada" });
+        }
+        const { clienteId, detalles, tipoCambioValor, pio, incoterm, plazoEntrega, condicionPago } = req.body;
+        const detallesNorm = Array.isArray(detalles) ? detalles : [];
+        const tipoCambio = Number(tipoCambioValor ?? 36.5);
+        const totalCordoba = detallesNorm.reduce((acc, d) => acc + Number(d.cantidad || 0) * Number(d.precio || 0), 0);
+        const totalDolar = tipoCambio > 0 ? totalCordoba / tipoCambio : 0;
+        const detallesForJson = detallesNorm.map((item) => ({
+            inventarioId: Number(item?.inventarioId) || null,
+            numeroParte: item?.numeroParte ?? null,
+            nombre: item?.nombre ?? null,
+            cantidad: Number(item?.cantidad || 0),
+            precioCordoba: Number(item?.precio || 0),
+        }));
+        const updated = await prisma_1.prisma.proforma.update({
+            where: { id },
+            data: {
+                clienteId: clienteId ?? null,
+                totalCordoba: totalCordoba,
+                totalDolar: totalDolar,
+                tipoCambioValor: tipoCambio || null,
+                pio: typeof pio === "string" && pio.trim().length > 0 ? pio.trim() : null,
+                incoterm: typeof incoterm === "string" && incoterm.trim().length > 0 ? incoterm.trim() : null,
+                plazoEntrega: typeof plazoEntrega === "string" && plazoEntrega.trim().length > 0 ? plazoEntrega.trim() : null,
+                condicionPago: typeof condicionPago === "string" && condicionPago.trim().length > 0 ? condicionPago.trim() : null,
+                detallesJson: JSON.stringify(detallesForJson),
+            },
+        });
+        res.json({ message: "Proforma actualizada exitosamente", proforma: updated });
+    }
+    catch (error) {
+        console.error("❌ Error al actualizar proforma:", error);
+        res.status(500).json({ message: "Error interno al actualizar proforma" });
+    }
+}
+async function deleteProforma(req, res) {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+        return res.status(400).json({ message: "ID inválido" });
+    }
+    try {
+        const proforma = await prisma_1.prisma.proforma.findUnique({ where: { id } });
+        if (!proforma) {
+            return res.status(404).json({ message: "Proforma no encontrada" });
+        }
+        await prisma_1.prisma.proforma.delete({ where: { id } });
+        res.json({ message: "Proforma borrada exitosamente", id });
+    }
+    catch (error) {
+        console.error("❌ Error al borrar proforma:", error);
+        res.status(500).json({ message: "Error interno al borrar proforma" });
     }
 }
 // ===============================
@@ -1024,7 +1054,7 @@ async function generarProformaExcel(req, res) {
             total += subtotal;
             const row = ws.getRow(currentRow);
             row.getCell(1).value = idx + 1; // Posición
-            row.getCell(2).value = item.numeroParte || "";
+            row.getCell(2).value = item.codigoFacturar || item.numeroParte || "";
             row.getCell(3).value = item.nombre || "";
             row.getCell(4).value = cantidad;
             row.getCell(5).value = precio;
@@ -1107,12 +1137,73 @@ async function update(req, res) {
         const venta = await prisma_1.prisma.venta.update({
             where: { id },
             data: updateData,
-            include: { cliente: true, detalles: { include: { inventario: true } } },
+            include: { cliente: true, detalles: { include: { inventario: { include: { marca: true } } } } },
         });
         res.json({ venta });
     }
     catch (error) {
         console.error("Error al actualizar venta:", error);
         res.status(500).json({ message: "Error al actualizar venta" });
+    }
+}
+/* ===== Eliminar Venta ===== */
+async function deleteVenta(req, res) {
+    try {
+        const id = Number(req.params.id);
+        if (isNaN(id))
+            return res.status(400).json({ message: "ID inválido" });
+        const venta = await prisma_1.prisma.venta.findUnique({
+            where: { id },
+            include: { detalles: { include: { remisionDetalle: true } } },
+        });
+        if (!venta)
+            return res.status(404).json({ message: "No encontrada" });
+        await prisma_1.prisma.$transaction(async (tx) => {
+            const incMap = new Map();
+            const remDetalleIds = [];
+            const remisionIds = new Set();
+            for (const d of venta.detalles) {
+                const cantidad = Number(d.cantidad || 0);
+                if (d.remisionDetalleId) {
+                    remDetalleIds.push(d.remisionDetalleId);
+                    const remId = d.remisionDetalle?.remisionId;
+                    if (typeof remId === "number")
+                        remisionIds.add(remId);
+                }
+                else {
+                    incMap.set(d.inventarioId, (incMap.get(d.inventarioId) || 0) + cantidad);
+                }
+            }
+            // Reponer stock de los detalles que salieron de inventario directo
+            for (const [inventarioId, cantidad] of incMap.entries()) {
+                if (cantidad > 0) {
+                    await tx.inventario.update({
+                        where: { id: inventarioId },
+                        data: { stockActual: { increment: cantidad } },
+                    });
+                }
+            }
+            // Revertir facturación de remisiones asociadas
+            if (remDetalleIds.length) {
+                await tx.detalleRemision.updateMany({
+                    where: { id: { in: remDetalleIds } },
+                    data: { facturado: false },
+                });
+            }
+            if (remisionIds.size) {
+                await tx.remision.updateMany({
+                    where: { id: { in: Array.from(remisionIds) } },
+                    data: { facturada: false },
+                });
+            }
+            // Borrar detalles y venta
+            await tx.detalleVenta.deleteMany({ where: { ventaId: id } });
+            await tx.venta.delete({ where: { id } });
+        });
+        res.json({ message: "Venta eliminada" });
+    }
+    catch (error) {
+        console.error("Error al eliminar venta:", error);
+        res.status(500).json({ message: "Error al eliminar venta" });
     }
 }

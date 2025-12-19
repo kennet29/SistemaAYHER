@@ -201,7 +201,7 @@ export default function RemisionesHistorico() {
         <p><strong>Cliente:</strong> {getClienteNombre(remisionSeleccionada.clienteId)}</p>
         <p><strong>Fecha:</strong> {String(remisionSeleccionada.fecha).split("T")[0]}</p>
         <p><strong>Obs:</strong> {remisionSeleccionada.observacion || "N/A"}</p>
-        <p><strong>PIO:</strong> {remisionSeleccionada.pio || "N/A"}</p>
+        <p><strong>PO:</strong> {remisionSeleccionada.pio || "N/A"}</p>
 
         <h4>Productos</h4>
         <div style={{ overflowX: "auto" }}>

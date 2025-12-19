@@ -48,6 +48,103 @@ docker-compose ps
 | Frontend | 80 | http://localhost |
 | Backend API | 4000 | http://localhost:4000 |
 
+## 🔄 Configurar Inicio Automático con Windows
+
+Para que tu software esté **siempre disponible** cuando enciendas la PC:
+
+### Método 1: Configuración Rápida (Recomendado)
+
+**Ejecuta como Administrador:**
+
+```bash
+# CMD
+configurar-docker-servicio.bat
+
+# PowerShell
+.\configurar-docker-servicio.ps1
+```
+
+Este script configura Docker Desktop como servicio de Windows para inicio automático.
+
+### Método 2: Configuración Manual
+
+#### Paso 1: Configurar Docker Desktop
+
+1. Abre Docker Desktop
+2. Haz clic en el ícono de engranaje (Settings)
+3. En la sección "General", activa:
+   - ✅ **"Start Docker Desktop when you log in"**
+   - ✅ **"Use the WSL 2 based engine"** (si está disponible)
+4. Haz clic en "Apply & Restart"
+
+#### Paso 2: Configurar Servicio de Windows (Opcional pero recomendado)
+
+1. Presiona `Win + R` y escribe `services.msc`
+2. Busca el servicio **"Docker Desktop Service"** o **"com.docker.service"**
+3. Haz doble clic en el servicio
+4. En "Tipo de inicio", selecciona **"Automático"**
+5. Haz clic en "Aplicar" y luego en "Iniciar" si no está corriendo
+
+#### Paso 3: Verificar política de reinicio automático
+
+Tu `docker-compose.yml` ya está configurado con `restart: unless-stopped`, lo que significa que:
+- ✅ Los contenedores se reiniciarán automáticamente si se detienen por error
+- ✅ Los contenedores se iniciarán automáticamente cuando Docker Desktop arranque
+- ✅ Los contenedores NO se reiniciarán si los detienes manualmente con `docker-compose stop`
+
+### Probar el inicio automático
+
+1. **Despliega tu aplicación:**
+   ```bash
+   docker-compose up -d
+   ```
+
+2. **Reinicia tu PC**
+
+3. **Espera 30-60 segundos** a que Docker Desktop inicie completamente
+
+4. **Abre tu navegador** y ve a http://localhost
+
+5. **Tu aplicación debería estar funcionando automáticamente** ✅
+
+### Verificar que todo funciona
+
+```bash
+# Ver estado de Docker
+docker info
+
+# Ver contenedores en ejecución
+docker-compose ps
+
+# Ver logs de inicio
+docker-compose logs
+```
+
+### Políticas de reinicio disponibles
+
+Si necesitas cambiar el comportamiento en `docker-compose.yml`:
+
+- `restart: "no"` - Nunca reinicia automáticamente (por defecto)
+- `restart: always` - Siempre reinicia, incluso si lo detienes manualmente
+- `restart: unless-stopped` - Reinicia siempre, excepto si lo detienes manualmente ⭐ **(recomendado)**
+- `restart: on-failure` - Solo reinicia si el contenedor falla
+
+### Solución de problemas de inicio automático
+
+**Docker Desktop no inicia con Windows:**
+- Verifica que la opción esté activada en Settings → General
+- Ejecuta `configurar-docker-servicio.bat` como Administrador
+- Revisa que el servicio esté en "Automático" en `services.msc`
+
+**Los contenedores no inician automáticamente:**
+- Verifica que tengan `restart: unless-stopped` en docker-compose.yml
+- Asegúrate de haberlos iniciado al menos una vez con `docker-compose up -d`
+- Revisa los logs: `docker-compose logs`
+
+**Docker tarda mucho en iniciar:**
+- Es normal que tarde 30-60 segundos en la primera carga
+- Considera usar WSL 2 para mejor rendimiento (Settings → General)
+
 ## 🔧 Comandos Útiles
 
 ### Ver logs en tiempo real

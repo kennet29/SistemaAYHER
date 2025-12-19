@@ -7,14 +7,17 @@ import {
   FaBoxOpen,
   FaSearch,
   FaEye,
+  FaFileExcel,
 } from "react-icons/fa";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import DataTable from "react-data-table-component";
+import type { TableStyles } from "react-data-table-component";
 import "./Inventario.css";
 import { fmtDateTime } from "../utils/dates";
 import { buildApiUrl } from "../api/constants";
 import { ImportarExcel } from "../components/ImportarExcel";
+import ExcelJS from "exceljs";
 
 // Ubicaciones físicas válidas: A1..A12, B1..B12, ... Z1..Z12
 const UBICACIONES = Array.from({ length: 26 }, (_, i) =>
@@ -24,6 +27,21 @@ const UBICACIONES = Array.from({ length: 26 }, (_, i) =>
 const API_URL = buildApiUrl("/inventario");
 const API_MARCA = buildApiUrl("/marcas");
 const API_CATEGORIA = buildApiUrl("/categorias");
+const roundUp2 = (n: number) => Math.ceil((Number(n) || 0) * 100) / 100;
+const formatMoneyUp = (n: any) => roundUp2(n).toFixed(2);
+const formatMoneyUpOrDash = (n: any) =>
+  n === null || n === undefined || n === "" ? "-" : formatMoneyUp(n);
+
+const tableCustomStyles: TableStyles = {
+  tableWrapper: {
+    style: {
+      maxHeight: "70vh",
+      overflowY: "auto",
+      overflowX: "auto",
+      position: "relative",
+    },
+  },
+};
 
 function getCookie(name: string) {
   const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
@@ -46,6 +64,7 @@ const InventarioView = () => {
     utilidadTotalC: 0,
     utilidadTotalD: 0,
   });
+  const [generandoExcel, setGenerandoExcel] = useState(false);
 
   const [form, setForm] = useState({
     numeroParte: "",
@@ -56,14 +75,17 @@ const InventarioView = () => {
     stockMinimo: 0,
     ubicacion: "",
     stockActual: 0,
-    costoPromedioCordoba: 0,
-    precioVentaPromedioCordoba: 0,
-    precioVentaSugeridoCordoba: 0,
+    costoPromedioDolar: 0,
+    precioVentaPromedioDolar: 0,
+    precioVentaSugeridoDolar: 0,
     codigoSustituto: "",
     marcaSustitutoId: 0,
+    descontinuado: false,
     compatibilidadMaquinas: [] as string[],
     preciosCompetencia: [] as any[],
   });
+  const [codigosSustituto, setCodigosSustituto] = useState<string[]>([]);
+  const [codigoSustManual, setCodigoSustManual] = useState("");
 
   // Estado temporal para agregar/editar precios de competencia
   const [pcForm, setPcForm] = useState({
@@ -74,12 +96,12 @@ const InventarioView = () => {
   });
   const [pcEditIdx, setPcEditIdx] = useState<number | null>(null);
 
-  const formUSD = useMemo(() => {
-    const toUSD = (v: number) => (tipoCambio > 0 ? v / tipoCambio : 0);
+  const formCordoba = useMemo(() => {
+    const toC = (usd: number) => (tipoCambio > 0 ? usd * tipoCambio : usd);
     return {
-      costoPromedioDolar: toUSD(Number(form.costoPromedioCordoba)),
-      precioVentaPromedioDolar: toUSD(Number(form.precioVentaPromedioCordoba)),
-      precioVentaSugeridoDolar: toUSD(Number(form.precioVentaSugeridoCordoba)),
+      costoPromedioCordoba: roundUp2(toC(Number(form.costoPromedioDolar))),
+      precioVentaPromedioCordoba: roundUp2(toC(Number(form.precioVentaPromedioDolar))),
+      precioVentaSugeridoCordoba: roundUp2(toC(Number(form.precioVentaSugeridoDolar))),
     };
   }, [form, tipoCambio]);
 
@@ -114,10 +136,10 @@ const InventarioView = () => {
       setTipoCambio(tipo);
 
       const lista = (dataInv.items || []).map((i: any) => {
-        const costoC = Number(i.costoPromedioCordoba ?? 0);
-        const costoD = Number(i.costoPromedioDolar ?? 0);
-        const ventaC = Number(i.precioVentaPromedioCordoba ?? 0);
-        const ventaD = Number(i.precioVentaPromedioDolar ?? 0);
+        const costoC = roundUp2(i.costoPromedioCordoba ?? 0);
+        const costoD = roundUp2(i.costoPromedioDolar ?? 0);
+        const ventaC = roundUp2(i.precioVentaPromedioCordoba ?? 0);
+        const ventaD = roundUp2(i.precioVentaPromedioDolar ?? 0);
         const stock = Number(i.stockActual ?? 0);
 
         // Normalizar posibles strings JSON → arrays
@@ -136,8 +158,8 @@ const InventarioView = () => {
         const compat = toArray(i.compatibilidadMaquinas);
         const compPrecios = toArray(i.preciosCompetencia);
 
-        const utilidadC = ventaC - costoC;
-        const utilidadD = ventaD - costoD;
+        const utilidadC = roundUp2(ventaC - costoC);
+        const utilidadD = roundUp2(ventaD - costoD);
 
         return {
           ...i,
@@ -149,19 +171,19 @@ const InventarioView = () => {
           precioVentaPromedioDolar: ventaD,
           utilidadCordoba: utilidadC,
           utilidadDolar: utilidadD,
-          costoTotalCordoba: costoC * stock,
-          costoTotalDolar: costoD * stock,
-          ventaTotalCordoba: ventaC * stock,
-          ventaTotalDolar: ventaD * stock,
-          utilidadTotalCordoba: utilidadC * stock,
-          utilidadTotalDolar: utilidadD * stock,
+          costoTotalCordoba: roundUp2(costoC * stock),
+          costoTotalDolar: roundUp2(costoD * stock),
+          ventaTotalCordoba: roundUp2(ventaC * stock),
+          ventaTotalDolar: roundUp2(ventaD * stock),
+          utilidadTotalCordoba: roundUp2(utilidadC * stock),
+          utilidadTotalDolar: roundUp2(utilidadD * stock),
         };
       });
 
-      const totalC = (lista as any[]).reduce((sum: number, i: any) => sum + Number(i.ventaTotalCordoba || 0), 0 as number);
-      const totalD = (lista as any[]).reduce((sum: number, i: any) => sum + Number(i.ventaTotalDolar || 0), 0 as number);
-      const utilidadC = (lista as any[]).reduce((sum: number, i: any) => sum + Number(i.utilidadTotalCordoba || 0), 0 as number);
-      const utilidadD = (lista as any[]).reduce((sum: number, i: any) => sum + Number(i.utilidadTotalDolar || 0), 0 as number);
+      const totalC = roundUp2((lista as any[]).reduce((sum: number, i: any) => sum + Number(i.ventaTotalCordoba || 0), 0 as number));
+      const totalD = roundUp2((lista as any[]).reduce((sum: number, i: any) => sum + Number(i.ventaTotalDolar || 0), 0 as number));
+      const utilidadC = roundUp2((lista as any[]).reduce((sum: number, i: any) => sum + Number(i.utilidadTotalCordoba || 0), 0 as number));
+      const utilidadD = roundUp2((lista as any[]).reduce((sum: number, i: any) => sum + Number(i.utilidadTotalDolar || 0), 0 as number));
 
       setItems(lista);
       setMarcas(dataMar.marcas || []);
@@ -185,9 +207,17 @@ const InventarioView = () => {
     return items.filter(
       (i) =>
         i.nombre?.toLowerCase().includes(q) ||
-        i.numeroParte?.toLowerCase().includes(q)
+        i.numeroParte?.toLowerCase().includes(q) ||
+        (i.descripcion || "").toLowerCase().includes(q) ||
+        (i.codigoSustituto || "").toLowerCase().includes(q)
     );
   }, [filtro, items]);
+
+  const parseCodigosSustituto = (val?: string | null) =>
+    (val || "")
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -199,8 +229,17 @@ const InventarioView = () => {
 
     setSaving(true);
     try {
-      // No enviar campos vacíos para evitar errores si el backend aún no migró
-      const payload: any = { ...form };
+      const toC = (usd: number) => (tipoCambio > 0 ? usd * tipoCambio : usd);
+      const payload: any = {
+        ...form,
+        costoPromedioDolar: roundUp2(form.costoPromedioDolar),
+        precioVentaPromedioDolar: roundUp2(form.precioVentaPromedioDolar),
+        precioVentaSugeridoDolar: roundUp2(form.precioVentaSugeridoDolar),
+        costoPromedioCordoba: roundUp2(toC(form.costoPromedioDolar)),
+        precioVentaPromedioCordoba: roundUp2(toC(form.precioVentaPromedioDolar)),
+        precioVentaSugeridoCordoba: roundUp2(toC(form.precioVentaSugeridoDolar)),
+        codigoSustituto: codigosSustituto.join(","),
+      };
       if (!payload.compatibilidadMaquinas || payload.compatibilidadMaquinas.length === 0) {
         delete payload.compatibilidadMaquinas;
       }
@@ -241,16 +280,19 @@ const InventarioView = () => {
         stockMinimo: 0,
         ubicacion: "",
         stockActual: 0,
-        costoPromedioCordoba: 0,
-        precioVentaPromedioCordoba: 0,
-        precioVentaSugeridoCordoba: 0,
+        costoPromedioDolar: 0,
+        precioVentaPromedioDolar: 0,
+        precioVentaSugeridoDolar: 0,
         codigoSustituto: "",
         marcaSustitutoId: 0,
-        compatibilidadMaquinas: [],
-        preciosCompetencia: [],
-      });
-      setEditing(null);
-      fetchData();
+      descontinuado: false,
+      compatibilidadMaquinas: [],
+      preciosCompetencia: [],
+    });
+    setCodigosSustituto([]);
+    setCodigoSustManual("");
+    setEditing(null);
+    fetchData();
     } catch {
       toast.error("❌ No se pudo guardar el producto");
     } finally {
@@ -279,15 +321,22 @@ const InventarioView = () => {
       nombre: item.nombre || "",
       descripcion: item.descripcion || "",
       marcaId: Number(item.marcaId || 0),
-      categoriaId: Number(item.categoriaId || 0),
-      stockMinimo: Number(item.stockMinimo || 0),
-      ubicacion: item.ubicacion || "",
-      stockActual: Number(item.stockActual || 0),
-      costoPromedioCordoba: Number(item.costoPromedioCordoba || 0),
-      precioVentaPromedioCordoba: Number(item.precioVentaPromedioCordoba || 0),
-      precioVentaSugeridoCordoba: Number(item.precioVentaSugeridoCordoba || 0),
+    categoriaId: Number(item.categoriaId || 0),
+    stockMinimo: Number(item.stockMinimo || 0),
+    ubicacion: item.ubicacion || "",
+    stockActual: Number(item.stockActual || 0),
+    costoPromedioDolar: Number(
+      item.costoPromedioDolar ?? ((tipoCambio > 0 ? Number(item.costoPromedioCordoba || 0) / tipoCambio : 0) || 0)
+    ),
+    precioVentaPromedioDolar: Number(
+      item.precioVentaPromedioDolar ?? ((tipoCambio > 0 ? Number(item.precioVentaPromedioCordoba || 0) / tipoCambio : 0) || 0)
+    ),
+    precioVentaSugeridoDolar: Number(
+      item.precioVentaSugeridoDolar ?? ((tipoCambio > 0 ? Number(item.precioVentaSugeridoCordoba || 0) / tipoCambio : 0) || 0)
+    ),
       codigoSustituto: item.codigoSustituto || "",
       marcaSustitutoId: Number(item.marcaSustitutoId || 0),
+      descontinuado: Boolean(item.descontinuado || false),
       compatibilidadMaquinas: Array.isArray(item.compatibilidadMaquinas)
         ? item.compatibilidadMaquinas
         : [],
@@ -295,6 +344,8 @@ const InventarioView = () => {
         ? item.preciosCompetencia
         : [],
     });
+    setCodigosSustituto(parseCodigosSustituto(item.codigoSustituto));
+    setCodigoSustManual("");
     setEditing(item.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -325,6 +376,74 @@ const InventarioView = () => {
     return stock > min + Math.max(1, Math.ceil(min * 0.1));
   };
 
+  const lowStockItems = useMemo(() => items.filter((r) => isLowStock(r)), [items]);
+
+  const exportLowStockExcel = async () => {
+    if (!lowStockItems.length) {
+      toast.info("No hay articulos en bajo stock");
+      return;
+    }
+    setGenerandoExcel(true);
+    try {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("Bajo stock");
+      ws.columns = [
+        { header: "#", key: "idx", width: 4 },
+        { header: "No. Parte", key: "numeroParte", width: 16 },
+        { header: "Nombre", key: "nombre", width: 28 },
+        { header: "Marca", key: "marca", width: 16 },
+        { header: "Categoria", key: "categoria", width: 16 },
+        { header: "Stock", key: "stockActual", width: 8 },
+        { header: "Stock Min", key: "stockMinimo", width: 10 },
+        { header: "Ubicacion", key: "ubicacion", width: 12 },
+        { header: "Costo C$", key: "costoC", width: 12 },
+        { header: "Costo US$", key: "costoD", width: 12 },
+        { header: "Venta C$", key: "ventaC", width: 12 },
+        { header: "Venta US$", key: "ventaD", width: 12 },
+        { header: "Compatibilidades", key: "compat", width: 20 },
+      ];
+      ws.getRow(1).font = { bold: true };
+
+      lowStockItems.forEach((r, idx) => {
+        ws.addRow({
+          idx: idx + 1,
+          numeroParte: r.numeroParte || "",
+          nombre: r.nombre || "",
+          marca: r.marca?.nombre || "",
+          categoria: r.categoria?.nombre || "",
+          stockActual: Number(r.stockActual ?? 0),
+          stockMinimo: Number(r.stockMinimo ?? 0),
+          ubicacion: r.ubicacion || "",
+          costoC: formatMoneyUp(r.costoPromedioCordoba),
+          costoD: formatMoneyUp(r.costoPromedioDolar),
+          ventaC: formatMoneyUp(r.precioVentaPromedioCordoba),
+          ventaD: formatMoneyUp(r.precioVentaPromedioDolar),
+          compat: Array.isArray(r.compatibilidadMaquinas)
+            ? r.compatibilidadMaquinas.join(", ")
+            : "",
+        });
+      });
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const date = new Date().toISOString().slice(0, 10);
+      a.download = `inventario_bajo_stock_${date}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Excel generado");
+    } catch (err) {
+      console.error("Error generando Excel de bajo stock", err);
+      toast.error("No se pudo generar el Excel");
+    } finally {
+      setGenerandoExcel(false);
+    }
+  };
+
   const columns = [
     { name: "N° Parte", selector: (r: any) => r.numeroParte, sortable: true },
     { name: "Nombre", selector: (r: any) => r.nombre, grow: 2 },
@@ -347,56 +466,60 @@ const InventarioView = () => {
     {
       name: "Costo (C$/US$)",
       selector: (r: any) =>
-        `${Number(r.costoPromedioCordoba).toFixed(2)} / ${Number(
+        `${formatMoneyUp(r.costoPromedioCordoba)} / ${formatMoneyUp(
           r.costoPromedioDolar
-        ).toFixed(2)}`,
+        )}`,
       right: true,
     },
     {
       name: "Venta Prom (C$/US$)",
       selector: (r: any) =>
-        `${Number(r.precioVentaPromedioCordoba).toFixed(2)} / ${Number(
+        `${formatMoneyUp(r.precioVentaPromedioCordoba)} / ${formatMoneyUp(
           r.precioVentaPromedioDolar
-        ).toFixed(2)}`,
+        )}`,
       right: true,
     },
     {
       name: "Costo Total (C$/US$)",
       selector: (r: any) =>
-        `${Number(r.costoTotalCordoba).toFixed(2)} / ${Number(
+        `${formatMoneyUp(r.costoTotalCordoba)} / ${formatMoneyUp(
           r.costoTotalDolar
-        ).toFixed(2)}`,
+        )}`,
       right: true,
     },
     {
       name: "Venta Total (C$/US$)",
       selector: (r: any) =>
-        `${Number(r.ventaTotalCordoba).toFixed(2)} / ${Number(
+        `${formatMoneyUp(r.ventaTotalCordoba)} / ${formatMoneyUp(
           r.ventaTotalDolar
-        ).toFixed(2)}`,
+        )}`,
       right: true,
     },
     {
       name: "Utilidad x Unidad (C$/US$)",
       selector: (r: any) =>
-        `${Number(r.utilidadCordoba).toFixed(2)} / ${Number(
+        `${formatMoneyUp(r.utilidadCordoba)} / ${formatMoneyUp(
           r.utilidadDolar
-        ).toFixed(2)}`,
+        )}`,
       right: true,
     },
     {
       name: "Utilidad Total (C$/US$)",
       selector: (r: any) =>
-        `${Number(r.utilidadTotalCordoba).toFixed(2)} / ${Number(
+        `${formatMoneyUp(r.utilidadTotalCordoba)} / ${formatMoneyUp(
           r.utilidadTotalDolar
-        ).toFixed(2)}`,
+        )}`,
       right: true,
     },
     {
       name: "Código Sustituto",
       selector: (r: any) => {
-        const sustituto = items.find((i) => i.numeroParte === r.codigoSustituto);
-        return sustituto ? `${sustituto.numeroParte} — ${sustituto.nombre}` : "—";
+        const sustituto = r.codigoSustituto
+          ? items.find((i) => i.numeroParte === r.codigoSustituto)
+          : null;
+        if (sustituto) return `${sustituto.numeroParte} — ${sustituto.nombre}`;
+        if (r.codigoSustituto) return r.codigoSustituto;
+        return "—";
       },
     },
     {
@@ -452,7 +575,31 @@ const InventarioView = () => {
         </p>
       </header>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", padding: "1rem 5%", background: "linear-gradient(180deg, #ffffff 0%, #f0f4ff 100%)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", padding: "1rem 5%", background: "linear-gradient(180deg, #ffffff 0%, #f0f4ff 100%)" }}>
+        <button
+          type="button"
+          onClick={exportLowStockExcel}
+          disabled={generandoExcel}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            background: "#16a34a",
+            color: "#fff",
+            border: "none",
+          padding: "0.65rem 1rem",
+          borderRadius: "10px",
+          cursor: generandoExcel ? "not-allowed" : "pointer",
+          boxShadow: "0 8px 18px rgba(22,163,74,0.2)",
+          opacity: generandoExcel ? 0.8 : 1,
+          fontWeight: 700,
+        }}
+          title="Exportar articulos con stock critico"
+        >
+          <FaFileExcel />
+          {generandoExcel ? "Generando..." : `Excel Bajo Stock (${lowStockItems.length})`}
+        </button>
+
         <ImportarExcel onSuccess={fetchData} />
       </div>
 
@@ -534,6 +681,18 @@ const InventarioView = () => {
                 ))}
               </select>
             </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", paddingTop: "1.5rem" }}>
+              <input
+                type="checkbox"
+                id="descontinuado"
+                checked={form.descontinuado}
+                onChange={(e) => setForm({ ...form, descontinuado: e.target.checked })}
+                style={{ width: "20px", height: "20px", cursor: "pointer" }}
+              />
+              <label htmlFor="descontinuado" style={{ cursor: "pointer", margin: 0, fontWeight: 600, color: "#d97706" }}>
+                Producto Descontinuado
+              </label>
+            </div>
           </div>
 
           <div className="inventario-row">
@@ -557,52 +716,52 @@ const InventarioView = () => {
               <small>Se marcará en rojo si está por debajo</small>
             </div>
             <div>
-              <label>Costo Promedio (C$)</label>
+              <label>Costo Promedio (US$)</label>
               <input
                 type="number"
-                value={form.costoPromedioCordoba}
+                value={form.costoPromedioDolar}
                 onChange={(e) =>
-                  setForm({ ...form, costoPromedioCordoba: Number(e.target.value) })
+                  setForm({ ...form, costoPromedioDolar: Number(e.target.value) })
                 }
                 min={0}
                 step="0.01"
               />
-              <small>≈ {formUSD.costoPromedioDolar.toFixed(2)} US$</small>
+              <small>≈ C$ {formatMoneyUp(formCordoba.costoPromedioCordoba)}</small>
             </div>
             <div>
-              <label>Precio Venta Promedio (C$)</label>
+              <label>Precio Venta Promedio (US$)</label>
               <input
                 type="number"
-                value={form.precioVentaPromedioCordoba}
+                value={form.precioVentaPromedioDolar}
                 onChange={(e) =>
                   setForm({
                     ...form,
-                    precioVentaPromedioCordoba: Number(e.target.value),
+                    precioVentaPromedioDolar: Number(e.target.value),
                   })
                 }
                 min={0}
                 step="0.01"
               />
-              <small>≈ {formUSD.precioVentaPromedioDolar.toFixed(2)} US$</small>
+              <small>≈ C$ {formatMoneyUp(formCordoba.precioVentaPromedioCordoba)}</small>
             </div>
           </div>
 
           <div className="inventario-row">
             <div>
-              <label>Precio Venta Sugerido (C$)</label>
+              <label>Precio Venta Sugerido (US$)</label>
               <input
                 type="number"
-                value={form.precioVentaSugeridoCordoba}
+                value={form.precioVentaSugeridoDolar}
                 onChange={(e) =>
                   setForm({
                     ...form,
-                    precioVentaSugeridoCordoba: Number(e.target.value),
+                    precioVentaSugeridoDolar: Number(e.target.value),
                   })
                 }
                 min={0}
                 step="0.01"
               />
-              <small>≈ {formUSD.precioVentaSugeridoDolar.toFixed(2)} US$</small>
+              <small>≈ C$ {formatMoneyUp(formCordoba.precioVentaSugeridoCordoba)}</small>
             </div>
             <div>
               <label>Descripción</label>
@@ -621,18 +780,18 @@ const InventarioView = () => {
               <label>Código Sustituto</label>
               <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", flexDirection: "column" }}>
                 <select
-                  value={form.codigoSustituto}
+                  value=""
                   onChange={(e) => {
                     const selectedParte = e.target.value;
                     if (selectedParte) {
                       const selectedProduct = items.find((i) => i.numeroParte === selectedParte);
-                      setForm({ 
-                        ...form, 
-                        codigoSustituto: selectedParte,
-                        marcaSustitutoId: selectedProduct?.marcaId || 0
+                      if (!codigosSustituto.includes(selectedParte)) {
+                        setCodigosSustituto((prev) => [...prev, selectedParte]);
+                      }
+                      setForm({
+                        ...form,
+                        marcaSustitutoId: selectedProduct?.marcaId || 0,
                       });
-                    } else {
-                      setForm({ ...form, codigoSustituto: "" });
                     }
                   }}
                   style={{ width: "100%" }}
@@ -650,34 +809,72 @@ const InventarioView = () => {
                   <span style={{ whiteSpace: "nowrap", fontSize: "0.9rem", color: "#666" }}>o ingrese manualmente:</span>
                   <input
                     type="text"
-                    value={form.codigoSustituto}
-                    onChange={(e) => {
-                      const codigo = e.target.value;
-                      // Verificar si el código existe en el inventario
-                      const productoExiste = items.find((i) => i.numeroParte === codigo);
-                      
-                      if (productoExiste) {
-                        // Si existe, usar su marca
-                        setForm({ 
-                          ...form, 
-                          codigoSustituto: codigo,
-                          marcaSustitutoId: productoExiste.marcaId || 0
-                        });
-                      } else {
-                        // Si no existe, marca como "Desconocida" (0)
-                        setForm({ 
-                          ...form, 
-                          codigoSustituto: codigo,
-                          marcaSustitutoId: 0
-                        });
-                      }
-                    }}
+                    value={codigoSustManual}
+                    onChange={(e) => setCodigoSustManual(e.target.value)}
                     placeholder="Número de parte del sustituto"
                     style={{ flex: 1 }}
                   />
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    onClick={() => {
+                      const codigo = codigoSustManual.trim();
+                      if (!codigo) return;
+                      if (codigosSustituto.includes(codigo)) {
+                        toast.warn("Código ya agregado");
+                        return;
+                      }
+                      const productoExiste = items.find((i) => i.numeroParte === codigo);
+                      setCodigosSustituto((prev) => [...prev, codigo]);
+                      setForm({
+                        ...form,
+                        marcaSustitutoId: productoExiste?.marcaId || 0,
+                      });
+                      setCodigoSustManual("");
+                    }}
+                    style={{ padding: ".45rem .7rem", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    title="Agregar código"
+                  >
+                    +
+                  </button>
                 </div>
+                {codigosSustituto.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: ".5rem" }}>
+                    {codigosSustituto.map((c) => (
+                      <span
+                        key={c}
+                        style={{
+                          padding: ".25rem .5rem",
+                          background: "#eef2ff",
+                          border: "1px solid #c7d2fe",
+                          borderRadius: "999px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: ".4rem",
+                          color: "#0f172a",
+                        }}
+                      >
+                        {c}
+                        <button
+                          type="button"
+                          onClick={() => setCodigosSustituto((prev) => prev.filter((x) => x !== c))}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            color: "#4f46e5",
+                            cursor: "pointer",
+                            fontWeight: 700,
+                          }}
+                          title="Quitar"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-              <small>Seleccione de la lista o ingrese un código manualmente (aunque no exista aún)</small>
+              <small>Seleccione de la lista o agregue manualmente (uno por clic)</small>
             </div>
 
             <div>
@@ -805,8 +1002,8 @@ const InventarioView = () => {
                     }
                     const entry = {
                       proveedor: pcForm.proveedor.trim(),
-                      precioCordoba: pcForm.precioCordoba ? Number(pcForm.precioCordoba) : undefined,
-                      precioDolar: pcForm.precioDolar ? Number(pcForm.precioDolar) : undefined,
+                      precioCordoba: pcForm.precioCordoba ? roundUp2(Number(pcForm.precioCordoba)) : undefined,
+                      precioDolar: pcForm.precioDolar ? roundUp2(Number(pcForm.precioDolar)) : undefined,
                       referencia: pcForm.referencia?.trim() || undefined,
                       fecha: new Date().toISOString(),
                     };
@@ -834,9 +1031,9 @@ const InventarioView = () => {
                     <div className="pc-left">
                       <strong>{pc.proveedor}</strong>
                       <span>
-                        {pc.precioCordoba != null ? `${Number(pc.precioCordoba).toFixed(2)} C$` : "—"}
+                        {pc.precioCordoba != null ? `${formatMoneyUp(pc.precioCordoba)} C$` : "-"}
                         {" / "}
-                        {pc.precioDolar != null ? `${Number(pc.precioDolar).toFixed(2)} US$` : "—"}
+                        {pc.precioDolar != null ? `${formatMoneyUp(pc.precioDolar)} US$` : "-"}
                       </span>
                       {pc.referencia && <em>{pc.referencia}</em>}
                     </div>
@@ -847,8 +1044,8 @@ const InventarioView = () => {
                         onClick={() => {
                           setPcForm({
                             proveedor: pc.proveedor || "",
-                            precioCordoba: pc.precioCordoba ?? "",
-                            precioDolar: pc.precioDolar ?? "",
+                            precioCordoba: pc.precioCordoba != null ? formatMoneyUp(pc.precioCordoba) : "",
+                            precioDolar: pc.precioDolar != null ? formatMoneyUp(pc.precioDolar) : "",
                             referencia: pc.referencia || "",
                           });
                           setPcEditIdx(idx);
@@ -902,10 +1099,13 @@ const InventarioView = () => {
           columns={columns}
           data={itemsFiltrados}
           pagination
+          fixedHeader
+          fixedHeaderScrollHeight="70vh"
           highlightOnHover
           striped
           responsive
           persistTableHead
+          customStyles={tableCustomStyles}
           conditionalRowStyles={[
             {
               when: (r: any) => isLowStock(r),
@@ -935,7 +1135,7 @@ const InventarioView = () => {
       <div className="inventario-totales">
         <p>
           💰 <strong>Total inventario:</strong>{" "}
-          {totales.valorTotalC.toFixed(2)} C$ / {totales.valorTotalD.toFixed(2)} US$
+          {formatMoneyUp(totales.valorTotalC)} C$ / {formatMoneyUp(totales.valorTotalD)} US$
         </p>
         <p>
           📈 <strong>Utilidad total:</strong>{" "}
@@ -945,7 +1145,7 @@ const InventarioView = () => {
               fontWeight: "bold",
             }}
           >
-            {totales.utilidadTotalC.toFixed(2)} C$ / {totales.utilidadTotalD.toFixed(2)} US$
+            {formatMoneyUp(totales.utilidadTotalC)} C$ / {formatMoneyUp(totales.utilidadTotalD)} US$
           </span>
         </p>
       </div>
@@ -984,19 +1184,19 @@ const InventarioView = () => {
                 <div>
                   <strong>Costo (C$/US$):</strong>
                   <div>
-                    {Number(view.costoPromedioCordoba).toFixed(2)} / {Number(view.costoPromedioDolar).toFixed(2)}
+                    {formatMoneyUp(view.costoPromedioCordoba)} / {formatMoneyUp(view.costoPromedioDolar)}
                   </div>
                 </div>
                 <div>
                   <strong>Venta Prom (C$/US$):</strong>
                   <div>
-                    {Number(view.precioVentaPromedioCordoba).toFixed(2)} / {Number(view.precioVentaPromedioDolar).toFixed(2)}
+                    {formatMoneyUp(view.precioVentaPromedioCordoba)} / {formatMoneyUp(view.precioVentaPromedioDolar)}
                   </div>
                 </div>
                 <div>
                   <strong>Venta Sug (C$/US$):</strong>
                   <div>
-                    {Number(view.precioVentaSugeridoCordoba).toFixed(2)} / {Number(view.precioVentaSugeridoDolar).toFixed(2)}
+                    {formatMoneyUp(view.precioVentaSugeridoCordoba)} / {formatMoneyUp(view.precioVentaSugeridoDolar)}
                   </div>
                 </div>
                 <div style={{ gridColumn: "1/-1" }}>
@@ -1046,8 +1246,8 @@ const InventarioView = () => {
                     {view.preciosCompetencia.map((pc: any, idx: number) => (
                       <div key={idx} className="pc-trow">
                         <div>{pc.proveedor}</div>
-                        <div>{pc.precioCordoba != null ? Number(pc.precioCordoba).toFixed(2) : "—"}</div>
-                        <div>{pc.precioDolar != null ? Number(pc.precioDolar).toFixed(2) : "—"}</div>
+                        <div>{formatMoneyUpOrDash(pc.precioCordoba)}</div>
+                        <div>{formatMoneyUpOrDash(pc.precioDolar)}</div>
                         <div>{pc.fecha ? fmtDateTime(pc.fecha) : "—"}</div>
                         <div>{pc.referencia || "—"}</div>
                       </div>

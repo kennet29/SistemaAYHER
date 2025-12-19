@@ -1,7 +1,7 @@
 // src/Views/Ventas.tsx - Historial de Ventas
 import React, { useEffect, useMemo, useState } from "react";
 import DataTable from "react-data-table-component";
-import { FaEye, FaTimes, FaFileExcel } from "react-icons/fa";
+import { FaEye, FaTimes, FaFileExcel, FaEdit, FaTrash } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -20,6 +20,9 @@ function getCookie(name: string) {
 const API_VENTAS = buildApiUrl("/ventas");
 const API_CONFIGURACION = buildApiUrl("/configuracion");
 const API_METODOS_PAGO = buildApiUrl("/metodos-pago");
+
+// Cantidad de artículos por página en la factura
+const ITEMS_PER_PAGE = 14;
 
 type Venta = {
   id: number;
@@ -46,12 +49,15 @@ const Ventas: React.FC = () => {
   const [ventaSel, setVentaSel] = useState<Venta | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [ventaAPagar, setVentaAPagar] = useState<Venta | null>(null);
+  const [ventaAEliminar, setVentaAEliminar] = useState<Venta | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [configuracion, setConfiguracion] = useState<any>(null);
   const [metodosPago, setMetodosPago] = useState<any[]>([]);
   const [showNumeroFacturaModal, setShowNumeroFacturaModal] = useState(false);
   const [ventaParaExcel, setVentaParaExcel] = useState<Venta | null>(null);
   const [numeroFacturaInicial, setNumeroFacturaInicial] = useState<string>('');
   const [monedaExcel, setMonedaExcel] = useState<'NIO' | 'USD'>('NIO');
+  const [metodoPagoSeleccionado, setMetodoPagoSeleccionado] = useState<number | null>(null);
 
   const ventaTitle = useMemo(() => {
     if (!ventaSel) return '';
@@ -72,6 +78,11 @@ const Ventas: React.FC = () => {
   const solicitarConfirmacion = (venta: Venta) => {
     setVentaAPagar(venta);
     setShowConfirmModal(true);
+  };
+
+  const solicitarEliminar = (venta: Venta) => {
+    setVentaAEliminar(venta);
+    setShowDeleteModal(true);
   };
 
   const marcarComoPagada = async () => {
@@ -104,6 +115,30 @@ const Ventas: React.FC = () => {
     }
   };
 
+  const eliminarVenta = async () => {
+    if (!ventaAEliminar) return;
+    setShowDeleteModal(false);
+    try {
+      const token = getCookie("token");
+      const resp = await fetch(buildApiUrl(`/ventas/${ventaAEliminar.id}`), {
+        method: "DELETE",
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+      });
+      if (!resp.ok) {
+        toast.error("Error al eliminar venta");
+        return;
+      }
+      toast.success("Venta eliminada");
+      cargarVentas();
+    } catch (error) {
+      toast.error("Error al eliminar venta");
+    } finally {
+      setVentaAEliminar(null);
+    }
+  };
+
   useEffect(() => {
     cargarVentas();
     // Cargar configuración
@@ -131,7 +166,7 @@ const Ventas: React.FC = () => {
       // Búsqueda por número de factura y rango de consecutivos
       if (v.numeroFactura) {
         const numeroInicial = parseInt(v.numeroFactura) || 0;
-        const numPaginas = Math.ceil((v.detalles?.length || 0) / 15);
+        const numPaginas = Math.ceil((v.detalles?.length || 0) / ITEMS_PER_PAGE);
         const numeroFinal = numeroInicial + numPaginas - 1;
         
         // Buscar en el número inicial
@@ -165,11 +200,16 @@ const Ventas: React.FC = () => {
 
   const solicitarNumeroFactura = async (venta: Venta) => {
     // Calcular cuántas páginas tendrá la factura
-    const numPaginas = Math.ceil((venta.detalles?.length || 0) / 15);
+    const numPaginas = Math.ceil((venta.detalles?.length || 0) / ITEMS_PER_PAGE);
     setVentaParaExcel(venta);
     
     // Establecer la moneda por defecto basada en la venta
     setMonedaExcel((venta.moneda as 'NIO' | 'USD') || 'NIO');
+    
+    // Establecer el primer método de pago activo por defecto
+    if (metodosPago.length > 0) {
+      setMetodoPagoSeleccionado(metodosPago[0].id);
+    }
     
     // Si la venta ya tiene un número de factura, sugerirlo (reimpresión)
     if (venta.numeroFactura) {
@@ -271,7 +311,7 @@ const Ventas: React.FC = () => {
 
       const excelDataItems = venta.detalles?.map((d: any) => {
         const cantidad = Number(d?.cantidad || 0);
-        const numeroParte = d?.inventario?.numeroParte || '-';
+        const numeroParte = d?.codigoFacturar || d?.numeroParte || d?.inventario?.numeroParte || '-';
         const producto = d?.inventario?.nombre || d?.producto?.nombre || '-';
         const precioUnitario = moneda === 'USD'
           ? Number(d?.precioUnitarioDolar || (d?.precioUnitarioCordoba || 0) / (venta.tipoCambioValor || 1))
@@ -281,11 +321,17 @@ const Ventas: React.FC = () => {
         return {
           cantidad: cantidad,
           numeroParte: numeroParte,
+          codigoFacturar: d?.codigoFacturar || d?.numeroParte || null,
           descripcion: producto,
           precioUnitario: precioUnitario,
           subtotal: subtotal
         }
       });
+
+      // Buscar el método de pago seleccionado
+      const metodoPago = metodoPagoSeleccionado 
+        ? metodosPago.find(m => m.id === metodoPagoSeleccionado) 
+        : (metodosPago.length > 0 ? metodosPago[0] : null);
 
       const excelData: InvoiceExcelData = {
         clienteNombre: clienteNombre,
@@ -302,7 +348,7 @@ const Ventas: React.FC = () => {
         moneda: moneda,
         direccion: configuracion?.direccion,
         razonSocial: configuracion?.razonSocial,
-        metodo: metodosPago.length > 0 ? metodosPago[0] : null,
+        metodo: metodoPago,
         items: excelDataItems
       }
       const blob = await generateInvoiceExcel(excelData);
@@ -319,7 +365,7 @@ const Ventas: React.FC = () => {
       
       if (!esReimpresion) {
         // Calcular el último número usado (número inicial + páginas - 1)
-        const numPaginas = Math.ceil((venta.detalles?.length || 0) / 15);
+        const numPaginas = Math.ceil((venta.detalles?.length || 0) / ITEMS_PER_PAGE);
         const ultimoNumeroUsado = parseInt(numeroFacturaInicial) + numPaginas - 1;
 
         // Actualizar el último número de factura en la configuración
@@ -364,7 +410,7 @@ const Ventas: React.FC = () => {
           return <span className="chip chip--muted">Sin asignar</span>;
         }
         
-        const numPaginas = Math.ceil((r.detalles?.length || 0) / 15);
+        const numPaginas = Math.ceil((r.detalles?.length || 0) / ITEMS_PER_PAGE);
         const numeroInicial = parseInt(r.numeroFactura) || 0;
         const numeroFinal = numeroInicial + numPaginas - 1;
         
@@ -442,19 +488,6 @@ const Ventas: React.FC = () => {
       }
     },
     {
-      name: "Total C$", selector: (r: Venta) => r.totalCordoba ?? 0, right: true,
-      cell: (r: Venta) => <span className="num-right">C$ {(Number(r.totalCordoba) || 0).toFixed(2)}</span>, width: "160px"
-    },
-    {
-      name: "Total $", selector: (r: Venta) => r.totalDolar ?? 0, right: true,
-      cell: (r: Venta) => <span className="num-right">$ {(Number(r.totalDolar) || 0).toFixed(2)}</span>, width: "140px"
-    },
-    { name: "# Items", selector: (r: Venta) => r.detalles?.length ?? 0, width: "110px" },
-    {
-      name: "PIO", selector: (r: Venta) => r.pio ?? "-", width: "150px",
-      cell: (r: Venta) => <span>{r.pio || "-"}</span>
-    },
-    {
       name: "Acciones",
       button: true,
       width: "300px",
@@ -471,49 +504,95 @@ const Ventas: React.FC = () => {
               color: "#003c8a",
               display: "inline-flex",
               alignItems: "center",
-              gap: ".4rem",
               fontWeight: 600,
-              fontSize: "0.85rem",
+              fontSize: "0.95rem",
+              width: "38px",
+              height: "38px",
+              justifyContent: "center",
             }}
           >
-            <FaEye /> Ver
+            <FaEye />
+          </button>
+          <button
+            onClick={() => navigate(`/editar-factura/${r.id}`)}
+            title="Editar factura"
+            style={{
+              padding: ".35rem",
+              borderRadius: "8px",
+              border: "1px solid #f59e0b",
+              background: "#fef3c7",
+              color: "#92400e",
+              display: "inline-flex",
+              alignItems: "center",
+              fontWeight: 600,
+              fontSize: "0.95rem",
+              width: "38px",
+              height: "38px",
+              justifyContent: "center",
+            }}
+          >
+            <FaEdit />
           </button>
           <button
             onClick={() => solicitarNumeroFactura(r)}
             title="Descargar factura en Excel"
             style={{
-              padding: ".35rem .6rem",
+              padding: ".35rem",
               borderRadius: "8px",
               border: "1px solid #10b981",
               background: "#d1fae5",
               color: "#065f46",
               display: "inline-flex",
               alignItems: "center",
-              gap: ".4rem",
+              justifyContent: "center",
               fontWeight: 600,
-              fontSize: "0.85rem",
+              fontSize: "0.95rem",
+              width: "38px",
+              height: "38px",
             }}
           >
-            <FaFileExcel /> Excel
+            <FaFileExcel />
+          </button>
+          <button
+            onClick={() => solicitarEliminar(r)}
+            title="Eliminar venta"
+            style={{
+              padding: ".35rem",
+              borderRadius: "8px",
+              border: "1px solid #ef4444",
+              background: "#fee2e2",
+              color: "#991b1b",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: 600,
+              fontSize: "0.95rem",
+              width: "38px",
+              height: "38px",
+            }}
+          >
+            <FaTrash />
           </button>
           {r.tipoPago === "CREDITO" && !(r.cancelada === true || r.estadoPago === "PAGADO") && (
             <button
               onClick={() => solicitarConfirmacion(r)}
               title="Marcar como pagada"
               style={{
-                padding: ".35rem .6rem",
+                padding: ".35rem",
                 borderRadius: "8px",
                 border: "1px solid #86efac",
                 background: "#dcfce7",
                 color: "#166534",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: ".4rem",
                 fontWeight: 600,
-                fontSize: "0.85rem",
+                fontSize: "0.95rem",
+                width: "38px",
+                height: "38px",
+                justifyContent: "center",
               }}
             >
-              ✓ Pagada
+              ✓
             </button>
           )}
         </div>
@@ -526,7 +605,7 @@ const Ventas: React.FC = () => {
   return (
     <div className="fact-page ventas-page">
       <header className="fact-header">
-        <button className="back-btn" title="Volver" onClick={() => navigate(-1)}>Volver</button>
+        <button className="back-btn" title="Volver" onClick={() => navigate("/facturacion")}>Volver</button>
         <div><h1>Historial de Ventas</h1></div>
       </header>
 
@@ -656,27 +735,45 @@ const Ventas: React.FC = () => {
           )}
           {ventaSel && (
             <div className="card" style={{ marginTop: "1rem" }}>
-              <div style={{ display: "flex", justifyContent: "flex-start", alignItems: "center", gap: ".75rem", marginBottom: ".5rem" }}>
-                <button
-                  onClick={() => setVentaSel(null)}
-                  title="Ocultar detalles"
-                  style={{
-                    padding: ".45rem .85rem",
-                    borderRadius: 8,
-                    border: "1px solid #bcd3ff",
-                    background: "#eaf1ff",
-                    color: "#003c8a",
-                    fontWeight: 600,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: ".4rem",
-                  }}
-                >
-                  <FaTimes /> Ocultar
-                </button>
-                <h3 style={{ margin: 0 }}>
-                  Detalles de la Venta {ventaSel.numeroFactura ? `#${ventaSel.numeroFactura}` : `ID ${ventaSel.id}`}
-                </h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", marginBottom: ".75rem", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: ".75rem" }}>
+                  <button
+                    onClick={() => setVentaSel(null)}
+                    title="Ocultar detalles"
+                    style={{
+                      padding: ".45rem .85rem",
+                      borderRadius: 8,
+                      border: "1px solid #bcd3ff",
+                      background: "#eaf1ff",
+                      color: "#003c8a",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: ".4rem",
+                    }}
+                  >
+                    <FaTimes /> Ocultar
+                  </button>
+                  <h3 style={{ margin: 0 }}>
+                    Detalles de la Venta {ventaSel.numeroFactura ? `#${ventaSel.numeroFactura}` : `ID ${ventaSel.id}`}
+                  </h3>
+                </div>
+                <div style={{ display: "flex", gap: ".75rem", flexWrap: "wrap" }}>
+                  <span className="chip" style={{ background: "#fef3c7", borderColor: "#fbbf24", color: "#92400e" }}>
+                    Items: {ventaSel.detalles?.length ?? 0}
+                  </span>
+                  <span className="chip" style={{ background: "#dcfce7", borderColor: "#86efac", color: "#166534" }}>
+                    Total C$: {(Number(ventaSel.totalCordoba) || 0).toFixed(2)}
+                  </span>
+                  <span className="chip" style={{ background: "#dbeafe", borderColor: "#93c5fd", color: "#1e40af" }}>
+                    Total $: {(Number(ventaSel.totalDolar) || 0).toFixed(2)}
+                  </span>
+                  {ventaSel.pio && (
+                    <span className="chip" style={{ background: "#f3e8ff", borderColor: "#d8b4fe", color: "#6b21a8" }}>
+                      PO: {ventaSel.pio}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="ventas-table-wrap">
@@ -684,6 +781,8 @@ const Ventas: React.FC = () => {
                   <DataTable
                     columns={[
                       { name: "Producto", selector: (d: any) => d.producto, grow: 2 },
+                      { name: "No. Parte", selector: (d: any) => d.codigoFacturar ?? d.numeroParte ?? "-", width: "140px" },
+                      { name: "Marca", selector: (d: any) => d.marca ?? "-", width: "150px" },
                       { name: "Cant", selector: (d: any) => d.cantidad, width: "90px", right: true },
                       { name: "Precio C$", selector: (d: any) => d.precioCordoba, width: "150px", right: true, cell: (d: any) => <span className="num-right">C$ {Number(d.precioCordoba || 0).toFixed(2)}</span> },
                       { name: "Precio $", selector: (d: any) => d.precioDolar, width: "140px", right: true, cell: (d: any) => <span className="num-right">$ {Number(d.precioDolar || 0).toFixed(2)}</span> },
@@ -692,6 +791,21 @@ const Ventas: React.FC = () => {
                     ]}
                     data={(ventaSel.detalles ?? []).map((d: any) => {
                       const producto = d?.inventario?.nombre ?? d?.producto?.nombre ?? d?.producto ?? d?.nombre ?? d?.descripcion ?? "-";
+                      const numeroParte = d?.codigoFacturar ?? d?.inventario?.numeroParte ?? d?.producto?.numeroParte ?? d?.numeroParte ?? "-";
+                      const marca =
+                        d?.inventario?.marca?.nombre ??
+                        d?.inventario?.marcaNombre ??
+                        (typeof d?.inventario?.marca === "string" ? d.inventario.marca : undefined) ??
+                        d?.inventario?.brand ??
+                        d?.producto?.marca?.nombre ??
+                        (typeof d?.producto?.marca === "string" ? d.producto.marca : undefined) ??
+                        d?.producto?.brand ??
+                        d?.marca?.nombre ??
+                        (typeof d?.marca === "string" ? d.marca : undefined) ??
+                        d?.marcaNombre ??
+                        d?.brand ??
+                        d?.marca ??
+                        "-";
                       const cantidad = Number(d?.cantidad ?? d?.cant ?? d?.unidades ?? 0);
                       const tc = Number(ventaSel?.tipoCambioValor || 0);
                       let precioCordoba = Number(
@@ -702,13 +816,13 @@ const Ventas: React.FC = () => {
                       if (!precioDolar && precioCordoba && tc > 0) precioDolar = precioCordoba / tc;
                       const subtotalCordoba = cantidad * (precioCordoba || 0);
                       const subtotalDolar = cantidad * (precioDolar || 0);
-                      return { producto, cantidad, precioCordoba, precioDolar, subtotalCordoba, subtotalDolar };
+                      return { producto, numeroParte, marca, cantidad, precioCordoba, precioDolar, subtotalCordoba, subtotalDolar };
                     })}
                     dense
                     highlightOnHover
                     pagination
                     customStyles={{
-                      table: { style: { minWidth: "900px" } },
+                      table: { style: { minWidth: "1100px" } },
                       headCells: { style: { justifyContent: "center", textAlign: "center" } },
                       cells: { style: { justifyContent: "center", textAlign: "center" } },
                     }}
@@ -831,16 +945,21 @@ const Ventas: React.FC = () => {
           justifyContent: "center",
           alignItems: "center",
           zIndex: 9999,
+          overflowY: "auto",
+          padding: "20px 0"
         }}>
           <div style={{
             background: "#fff",
-            padding: "2rem",
+            padding: "1.5rem 2rem",
             borderRadius: "12px",
             boxShadow: "0 8px 30px rgba(0, 0, 0, 0.25)",
-            minWidth: "450px",
-            maxWidth: "550px",
+            minWidth: "600px",
+            maxWidth: "700px",
+            maxHeight: "85vh",
+            overflowY: "auto",
+            margin: "auto"
           }}>
-            <h3 style={{ marginTop: 0, color: "#003399" }}>
+            <h3 style={{ marginTop: 0, marginBottom: "0.75rem", color: "#003399" }}>
               {ventaParaExcel.numeroFactura ? '🔄 Reimpresión de Factura' : '📄 Nueva Factura'}
             </h3>
             
@@ -849,26 +968,27 @@ const Ventas: React.FC = () => {
                 background: "#dcfce7", 
                 border: "2px solid #86efac", 
                 borderRadius: "8px", 
-                padding: "0.75rem 1rem", 
-                marginBottom: "1rem",
+                padding: "0.5rem 0.75rem", 
+                marginBottom: "0.75rem",
                 color: "#166534",
-                fontWeight: 600
+                fontWeight: 600,
+                fontSize: "0.9rem"
               }}>
                 ✓ Esta factura ya fue impresa anteriormente con el número: <strong>{ventaParaExcel.numeroFactura}</strong>
               </div>
             )}
             
-            <p style={{ marginBottom: "1rem", color: "#475569" }}>
+            <p style={{ marginBottom: "0.75rem", color: "#475569", fontSize: "0.95rem" }}>
               Esta factura tiene <strong>{ventaParaExcel.detalles?.length || 0} artículos</strong> y se imprimirá en{' '}
-              <strong>{Math.ceil((ventaParaExcel.detalles?.length || 0) / 15)} página(s)</strong>.
+              <strong>{Math.ceil((ventaParaExcel.detalles?.length || 0) / ITEMS_PER_PAGE)} página(s)</strong>.
             </p>
             
             <div style={{ 
               background: "#f1f5f9", 
               border: "2px solid #cbd5e1", 
               borderRadius: "8px", 
-              padding: "0.75rem 1rem", 
-              marginBottom: "1rem",
+              padding: "0.5rem 0.75rem", 
+              marginBottom: "0.75rem",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center"
@@ -883,16 +1003,16 @@ const Ventas: React.FC = () => {
             </div>
             
             {!ventaParaExcel.numeroFactura && (
-              <p style={{ marginBottom: "1.5rem", color: "#dc2626", fontSize: "0.9rem", fontWeight: 600 }}>
+              <p style={{ marginBottom: "0.75rem", color: "#dc2626", fontSize: "0.85rem", fontWeight: 600 }}>
                 ⚠️ Cada página consumirá un número de factura consecutivo
               </p>
             )}
             
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "#334155" }}>
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontWeight: 600, color: "#334155", fontSize: "0.95rem" }}>
                 Moneda para la factura:
               </label>
-              <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
+              <div style={{ display: "flex", gap: "0.75rem" }}>
                 <label style={{ 
                   flex: 1, 
                   display: "flex", 
@@ -942,8 +1062,36 @@ const Ventas: React.FC = () => {
               </div>
             </div>
 
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, color: "#334155" }}>
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontWeight: 600, color: "#334155", fontSize: "0.95rem" }}>
+                Método de pago:
+              </label>
+              <select
+                value={metodoPagoSeleccionado || ''}
+                onChange={(e) => setMetodoPagoSeleccionado(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "0.6rem",
+                  border: "2px solid #e2e8f0",
+                  borderRadius: "8px",
+                  fontSize: "0.95rem",
+                  background: "#fff",
+                  cursor: "pointer"
+                }}
+              >
+                {metodosPago.length === 0 && (
+                  <option value="">Sin métodos de pago configurados</option>
+                )}
+                {metodosPago.map((metodo) => (
+                  <option key={metodo.id} value={metodo.id}>
+                    {metodo.banco || metodo.nombre} - {metodo.numeroCuenta} ({metodo.moneda})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", marginBottom: "0.4rem", fontWeight: 600, color: "#334155", fontSize: "0.95rem" }}>
                 Número de factura inicial:
               </label>
               <input
@@ -954,10 +1102,10 @@ const Ventas: React.FC = () => {
                 autoFocus
                 style={{
                   width: "100%",
-                  padding: "0.75rem",
+                  padding: "0.6rem",
                   border: "2px solid #e2e8f0",
                   borderRadius: "8px",
-                  fontSize: "1rem",
+                  fontSize: "0.95rem",
                   fontFamily: "monospace",
                   textAlign: "center",
                   letterSpacing: "0.1em"
@@ -968,9 +1116,9 @@ const Ventas: React.FC = () => {
                   }
                 }}
               />
-              <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: "0.5rem" }}>
+              <p style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "0.4rem" }}>
                 Números que se usarán: {numeroFacturaInicial || '?'} hasta{' '}
-                {numeroFacturaInicial ? (parseInt(numeroFacturaInicial) + Math.ceil((ventaParaExcel.detalles?.length || 0) / 15) - 1).toString().padStart(numeroFacturaInicial.length, '0') : '?'}
+                {numeroFacturaInicial ? (parseInt(numeroFacturaInicial) + Math.ceil((ventaParaExcel.detalles?.length || 0) / ITEMS_PER_PAGE) - 1).toString().padStart(numeroFacturaInicial.length, '0') : '?'}
               </p>
             </div>
 
@@ -1014,10 +1162,69 @@ const Ventas: React.FC = () => {
       )}
 
       <ToastContainer position="top-right" autoClose={3000} hideProgressBar />
+
+      {/* Modal eliminar venta */}
+      {showDeleteModal && ventaAEliminar && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          zIndex: 9999,
+          padding: "1rem",
+        }}>
+          <div style={{
+            background: "#fff",
+            padding: "1.5rem",
+            borderRadius: "12px",
+            boxShadow: "0 8px 30px rgba(0, 0, 0, 0.25)",
+            minWidth: "360px",
+            maxWidth: "480px",
+          }}>
+            <h3 style={{ marginTop: 0, color: "#991b1b" }}>Eliminar venta</h3>
+            <p style={{ color: "#334155" }}>
+              ¿Deseas eliminar la venta <strong>{ventaAEliminar.numeroFactura || `#${ventaAEliminar.id}`}</strong>?
+            </p>
+            <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end", marginTop: "1.5rem" }}>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setVentaAEliminar(null);
+                }}
+                style={{
+                  padding: "0.5rem 1.4rem",
+                  background: "#e2e8f0",
+                  color: "#0f172a",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={eliminarVenta}
+                style={{
+                  padding: "0.5rem 1.4rem",
+                  background: "#ef4444",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                <FaTrash /> Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default Ventas;
-
-

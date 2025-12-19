@@ -15,20 +15,20 @@ const optionalEmail = z
 const clienteSchema = z.object({
   tipoCliente: z.string().default("PERSONA"),
   nombre: z.string().min(2, "El nombre es obligatorio"),
-  empresa: z.string().optional(),
-  nombreContacto: z.string().optional(),
-  ruc: z.string().optional(),
-  razonSocial: z.string().optional(),
-  telefono1: z.string().optional(),
-  telefono2: z.string().optional(),
+  empresa: z.string().nullish().transform(val => val ?? undefined),
+  nombreContacto: z.string().nullish().transform(val => val ?? undefined),
+  ruc: z.string().nullish().transform(val => val ?? undefined),
+  razonSocial: z.string().nullish().transform(val => val ?? undefined),
+  telefono1: z.string().nullish().transform(val => val ?? undefined),
+  telefono2: z.string().nullish().transform(val => val ?? undefined),
   correo1: optionalEmail,
   correo2: optionalEmail,
-  direccion: z.string().optional(),
-  observacion: z.string().optional(),
+  direccion: z.string().nullish().transform(val => val ?? undefined),
+  observacion: z.string().nullish().transform(val => val ?? undefined),
   estado: z.string().default("ACTIVO"),
-  creditoHabilitado: z.boolean().default(false),
-  creditoMaximoCordoba: z.number().nonnegative().optional().default(0),
-  creditoMaximoDolar: z.number().nonnegative().optional().default(0),
+  creditoHabilitado: z.boolean().default(true),
+  creditoMaximoCordoba: z.number().nonnegative().optional().default(100000),
+  creditoMaximoDolar: z.number().nonnegative().optional().default(2739.73),
 });
 
 
@@ -66,6 +66,12 @@ export const createCliente = async (req: Request, res: Response) => {
 
 export const getClientes = async (req: Request, res: Response) => {
   try {
+    // Ensure all clients keep credit enabled by default
+    await prisma.cliente.updateMany({
+      where: { creditoHabilitado: false },
+      data: { creditoHabilitado: true }
+    });
+
     const clientes = await prisma.cliente.findMany({
       orderBy: { id: "desc" },
     });
@@ -170,3 +176,4 @@ export const deleteCliente = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Error al eliminar cliente" });
   }
 };
+

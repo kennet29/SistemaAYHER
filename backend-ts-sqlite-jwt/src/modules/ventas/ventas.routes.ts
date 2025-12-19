@@ -16,12 +16,15 @@ ventaRouter.get('/pendientes', authenticate, ctrl.listPendientes);
 // Historial de Proformas
 ventaRouter.get('/proformas', authenticate, ctrl.listProformas);
 ventaRouter.get('/proformas/:id', authenticate, ctrl.getProformaById);
+ventaRouter.put('/proformas/:id', authenticate, ctrl.updateProforma);
+ventaRouter.delete('/proformas/:id', authenticate, ctrl.deleteProforma);
 ventaRouter.get('/proformas/:id/excel', authenticate, ctrl.generarProformaExcel);
 
 ventaRouter
   .route('/:id')
   .get(authenticate, ctrl.getById)
-  .patch(authenticate, ctrl.update);
+  .patch(authenticate, ctrl.update)
+  .delete(authenticate, ctrl.deleteVenta);
 
 // Excel de una venta (historial)
 ventaRouter.get('/:id/excel', authenticate, ctrl.generarVentaExcel);

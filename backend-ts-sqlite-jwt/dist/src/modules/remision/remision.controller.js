@@ -421,6 +421,7 @@ const imprimirRemisionPDF = async (req, res) => {
             observacion: remision.observacion || null,
             pio: remision.pio || null,
             entregadoA: remision.entregadoA || null,
+            tipoCambio: tipoCambioValor,
         }, res);
         return;
         res.setHeader("Content-Type", "application/pdf");

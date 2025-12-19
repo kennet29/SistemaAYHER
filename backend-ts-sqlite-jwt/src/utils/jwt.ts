@@ -1,4 +1,4 @@
-import jwt, { Secret, SignOptions } from 'jsonwebtoken';
+import jwt, { Secret } from 'jsonwebtoken';
 import { env } from '../config/env';
 
 export type JwtPayload = {
@@ -7,7 +7,8 @@ export type JwtPayload = {
 };
 
 export function signToken(payload: JwtPayload) {
-  return jwt.sign(payload, env.JWT_SECRET as Secret, { expiresIn: env.JWT_EXPIRES_IN } as SignOptions);
+  // Sign tokens without expiration so sessions do not expire
+  return jwt.sign(payload, env.JWT_SECRET as Secret);
 }
 
 export function verifyToken(token: string): JwtPayload {

@@ -8,12 +8,14 @@ exports.create = create;
 exports.getById = getById;
 exports.update = update;
 exports.listLowStock = listLowStock;
+exports.listLowStockExcel = listLowStockExcel;
 exports.asignarUbicaciones = asignarUbicaciones;
 exports.remove = remove;
 exports.viewConSustituto = viewConSustituto;
 exports.buscarProductoDisponible = buscarProductoDisponible;
 const prisma_1 = require("../../db/prisma");
 const zod_1 = require("zod");
+const exceljs_1 = __importDefault(require("exceljs"));
 const node_fetch_1 = __importDefault(require("node-fetch")); // npm i node-fetch
 function toStringJSON(value) {
     if (value === undefined || value === null)
@@ -42,6 +44,7 @@ const InvCreateSchema = zod_1.z.object({
     marcaId: zod_1.z.number().int().positive(),
     categoriaId: zod_1.z.number().int().positive(),
     nombre: zod_1.z.string().min(1),
+    descontinuado: zod_1.z.boolean().optional().default(false),
     descripcion: zod_1.z.string().optional(),
     ubicacion: zod_1.z
         .string()
@@ -186,13 +189,16 @@ async function create(req, res) {
             // Remove input-only key to avoid Prisma unknown argument
             delete createData.preciosCompetencia;
         }
-        // Relación sustituto: intentar conectar si existe, sino guardar los campos directamente
-        if (data.codigoSustituto && data.marcaSustitutoId) {
+        // Relación sustituto: intentar conectar si existe; si no hay marca válida, guardar el código plano (soporta múltiples códigos separados por coma)
+        const codigoSustiRaw = (data.codigoSustituto || "").trim();
+        const esMultiple = codigoSustiRaw.includes(",");
+        const marcaSustiCreate = Number(data.marcaSustitutoId || 0) > 0 ? Number(data.marcaSustitutoId) : null;
+        if (codigoSustiRaw && marcaSustiCreate && !esMultiple) {
             // Verificar si el producto sustituto existe
             const sustitutoExiste = await prisma_1.prisma.inventario.findFirst({
                 where: {
-                    numeroParte: data.codigoSustituto,
-                    marcaId: data.marcaSustitutoId,
+                    numeroParte: codigoSustiRaw,
+                    marcaId: marcaSustiCreate,
                 },
             });
             if (sustitutoExiste) {
@@ -200,8 +206,8 @@ async function create(req, res) {
                 createData.sustituto = {
                     connect: {
                         UQ_NumeroParte_Marca: {
-                            numeroParte: data.codigoSustituto,
-                            marcaId: data.marcaSustitutoId,
+                            numeroParte: codigoSustiRaw,
+                            marcaId: marcaSustiCreate,
                         },
                     },
                 };
@@ -210,9 +216,14 @@ async function create(req, res) {
             }
             else {
                 // Si no existe, guardar los campos directamente (sin relación)
-                createData.codigoSustituto = data.codigoSustituto;
-                createData.marcaSustitutoId = data.marcaSustitutoId;
+                createData.codigoSustituto = codigoSustiRaw;
+                createData.marcaSustitutoId = marcaSustiCreate;
             }
+        }
+        else if (codigoSustiRaw) {
+            // Código manual (uno o varios separados por coma) sin marca conocida o no conectable
+            createData.codigoSustituto = codigoSustiRaw;
+            createData.marcaSustitutoId = null;
         }
         else {
             delete createData.codigoSustituto;
@@ -393,18 +404,22 @@ async function update(req, res) {
             // Remove input-only key to avoid Prisma unknown argument
             delete updateData.preciosCompetencia;
         }
-        // Relación sustituto: intentar conectar si existe, sino guardar los campos directamente
+        // Relación sustituto: intentar conectar si existe, sino guardar/disconnect
+        const codigoSustiPlano = (data.codigoSustituto || "").trim() || null;
+        const esMultiple = codigoSustiPlano ? codigoSustiPlano.includes(",") : false;
+        const marcaSustiPlano = Number(data.marcaSustitutoId || 0) > 0 && !esMultiple ? Number(data.marcaSustitutoId) : null;
         if (Object.prototype.hasOwnProperty.call(data, "codigoSustituto") ||
             Object.prototype.hasOwnProperty.call(data, "marcaSustitutoId")) {
             // Siempre eliminar estos campos del updateData ya que se manejan via relación
             delete updateData.codigoSustituto;
             delete updateData.marcaSustitutoId;
-            if (data.codigoSustituto && data.marcaSustitutoId) {
+            const marcaSustiUpdate = marcaSustiPlano;
+            if (codigoSustiPlano && marcaSustiUpdate && !esMultiple) {
                 // Verificar si el producto sustituto existe
                 const sustitutoExiste = await prisma_1.prisma.inventario.findFirst({
                     where: {
-                        numeroParte: data.codigoSustituto,
-                        marcaId: data.marcaSustitutoId,
+                        numeroParte: codigoSustiPlano,
+                        marcaId: marcaSustiUpdate,
                     },
                 });
                 if (sustitutoExiste) {
@@ -413,20 +428,27 @@ async function update(req, res) {
                         connect: {
                             UQ_NumeroParte_Marca: {
                                 numeroParte: data.codigoSustituto,
-                                marcaId: data.marcaSustitutoId,
+                                marcaId: marcaSustiUpdate,
                             },
                         },
                     };
                 }
                 else {
                     // Si no existe, desconectar cualquier relación previa
-                    // No podemos guardar codigoSustituto sin relación en Prisma
                     updateData.sustituto = { disconnect: true };
+                    // Guardaremos plano luego del update principal
                 }
             }
             else {
-                // Si se envían vacíos, desconectar
-                updateData.sustituto = { disconnect: true };
+                // Si se envía solo código sin marca o múltiples códigos, guardar plano y desconectar relación
+                if (codigoSustiPlano) {
+                    updateData.sustituto = { disconnect: true };
+                    // Guardaremos plano luego del update principal
+                }
+                else {
+                    // Si se envían vacíos, desconectar y limpiar campos
+                    updateData.sustituto = { disconnect: true };
+                }
             }
         }
         else {
@@ -440,6 +462,10 @@ async function update(req, res) {
                 data: updateData,
                 include: { marca: true, categoria: true },
             });
+            // Forzar persistencia de código sustituto plano (aunque no exista relación)
+            if (Object.prototype.hasOwnProperty.call(data, "codigoSustituto")) {
+                await prisma_1.prisma.$executeRawUnsafe('UPDATE "Inventario" SET codigoSustituto = ?, marcaSustitutoId = ? WHERE id = ?', codigoSustiPlano, marcaSustiPlano, id);
+            }
             console.log("[Inventario.update] updated item id:", item.id);
             return res.json({ tipoCambio, item });
         }
@@ -483,7 +509,7 @@ async function update(req, res) {
     }
 }
 // ===============================
-// 📉 LISTAR BAJO STOCK (stockActual <= stockMinimo O stockActual = 0)
+// Listar bajo stock (stockActual <= stockMinimo O stockActual = 0)
 // ===============================
 async function listLowStock(_req, res) {
     try {
@@ -514,6 +540,83 @@ async function listLowStock(_req, res) {
     catch (err) {
         console.error('❌ Error al listar bajo stock:', err);
         res.status(500).json({ message: 'Error interno del servidor' });
+    }
+}
+async function listLowStockExcel(_req, res) {
+    try {
+        const items = await prisma_1.prisma.inventario.findMany({
+            include: {
+                marca: true,
+                categoria: true,
+            },
+            orderBy: [{ marcaId: 'asc' }, { numeroParte: 'asc' }],
+        });
+        const filtered = items.filter((i) => {
+            const stockActual = Number(i.stockActual || 0);
+            const stockMinimo = Number(i.stockMinimo || 0);
+            if (stockActual === 0)
+                return true;
+            if (typeof i.stockMinimo === 'number' && stockActual <= stockMinimo)
+                return true;
+            return false;
+        });
+        const wb = new exceljs_1.default.Workbook();
+        const ws = wb.addWorksheet('Stock Critico');
+        ws.columns = [
+            { header: '#', key: 'idx', width: 5 },
+            { header: 'Numero Parte', key: 'numeroParte', width: 18 },
+            { header: 'Nombre', key: 'nombre', width: 28 },
+            { header: 'Marca', key: 'marca', width: 18 },
+            { header: 'Categoria', key: 'categoria', width: 18 },
+            { header: 'Stock Actual', key: 'stockActual', width: 14 },
+            { header: 'Stock Minimo', key: 'stockMinimo', width: 14 },
+            { header: 'Faltante', key: 'faltante', width: 12 },
+        ];
+        ws.autoFilter = { from: 'A1', to: 'H1' };
+        const header = ws.getRow(1);
+        header.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        header.alignment = { vertical: 'middle', horizontal: 'center' };
+        header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B5394' } };
+        filtered.forEach((item, idx) => {
+            const stock = Number(item.stockActual ?? 0);
+            const min = Number(item.stockMinimo ?? 0);
+            const faltante = min > stock ? min - stock : 0;
+            const row = ws.addRow({
+                idx: idx + 1,
+                numeroParte: item.numeroParte || '',
+                nombre: item.nombre || '',
+                marca: item.marca?.nombre || '',
+                categoria: item.categoria?.nombre || '',
+                stockActual: stock,
+                stockMinimo: min,
+                faltante,
+            });
+            row.alignment = { vertical: 'middle' };
+            row.eachCell((cell) => {
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FFDDDDDD' } },
+                    bottom: { style: 'thin', color: { argb: 'FFDDDDDD' } },
+                };
+            });
+            if (stock === 0) {
+                row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE5E5' } };
+            }
+            else if (min > 0 && stock <= min) {
+                row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF5E5' } };
+            }
+        });
+        ws.getColumn('F').numFmt = '#,##0';
+        ws.getColumn('G').numFmt = '#,##0';
+        ws.getColumn('H').numFmt = '#,##0';
+        const buffer = await wb.xlsx.writeBuffer();
+        const filename = `stock_critico_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+        res.send(Buffer.from(buffer));
+    }
+    catch (err) {
+        console.error('❌ Error al generar Excel de bajo stock:', err);
+        res.status(500).json({ message: 'Error interno al generar Excel' });
     }
 }
 // ===============================
